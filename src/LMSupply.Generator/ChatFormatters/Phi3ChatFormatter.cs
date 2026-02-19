@@ -1,3 +1,4 @@
+using System.Globalization;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 
@@ -24,10 +25,10 @@ public sealed class Phi3ChatFormatter : IChatFormatter
                 ChatRole.System => "system",
                 ChatRole.User => "user",
                 ChatRole.Assistant => "assistant",
-                _ => throw new ArgumentOutOfRangeException(nameof(message.Role))
+                _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
-            sb.Append($"<|{role}|>\n");
+            sb.Append(CultureInfo.InvariantCulture, $"<|{role}|>\n");
             sb.Append(message.Content);
             sb.Append("<|end|>\n");
         }

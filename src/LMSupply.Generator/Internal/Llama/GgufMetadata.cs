@@ -142,9 +142,9 @@ public sealed record GgufMetadata
         {
             var qt = QuantizationType.ToUpperInvariant();
             if (qt.Contains("Q4") || qt.Contains("INT4"))
-                return Quantization.INT4;
+                return Quantization.Quant4;
             if (qt.Contains("Q8") || qt.Contains("INT8"))
-                return Quantization.INT8;
+                return Quantization.Quant8;
             if (qt.Contains("F16") || qt.Contains("FP16"))
                 return Quantization.FP16;
             if (qt.Contains("F32") || qt.Contains("FP32"))
@@ -160,13 +160,13 @@ public sealed record GgufMetadata
             {
                 0 => Quantization.FP32,
                 1 => Quantization.FP16,
-                >= 2 and <= 6 => Quantization.INT4,
-                >= 7 and <= 8 => Quantization.INT8,
-                _ => Quantization.INT4 // Default to INT4 for quantized models
+                >= 2 and <= 6 => Quantization.Quant4,
+                >= 7 and <= 8 => Quantization.Quant8,
+                _ => Quantization.Quant4 // Default to Quant4 for quantized models
             };
         }
 
-        return Quantization.INT4; // Most GGUF files are quantized
+        return Quantization.Quant4; // Most GGUF files are quantized
     }
 
     /// <summary>

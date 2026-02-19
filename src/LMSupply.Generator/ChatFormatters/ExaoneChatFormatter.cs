@@ -29,7 +29,7 @@ public sealed class ExaoneChatFormatter : IChatFormatter
                 ChatRole.System => SystemTag,
                 ChatRole.User => UserTag,
                 ChatRole.Assistant => AssistantTag,
-                _ => throw new ArgumentOutOfRangeException(nameof(message.Role))
+                _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             sb.Append(tag);

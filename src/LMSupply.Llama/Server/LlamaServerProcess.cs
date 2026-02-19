@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using ChildProcessGuard;
@@ -70,7 +71,7 @@ public sealed class LlamaServerConfig
     /// <summary>
     /// Port to run the server on (0 for auto-assign).
     /// </summary>
-    public int Port { get; init; } = 0;
+    public int Port { get; init; }
 
     /// <summary>
     /// Context size.
@@ -102,7 +103,7 @@ public sealed class LlamaServerConfig
     /// <summary>
     /// Enable Flash Attention.
     /// </summary>
-    public bool FlashAttention { get; init; } = false;
+    public bool FlashAttention { get; init; }
 
     #region KV Cache Options
 
@@ -405,11 +406,11 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         var args = new List<string>
         {
             "--model", $"\"{_config.ModelPath}\"",
-            "--port", _port.ToString(),
-            "--ctx-size", _config.ContextSize.ToString(),
-            "--n-gpu-layers", _config.GpuLayers.ToString(),
-            "--batch-size", _config.BatchSize.ToString(),
-            "--parallel", _config.Parallel.ToString(),
+            "--port", _port.ToString(CultureInfo.InvariantCulture),
+            "--ctx-size", _config.ContextSize.ToString(CultureInfo.InvariantCulture),
+            "--n-gpu-layers", _config.GpuLayers.ToString(CultureInfo.InvariantCulture),
+            "--batch-size", _config.BatchSize.ToString(CultureInfo.InvariantCulture),
+            "--parallel", _config.Parallel.ToString(CultureInfo.InvariantCulture),
             "--host", "127.0.0.1", // Only listen on localhost for security
             "--cont-batching"      // Enable continuous batching for better throughput
         };
@@ -418,7 +419,7 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         if (_config.UBatchSize.HasValue)
         {
             args.Add("--ubatch-size");
-            args.Add(_config.UBatchSize.Value.ToString());
+            args.Add(_config.UBatchSize.Value.ToString(CultureInfo.InvariantCulture));
         }
 
         if (_config.FlashAttention)
@@ -454,20 +455,20 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         if (_config.MainGpu.HasValue)
         {
             args.Add("--main-gpu");
-            args.Add(_config.MainGpu.Value.ToString());
+            args.Add(_config.MainGpu.Value.ToString(CultureInfo.InvariantCulture));
         }
 
         // RoPE options (Phase 1)
         if (_config.RopeFreqBase.HasValue)
         {
             args.Add("--rope-freq-base");
-            args.Add(_config.RopeFreqBase.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+            args.Add(_config.RopeFreqBase.Value.ToString("F1", CultureInfo.InvariantCulture));
         }
 
         if (_config.RopeFreqScale.HasValue)
         {
             args.Add("--rope-freq-scale");
-            args.Add(_config.RopeFreqScale.Value.ToString("F4", System.Globalization.CultureInfo.InvariantCulture));
+            args.Add(_config.RopeFreqScale.Value.ToString("F4", CultureInfo.InvariantCulture));
         }
 
         // Multimodal projector (Phase 3)
@@ -484,7 +485,7 @@ public sealed class LlamaServerProcess : IAsyncDisposable
             {
                 args.Add("--lora-scaled");
                 args.Add($"\"{_config.LoraPath}\"");
-                args.Add(_config.LoraScale.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+                args.Add(_config.LoraScale.Value.ToString("F2", CultureInfo.InvariantCulture));
             }
             else
             {

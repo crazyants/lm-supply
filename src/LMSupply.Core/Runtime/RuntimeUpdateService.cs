@@ -75,7 +75,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         {
             if (Directory.Exists(state.UpdateReadyPath))
             {
-                Debug.WriteLine($"[RuntimeUpdateService] Applying ready update: {state.LatestKnownVersion}");
+                Trace.TraceInformation($"[RuntimeUpdateService] Applying ready update: {state.LatestKnownVersion}");
                 await _stateManager.ActivateUpdateAsync(packageKey, _options.MaxVersionsToKeep, ct);
                 return state.UpdateReadyPath;
             }
@@ -94,7 +94,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[RuntimeUpdateService] Download failed: {ex.Message}");
+            Trace.TraceWarning($"[RuntimeUpdateService] Download failed: {ex.Message}");
             throw;
         }
 
@@ -146,12 +146,12 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            Debug.WriteLine("[RuntimeUpdateService] Version check timed out");
+            Trace.TraceInformation("[RuntimeUpdateService] Version check timed out");
             return RuntimeUpdateResult.NoUpdateNeeded(currentVersion, string.Empty);
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[RuntimeUpdateService] Version check failed: {ex.Message}");
+            Trace.TraceWarning($"[RuntimeUpdateService] Version check failed: {ex.Message}");
             return RuntimeUpdateResult.NoUpdateNeeded(currentVersion, string.Empty);
         }
 
@@ -169,11 +169,11 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         // Check if version failed before
         if (state.FailedVersions.Contains(latestVersion))
         {
-            Debug.WriteLine($"[RuntimeUpdateService] Skipping failed version: {latestVersion}");
+            Trace.TraceWarning($"[RuntimeUpdateService] Skipping failed version: {latestVersion}");
             return RuntimeUpdateResult.NoUpdateNeeded(currentVersion, string.Empty);
         }
 
-        Debug.WriteLine($"[RuntimeUpdateService] Updating {currentVersion} -> {latestVersion}");
+        Trace.TraceInformation($"[RuntimeUpdateService] Updating {currentVersion} -> {latestVersion}");
 
         // Download new version
         string newPath;
@@ -191,7 +191,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[RuntimeUpdateService] Update download failed: {ex.Message}");
+            Trace.TraceWarning($"[RuntimeUpdateService] Update download failed: {ex.Message}");
             return RuntimeUpdateResult.Failed($"Download failed: {ex.Message}");
         }
 
@@ -248,7 +248,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         var isDue = await _stateManager.IsVersionCheckDueAsync(packageKey, _options.VersionCheckInterval);
         if (!isDue)
         {
-            Debug.WriteLine("[RuntimeUpdateService] Background check skipped (not due)");
+            Trace.TraceInformation("[RuntimeUpdateService] Background check skipped (not due)");
             return;
         }
 
@@ -269,7 +269,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[RuntimeUpdateService] Background version check failed: {ex.Message}");
+            Trace.TraceWarning($"[RuntimeUpdateService] Background version check failed: {ex.Message}");
             return;
         }
 
@@ -288,7 +288,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         if (state.FailedVersions.Contains(latestVersion))
             return;
 
-        Debug.WriteLine($"[RuntimeUpdateService] Background downloading: {latestVersion}");
+        Trace.TraceInformation($"[RuntimeUpdateService] Background downloading: {latestVersion}");
 
         // Mark as pending
         await _stateManager.MarkPendingDownloadAsync(packageKey, latestVersion);
@@ -301,7 +301,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
             {
                 var newPath = await downloadFunc(latestVersion, null, CancellationToken.None);
                 await _stateManager.MarkUpdateReadyAsync(packageKey, latestVersion, newPath);
-                Debug.WriteLine($"[RuntimeUpdateService] Background download complete: {latestVersion}");
+                Trace.TraceInformation($"[RuntimeUpdateService] Background download complete: {latestVersion}");
             }
             finally
             {
@@ -310,7 +310,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[RuntimeUpdateService] Background download failed: {ex.Message}");
+            Trace.TraceWarning($"[RuntimeUpdateService] Background download failed: {ex.Message}");
             await _stateManager.ClearPendingDownloadAsync(packageKey);
         }
     }
@@ -369,7 +369,7 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
             return RuntimeUpdateResult.Failed($"No previous version available for rollback from {failedVersion}");
         }
 
-        Debug.WriteLine($"[RuntimeUpdateService] Rolling back from {failedVersion} to {previousVersion}");
+        Trace.TraceWarning($"[RuntimeUpdateService] Rolling back from {failedVersion} to {previousVersion}");
 
         // Download previous version
         try
@@ -424,11 +424,11 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
                 try
                 {
                     Directory.Delete(versionDir, recursive: true);
-                    Debug.WriteLine($"[RuntimeUpdateService] Cleaned up old version: {version}");
+                    Trace.TraceInformation($"[RuntimeUpdateService] Cleaned up old version: {version}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[RuntimeUpdateService] Failed to clean up {version}: {ex.Message}");
+                    Trace.TraceWarning($"[RuntimeUpdateService] Failed to clean up {version}: {ex.Message}");
                 }
             }
         }

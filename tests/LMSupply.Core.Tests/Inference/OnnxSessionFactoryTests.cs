@@ -44,8 +44,8 @@ public class OnnxSessionFactoryTests
 
         // Assert
         fallbackChain.Should().NotBeNull();
-        fallbackChain.First().Should().Be(ExecutionProvider.Cuda, "CUDA should be first for NVIDIA GPUs");
-        fallbackChain.Last().Should().Be(ExecutionProvider.Cpu, "CPU should be last");
+        fallbackChain[0].Should().Be(ExecutionProvider.Cuda, "CUDA should be first for NVIDIA GPUs");
+        fallbackChain[^1].Should().Be(ExecutionProvider.Cpu, "CPU should be last");
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class OnnxSessionFactoryTests
         var fallbackChain = gpu?.GetFallbackProviders() ?? new[] { ExecutionProvider.Cpu };
 
         // Assert
-        fallbackChain.Last().Should().Be(ExecutionProvider.Cpu, "CPU should always be the final fallback");
+        fallbackChain[^1].Should().Be(ExecutionProvider.Cpu, "CPU should always be the final fallback");
     }
 
     [Fact]

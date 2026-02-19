@@ -19,6 +19,7 @@ public class ModelPathResolverTests : IDisposable
         {
             Directory.Delete(_tempDir, recursive: true);
         }
+        GC.SuppressFinalize(this);
     }
 
     [Fact]

@@ -37,7 +37,7 @@ public sealed record ChatCompletionRequest
     /// <summary>
     /// Whether to stream the response
     /// </summary>
-    public bool Stream { get; init; } = false;
+    public bool Stream { get; init; }
 
     /// <summary>
     /// Stop sequences
@@ -89,7 +89,8 @@ public sealed record ChatCompletionMessage
 public sealed record ChatCompletionResponse
 {
     public required string Id { get; init; }
-    public string Object { get; init; } = "chat.completion";
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "chat.completion";
     public long Created { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public required string Model { get; init; }
     public required IReadOnlyList<ChatCompletionChoice> Choices { get; init; }
@@ -113,7 +114,8 @@ public sealed record ChatCompletionChoice
 public sealed record ChatCompletionChunk
 {
     public required string Id { get; init; }
-    public string Object { get; init; } = "chat.completion.chunk";
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "chat.completion.chunk";
     public long Created { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public required string Model { get; init; }
     public required IReadOnlyList<ChatCompletionChunkChoice> Choices { get; init; }

@@ -143,7 +143,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Checks if a token ID is a special token.
     /// </summary>
-    public bool IsSpecialToken(int tokenId)
+    public static bool IsSpecialToken(int tokenId)
     {
         return tokenId >= EndOfTextToken;
     }
@@ -151,7 +151,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Checks if a token ID is a timestamp token.
     /// </summary>
-    public bool IsTimestampToken(int tokenId)
+    public static bool IsTimestampToken(int tokenId)
     {
         return tokenId >= TimestampBeginToken;
     }
@@ -159,7 +159,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Converts a timestamp token to seconds.
     /// </summary>
-    public float TimestampTokenToSeconds(int tokenId)
+    public static float TimestampTokenToSeconds(int tokenId)
     {
         if (tokenId < TimestampBeginToken)
             return 0f;
@@ -170,7 +170,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Checks if a token ID is a language token.
     /// </summary>
-    public bool IsLanguageToken(int tokenId)
+    public static bool IsLanguageToken(int tokenId)
     {
         return tokenId >= LanguageTokenStart && tokenId <= LanguageTokenEnd;
     }
@@ -178,7 +178,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Gets the language code for a language token.
     /// </summary>
-    public string? GetLanguageFromToken(int tokenId)
+    public static string? GetLanguageFromToken(int tokenId)
     {
         if (!IsLanguageToken(tokenId))
             return null;
@@ -200,7 +200,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Gets the token ID for a language code.
     /// </summary>
-    public int? GetLanguageToken(string languageCode)
+    public static int? GetLanguageToken(string languageCode)
     {
         // Language tokens are NOT in vocab.json - they're computed as offsets from LanguageTokenStart
         // The order matches the SupportedLanguages dictionary order
@@ -222,7 +222,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <param name="language">ISO 639-1 language code (e.g., "en", "zh", "ja").</param>
     /// <param name="timestamps">Whether to include timestamps in output.</param>
     /// <returns>Array of token IDs for the SOT sequence.</returns>
-    public int[] GetSotSequence(string? language = null, bool timestamps = false)
+    public static int[] GetSotSequence(string? language = null, bool timestamps = false)
     {
         var tokens = new List<int> { StartOfTranscriptToken };
 
@@ -236,17 +236,17 @@ internal sealed class WhisperTokenizer : IDisposable
             if (langToken.HasValue)
             {
                 tokens.Add(langToken.Value);
-                Debug.WriteLine($"[WhisperTokenizer] Using language: {normalizedLang} (token: {langToken.Value})");
+                Trace.TraceInformation($"[WhisperTokenizer] Using language: {normalizedLang} (token: {langToken.Value})");
             }
             else
             {
-                Debug.WriteLine($"[WhisperTokenizer] Warning: Language '{language}' not found in vocabulary. " +
+                Trace.TraceWarning($"[WhisperTokenizer] Warning: Language '{language}' not found in vocabulary. " +
                     $"Supported codes: {string.Join(", ", SupportedLanguages.Keys.Take(10))}...");
             }
         }
         else
         {
-            Debug.WriteLine("[WhisperTokenizer] No language specified, model will auto-detect language.");
+            Trace.TraceInformation("[WhisperTokenizer] No language specified, model will auto-detect language.");
         }
 
         // Add task token (transcribe)
@@ -258,7 +258,7 @@ internal sealed class WhisperTokenizer : IDisposable
             tokens.Add(NoTimestampsToken);
         }
 
-        Debug.WriteLine($"[WhisperTokenizer] SOT sequence: [{string.Join(", ", tokens)}]");
+        Trace.TraceInformation($"[WhisperTokenizer] SOT sequence: [{string.Join(", ", tokens)}]");
         return [.. tokens];
     }
 

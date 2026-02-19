@@ -15,7 +15,7 @@ public static class ModelRegistry
         // ViT-GPT2 (default model - most stable ONNX conversion)
         RegisterModel(new ModelInfo(
             RepoId: "Xenova/vit-gpt2-image-captioning",
-            Alias: "vit-gpt2",
+            AliasName: "vit-gpt2",
             DisplayName: "ViT-GPT2 Image Captioning",
             EncoderFile: "encoder_model.onnx",
             DecoderFile: "decoder_model_merged.onnx",
@@ -33,7 +33,7 @@ public static class ModelRegistry
         // BLIP Base (quality model - 384x384 resolution)
         RegisterModel(new ModelInfo(
             RepoId: "Xenova/blip-image-captioning-base",
-            Alias: "blip-base",
+            AliasName: "blip-base",
             DisplayName: "BLIP Image Captioning Base",
             EncoderFile: "vision_model.onnx",
             DecoderFile: "text_decoder_model_merged.onnx",
@@ -51,7 +51,7 @@ public static class ModelRegistry
         // BLIP Large (large model - higher quality)
         RegisterModel(new ModelInfo(
             RepoId: "Xenova/blip-image-captioning-large",
-            Alias: "blip-large",
+            AliasName: "blip-large",
             DisplayName: "BLIP Image Captioning Large",
             EncoderFile: "vision_model.onnx",
             DecoderFile: "text_decoder_model_merged.onnx",
@@ -69,7 +69,7 @@ public static class ModelRegistry
         // GIT Base (fast model - efficient architecture)
         RegisterModel(new ModelInfo(
             RepoId: "Xenova/git-base-coco",
-            Alias: "git-base",
+            AliasName: "git-base",
             DisplayName: "GIT Base COCO",
             EncoderFile: "encoder_model.onnx",
             DecoderFile: "decoder_model_merged.onnx",
@@ -97,7 +97,7 @@ public static class ModelRegistry
     public static void RegisterModel(ModelInfo model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        Models[model.Alias] = model;
+        Models[model.AliasName] = model;
         Models[model.RepoId] = model;
     }
 
@@ -140,7 +140,7 @@ public static class ModelRegistry
     public static IEnumerable<string> GetAvailableModels()
     {
         return Models.Values
-            .Select(m => m.Alias)
+            .Select(m => m.AliasName)
             .Distinct()
             .Order();
     }
@@ -150,6 +150,6 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<ModelInfo> GetAllModels()
     {
-        return Models.Values.DistinctBy(m => m.Alias);
+        return Models.Values.DistinctBy(m => m.AliasName);
     }
 }

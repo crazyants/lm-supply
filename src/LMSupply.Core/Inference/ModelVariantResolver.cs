@@ -100,9 +100,9 @@ public static class ModelVariantResolver
         // Check main directory for precision-specific variants
         CheckAndAddVariant(variants, modelDirectory, FilePatterns.FP32Model, ModelPrecision.FP32);
         CheckAndAddVariant(variants, modelDirectory, FilePatterns.FP16Model, ModelPrecision.FP16);
-        CheckAndAddVariant(variants, modelDirectory, FilePatterns.INT8Model, ModelPrecision.INT8);
-        CheckAndAddVariant(variants, modelDirectory, FilePatterns.INT4Model, ModelPrecision.INT4);
-        CheckAndAddVariant(variants, modelDirectory, FilePatterns.QuantizedModel, ModelPrecision.INT8); // Assume quantized is INT8
+        CheckAndAddVariant(variants, modelDirectory, FilePatterns.INT8Model, ModelPrecision.Quant8);
+        CheckAndAddVariant(variants, modelDirectory, FilePatterns.INT4Model, ModelPrecision.Quant4);
+        CheckAndAddVariant(variants, modelDirectory, FilePatterns.QuantizedModel, ModelPrecision.Quant8); // Assume quantized is Quant8
 
         // Check onnx subdirectory for precision-specific variants
         var onnxSubDir = Path.Combine(modelDirectory, "onnx");
@@ -110,9 +110,9 @@ public static class ModelVariantResolver
         {
             CheckAndAddVariant(variants, onnxSubDir, "model_fp32.onnx", ModelPrecision.FP32);
             CheckAndAddVariant(variants, onnxSubDir, "model_fp16.onnx", ModelPrecision.FP16);
-            CheckAndAddVariant(variants, onnxSubDir, "model_int8.onnx", ModelPrecision.INT8);
-            CheckAndAddVariant(variants, onnxSubDir, "model_int4.onnx", ModelPrecision.INT4);
-            CheckAndAddVariant(variants, onnxSubDir, "model_quantized.onnx", ModelPrecision.INT8);
+            CheckAndAddVariant(variants, onnxSubDir, "model_int8.onnx", ModelPrecision.Quant8);
+            CheckAndAddVariant(variants, onnxSubDir, "model_int4.onnx", ModelPrecision.Quant4);
+            CheckAndAddVariant(variants, onnxSubDir, "model_quantized.onnx", ModelPrecision.Quant8);
         }
 
         // If no specific variants found and fallback enabled, check for default model
@@ -149,8 +149,8 @@ public static class ModelVariantResolver
             AvailableVariants = variants,
             HasFP32 = variants.ContainsKey(ModelPrecision.FP32),
             HasFP16 = variants.ContainsKey(ModelPrecision.FP16),
-            HasINT8 = variants.ContainsKey(ModelPrecision.INT8),
-            HasINT4 = variants.ContainsKey(ModelPrecision.INT4),
+            HasQuant8 = variants.ContainsKey(ModelPrecision.Quant8),
+            HasQuant4 = variants.ContainsKey(ModelPrecision.Quant4),
             RecommendedPrecision = SelectBestAvailablePrecision(
                 variants.Keys.ToList(), ModelPrecision.Auto) ?? ModelPrecision.FP16
         };
@@ -170,7 +170,7 @@ public static class ModelVariantResolver
     }
 
     private static ModelPrecision? SelectBestAvailablePrecision(
-        IList<ModelPrecision> available,
+        List<ModelPrecision> available,
         ModelPrecision requested)
     {
         if (available.Count == 0)
@@ -178,11 +178,11 @@ public static class ModelVariantResolver
 
         if (requested == ModelPrecision.Auto)
         {
-            // Priority: FP16 > INT8 > FP32 > INT4 (balance of speed/accuracy)
+            // Priority: FP16 > Quant8 > FP32 > Quant4 (balance of speed/accuracy)
             if (available.Contains(ModelPrecision.FP16)) return ModelPrecision.FP16;
-            if (available.Contains(ModelPrecision.INT8)) return ModelPrecision.INT8;
+            if (available.Contains(ModelPrecision.Quant8)) return ModelPrecision.Quant8;
             if (available.Contains(ModelPrecision.FP32)) return ModelPrecision.FP32;
-            if (available.Contains(ModelPrecision.INT4)) return ModelPrecision.INT4;
+            if (available.Contains(ModelPrecision.Quant4)) return ModelPrecision.Quant4;
         }
         else
         {
@@ -203,11 +203,11 @@ public static class ModelVariantResolver
 
     private static IEnumerable<ModelPrecision> GetFallbackOrder(ModelPrecision requested) => requested switch
     {
-        ModelPrecision.FP32 => [ModelPrecision.FP16, ModelPrecision.INT8, ModelPrecision.INT4],
-        ModelPrecision.FP16 => [ModelPrecision.FP32, ModelPrecision.INT8, ModelPrecision.INT4],
-        ModelPrecision.INT8 => [ModelPrecision.FP16, ModelPrecision.FP32, ModelPrecision.INT4],
-        ModelPrecision.INT4 => [ModelPrecision.INT8, ModelPrecision.FP16, ModelPrecision.FP32],
-        _ => [ModelPrecision.FP16, ModelPrecision.INT8, ModelPrecision.FP32, ModelPrecision.INT4]
+        ModelPrecision.FP32 => [ModelPrecision.FP16, ModelPrecision.Quant8, ModelPrecision.Quant4],
+        ModelPrecision.FP16 => [ModelPrecision.FP32, ModelPrecision.Quant8, ModelPrecision.Quant4],
+        ModelPrecision.Quant8 => [ModelPrecision.FP16, ModelPrecision.FP32, ModelPrecision.Quant4],
+        ModelPrecision.Quant4 => [ModelPrecision.Quant8, ModelPrecision.FP16, ModelPrecision.FP32],
+        _ => [ModelPrecision.FP16, ModelPrecision.Quant8, ModelPrecision.FP32, ModelPrecision.Quant4]
     };
 
     private static ModelPrecision InferPrecisionFromFileName(string path)
@@ -219,9 +219,9 @@ public static class ModelVariantResolver
         if (fileName.Contains("fp16") || fileName.Contains("float16") || fileName.Contains("half"))
             return ModelPrecision.FP16;
         if (fileName.Contains("int8") || fileName.Contains("quantized") || fileName.Contains("qint8"))
-            return ModelPrecision.INT8;
+            return ModelPrecision.Quant8;
         if (fileName.Contains("int4") || fileName.Contains("qint4"))
-            return ModelPrecision.INT4;
+            return ModelPrecision.Quant4;
 
         // Default to FP32 for standard model.onnx
         return ModelPrecision.FP32;
@@ -254,14 +254,14 @@ public sealed class ModelVariantInfo
     public bool HasFP16 { get; init; }
 
     /// <summary>
-    /// Whether INT8 variant is available.
+    /// Whether 8-bit quantized variant is available.
     /// </summary>
-    public bool HasINT8 { get; init; }
+    public bool HasQuant8 { get; init; }
 
     /// <summary>
-    /// Whether INT4 variant is available.
+    /// Whether 4-bit quantized variant is available.
     /// </summary>
-    public bool HasINT4 { get; init; }
+    public bool HasQuant4 { get; init; }
 
     /// <summary>
     /// Recommended precision based on available variants.

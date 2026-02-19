@@ -102,7 +102,7 @@ public class SegmentationResultTests
 
         var mask = result.GetClassMask(1);
 
-        mask.Should().BeEquivalentTo(new[] { false, true, false, true, false, true, false, false, true, false });
+        mask.Should().BeEquivalentTo([false, true, false, true, false, true, false, false, true, false]);
     }
 
     [Fact]

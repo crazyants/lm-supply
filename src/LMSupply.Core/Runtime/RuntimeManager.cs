@@ -126,7 +126,7 @@ public sealed class RuntimeManager : IAsyncDisposable
         foreach (var path in pathsToAdd)
         {
             NativeLoader.Instance.AddToWindowsDllSearchPath(path);
-            Debug.WriteLine($"[RuntimeManager] Added to DLL search path: {path}");
+            Trace.TraceInformation($"[RuntimeManager] Added to DLL search path: {path}");
         }
 
         // Also modify PATH environment variable for current process
@@ -139,12 +139,12 @@ public sealed class RuntimeManager : IAsyncDisposable
             {
                 var pathToAdd = string.Join(Path.PathSeparator.ToString(), newPaths);
                 Environment.SetEnvironmentVariable("PATH", pathToAdd + Path.PathSeparator + currentPath);
-                Debug.WriteLine($"[RuntimeManager] Added to PATH: {pathToAdd}");
+                Trace.TraceInformation($"[RuntimeManager] Added to PATH: {pathToAdd}");
             }
         }
 
         // Log diagnostics in debug mode
-        Debug.WriteLine(cudaEnv.GetDiagnostics());
+        Trace.TraceInformation(cudaEnv.GetDiagnostics());
     }
 
     /// <summary>
@@ -193,7 +193,7 @@ public sealed class RuntimeManager : IAsyncDisposable
             catch (Exception ex) when (providerToTry != "cpu")
             {
                 // Log and continue to next provider in chain
-                Debug.WriteLine(
+                Trace.TraceInformation(
                     $"[RuntimeManager] Provider '{providerToTry}' failed: {ex.Message}. Trying next provider...");
                 lastException = ex;
             }
@@ -232,7 +232,7 @@ public sealed class RuntimeManager : IAsyncDisposable
             provider,
             _platform!,
             currentVersion,
-            (ver, prog, ct) => _nugetDownloader.DownloadAsync(provider, _platform!, ver, prog, ct, packageType),
+            (ver, prog, ct) => _nugetDownloader.DownloadAsync(provider, _platform!, ver, prog, packageType, ct),
             progress,
             cancellationToken);
 
@@ -250,7 +250,7 @@ public sealed class RuntimeManager : IAsyncDisposable
     /// <summary>
     /// Resolves the version to use from loaded assembly.
     /// </summary>
-    private async Task<string> ResolveVersionAsync(string packageId, CancellationToken ct)
+    private static async Task<string> ResolveVersionAsync(string packageId, CancellationToken ct)
     {
         // Try to get from loaded assembly
         var assemblyVersion = TryGetOnnxRuntimeVersion();
@@ -326,7 +326,7 @@ public sealed class RuntimeManager : IAsyncDisposable
     /// </summary>
     public string GetDefaultProvider()
     {
-        return GetProviderFallbackChain().First();
+        return GetProviderFallbackChain()[0];
     }
 
     /// <summary>
@@ -439,7 +439,7 @@ public sealed class RuntimeManager : IAsyncDisposable
             _activeProvider,
             _platform,
             currentVersion,
-            (ver, prog, ct) => _nugetDownloader.DownloadAsync(_activeProvider, _platform, ver, prog, ct, normalizedPackageType),
+            (ver, prog, ct) => _nugetDownloader.DownloadAsync(_activeProvider, _platform, ver, prog, normalizedPackageType, ct),
             progress,
             cancellationToken);
 

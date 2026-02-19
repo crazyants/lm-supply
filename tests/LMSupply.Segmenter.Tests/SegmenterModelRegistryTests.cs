@@ -17,7 +17,7 @@ public class SegmenterModelRegistryTests
 
         model.Should().NotBeNull();
         model.Id.Should().Be("optimum/segformer-b0-finetuned-ade-512-512");
-        model.Alias.Should().Be("default");
+        model.AliasName.Should().Be("default");
     }
 
     [Theory]
@@ -57,7 +57,7 @@ public class SegmenterModelRegistryTests
         var model = _registry.Resolve("./models/custom.onnx");
 
         model.Should().NotBeNull();
-        model.Alias.Should().Be("local");
+        model.AliasName.Should().Be("local");
         model.OnnxFile.Should().Be("custom.onnx");
     }
 

@@ -119,7 +119,7 @@ internal sealed class MobileSamModel : IInteractiveSegmenter
             };
 
             using var outputs = _encoderSession!.Run(inputs);
-            var embeddingTensor = outputs.First().AsTensor<float>();
+            var embeddingTensor = outputs[0].AsTensor<float>();
 
             // Clone the embedding
             var dims = embeddingTensor.Dimensions.ToArray();
@@ -468,7 +468,7 @@ internal sealed class MobileSamSession : IInteractiveSession
         return (coords, labels);
     }
 
-    private DenseTensor<float> PrepareMaskInput(MaskPrompt mask)
+    private static DenseTensor<float> PrepareMaskInput(MaskPrompt mask)
     {
         // Resize mask to 256x256 and convert to tensor
         var tensor = new DenseTensor<float>([1, 1, 256, 256]);

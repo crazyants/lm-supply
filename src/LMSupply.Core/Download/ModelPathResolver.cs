@@ -125,7 +125,7 @@ public sealed class ModelPathResolver : IDisposable
         if (!File.Exists(modelPath) && discovery.OnnxFiles.Count > 0)
         {
             // Use first discovered ONNX file
-            modelPath = discovery.GetFilePath(modelDir, discovery.OnnxFiles[0]);
+            modelPath = ModelDiscoveryResult.GetFilePath(modelDir, discovery.OnnxFiles[0]);
         }
 
         if (!File.Exists(modelPath))

@@ -33,7 +33,7 @@ public sealed class SynthesizerModelRegistry
     /// <param name="info">The model information to register.</param>
     public void Register(SynthesizerModelInfo info)
     {
-        _models[info.Alias] = info;
+        _models[info.AliasName] = info;
         _byId[info.Id] = info;
     }
 

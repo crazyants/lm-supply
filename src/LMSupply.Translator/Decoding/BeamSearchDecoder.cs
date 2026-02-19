@@ -9,6 +9,9 @@ namespace LMSupply.Translator.Decoding;
 /// </summary>
 internal sealed class BeamSearchDecoder
 {
+    private static readonly bool[] s_falseArray = [false];
+    private static readonly int[] s_oneDimension = [1];
+
     private readonly int _beamSize;
     private readonly int _maxLength;
     private readonly int _eosTokenId;
@@ -149,7 +152,7 @@ internal sealed class BeamSearchDecoder
         return bestBeam?.TokenIds.ToArray() ?? startTokenIds;
     }
 
-    private float[] RunDecoderStep(
+    private static float[] RunDecoderStep(
         List<long> inputIds,
         DenseTensor<float> encoderOutput,
         long[] encoderAttentionMask,
@@ -170,12 +173,12 @@ internal sealed class BeamSearchDecoder
         var inputNames = decoderSession.InputMetadata.Keys;
         if (inputNames.Contains("use_cache_branch"))
         {
-            var useCacheBranch = new DenseTensor<bool>(new[] { false }, new[] { 1 });
+            var useCacheBranch = new DenseTensor<bool>(s_falseArray, s_oneDimension);
             inputs.Add(NamedOnnxValue.CreateFromTensor("use_cache_branch", useCacheBranch));
         }
 
         using var outputs = decoderSession.Run(inputs);
-        var logitsTensor = outputs.First().AsTensor<float>();
+        var logitsTensor = outputs[0].AsTensor<float>();
 
         // Get logits for last position
         var lastPosition = inputIds.Count - 1;

@@ -174,7 +174,7 @@ public sealed class GgufModelDownloader : IDisposable
         }
 
         // Fallback to first file
-        return ggufFiles.First().FileName;
+        return ggufFiles[0].FileName;
     }
 
     /// <summary>

@@ -6,7 +6,7 @@ namespace LMSupply.Captioner.Models;
 /// Metadata about a captioning model.
 /// </summary>
 /// <param name="RepoId">HuggingFace repository ID.</param>
-/// <param name="Alias">Short alias for the model.</param>
+/// <param name="AliasName">Short alias name for the model.</param>
 /// <param name="DisplayName">Human-readable display name.</param>
 /// <param name="EncoderFile">ONNX file name for the vision encoder.</param>
 /// <param name="DecoderFile">ONNX file name for the text decoder.</param>
@@ -19,7 +19,7 @@ namespace LMSupply.Captioner.Models;
 /// <param name="PadTokenId">Padding token ID.</param>
 public record ModelInfo(
     string RepoId,
-    string Alias,
+    string AliasName,
     string DisplayName,
     string EncoderFile,
     string DecoderFile,

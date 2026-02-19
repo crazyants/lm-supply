@@ -12,6 +12,8 @@ namespace LMSupply.Reranker.Core;
 /// </summary>
 internal sealed class CrossEncoderInference : IDisposable
 {
+    private static readonly string[] s_cpuProvider = ["CPUExecutionProvider"];
+
     private readonly InferenceSession _session;
     private readonly string[] _inputNames;
     private readonly string _outputName;
@@ -153,7 +155,7 @@ internal sealed class CrossEncoderInference : IDisposable
             modelInfo.OutputShape,
             hasTokenTypeIds,
             false,
-            new[] { "CPUExecutionProvider" },
+            s_cpuProvider,
             ExecutionProvider.Cpu);
     }
 
@@ -213,7 +215,7 @@ internal sealed class CrossEncoderInference : IDisposable
         try
         {
             using var results = _session.Run(inputs);
-            var outputTensor = results.First().AsTensor<float>();
+            var outputTensor = results[0].AsTensor<float>();
 
             return ExtractScores(outputTensor, batch.BatchSize);
         }
@@ -248,7 +250,7 @@ internal sealed class CrossEncoderInference : IDisposable
         try
         {
             using var results = _session.Run(inputs);
-            var outputTensor = results.First().AsTensor<float>();
+            var outputTensor = results[0].AsTensor<float>();
 
             return ExtractScores(outputTensor, 1)[0];
         }

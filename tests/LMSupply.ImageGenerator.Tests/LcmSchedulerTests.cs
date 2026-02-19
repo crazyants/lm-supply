@@ -202,7 +202,7 @@ public class LcmSchedulerTests
         var sample = new float[sampleSize];
 
         // Act
-        var result = scheduler.ScaleModelInput(sample, scheduler.Timesteps[0]);
+        var result = LcmScheduler.ScaleModelInput(sample, scheduler.Timesteps[0]);
 
         // Assert
         result.Length.Should().Be(sampleSize);

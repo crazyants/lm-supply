@@ -29,7 +29,7 @@ public sealed class ImageGeneratorOptions
     /// Whether to disable automatic model downloading.
     /// Default: false
     /// </summary>
-    public bool DisableAutoDownload { get; set; } = false;
+    public bool DisableAutoDownload { get; set; }
 
     /// <summary>
     /// Whether to use FP16 precision for reduced memory usage.
@@ -41,5 +41,5 @@ public sealed class ImageGeneratorOptions
     /// Device ID for GPU inference (0-based index).
     /// Default: 0
     /// </summary>
-    public int DeviceId { get; set; } = 0;
+    public int DeviceId { get; set; }
 }

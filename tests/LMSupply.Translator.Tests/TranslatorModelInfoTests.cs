@@ -11,7 +11,7 @@ public class TranslatorModelInfoTests
         var modelInfo = new TranslatorModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test Model",
             Architecture = "MarianMT",
             SourceLanguage = "en",
@@ -19,7 +19,7 @@ public class TranslatorModelInfoTests
         };
 
         modelInfo.Id.Should().Be("test/model");
-        modelInfo.Alias.Should().Be("test");
+        modelInfo.AliasName.Should().Be("test");
         modelInfo.DisplayName.Should().Be("Test Model");
         modelInfo.Architecture.Should().Be("MarianMT");
         modelInfo.SourceLanguage.Should().Be("en");
@@ -32,7 +32,7 @@ public class TranslatorModelInfoTests
         var modelInfo = new TranslatorModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test",
             Architecture = "MarianMT",
             SourceLanguage = "en",
@@ -59,7 +59,7 @@ public class TranslatorModelInfoTests
         var modelInfo = new TranslatorModelInfo
         {
             Id = "Helsinki-NLP/opus-mt-ko-en",
-            Alias = "ko-en",
+            AliasName = "ko-en",
             DisplayName = "OPUS-MT Ko-En",
             Architecture = "MarianMT",
             SourceLanguage = "ko",
@@ -94,7 +94,7 @@ public class TranslatorModelInfoTests
         var modelInfo = new TranslatorModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test",
             Architecture = architecture,
             SourceLanguage = "en",
@@ -116,7 +116,7 @@ public class TranslatorModelInfoTests
         var modelInfo = new TranslatorModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test",
             Architecture = "MarianMT",
             SourceLanguage = source,
@@ -136,7 +136,7 @@ public class TranslatorModelInfoTests
         var modelInfo = new TranslatorModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test",
             Architecture = "MarianMT",
             SourceLanguage = "en",
@@ -154,7 +154,7 @@ public class TranslatorModelInfoTests
 
         // Uses onnx-community repo with pre-converted ONNX files
         model.Id.Should().Be("onnx-community/opus-mt-ko-en");
-        model.Alias.Should().Be("default");
+        model.AliasName.Should().Be("default");
         model.SourceLanguage.Should().Be("ko");
         model.TargetLanguage.Should().Be("en");
         model.Architecture.Should().Be("MarianMT");
@@ -170,12 +170,12 @@ public class TranslatorModelInfoTests
     [Fact]
     public void DefaultModels_All_ShouldContainKoEnModel()
     {
-        DefaultModels.All.Should().Contain(m => m.Alias == "ko-en");
+        DefaultModels.All.Should().Contain(m => m.AliasName == "ko-en");
     }
 
     [Fact]
     public void DefaultModels_All_ShouldContainEnKoModel()
     {
-        DefaultModels.All.Should().Contain(m => m.Alias == "en-ko");
+        DefaultModels.All.Should().Contain(m => m.AliasName == "en-ko");
     }
 }

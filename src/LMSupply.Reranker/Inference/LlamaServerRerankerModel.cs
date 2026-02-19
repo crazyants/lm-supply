@@ -231,7 +231,7 @@ internal sealed class LlamaServerRerankerModel : IRerankerModel
     public ModelInfo? GetModelInfo() => new()
     {
         Id = ModelId,
-        Alias = "gguf",
+        AliasName = "gguf",
         DisplayName = Path.GetFileNameWithoutExtension(_modelPath),
         Parameters = 0, // Unknown for GGUF
         MaxSequenceLength = _options.MaxSequenceLength ?? 512,

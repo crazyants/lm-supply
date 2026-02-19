@@ -27,7 +27,7 @@ public sealed class ChatMLFormatter : IChatFormatter
                 ChatRole.System => "system",
                 ChatRole.User => "user",
                 ChatRole.Assistant => "assistant",
-                _ => throw new ArgumentOutOfRangeException(nameof(message.Role))
+                _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             sb.Append(ImStart);

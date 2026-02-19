@@ -33,8 +33,8 @@ internal sealed class CrnnRecognizer : IDisposable
         _confidenceThreshold = options.RecognitionThreshold;
 
         // Get input/output names from the model
-        _inputName = session.InputNames.First();
-        _outputName = session.OutputNames.First();
+        _inputName = session.InputNames[0];
+        _outputName = session.OutputNames[0];
     }
 
     /// <summary>
@@ -132,14 +132,14 @@ internal sealed class CrnnRecognizer : IDisposable
                 NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
             };
             var results = _session.Run(inputs);
-            return ExtractLogits(results.First().AsTensor<float>());
+            return ExtractLogits(results[0].AsTensor<float>());
         }, cancellationToken).ConfigureAwait(false);
 
         // CTC decode
         return CtcDecoder.GreedyDecode(logits, _dictionary);
     }
 
-    private Image<Rgb24> CropRegion(Image<Rgb24> image, DetectedRegion region)
+    private static Image<Rgb24> CropRegion(Image<Rgb24> image, DetectedRegion region)
     {
         var box = region.BoundingBox;
 

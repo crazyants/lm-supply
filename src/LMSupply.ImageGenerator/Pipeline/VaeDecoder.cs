@@ -44,8 +44,8 @@ internal sealed class VaeDecoder : IAsyncDisposable
             () => new InferenceSession(modelPath, options),
             cancellationToken);
 
-        var inputName = session.InputNames.First();
-        var outputName = session.OutputNames.First();
+        var inputName = session.InputNames[0];
+        var outputName = session.OutputNames[0];
 
         return new VaeDecoder(session, inputName, outputName, scalingFactor);
     }
@@ -73,7 +73,7 @@ internal sealed class VaeDecoder : IAsyncDisposable
         var imageBytes = await Task.Run(() =>
         {
             using var outputs = _session.Run(inputs);
-            var output = outputs.First();
+            var output = outputs[0];
 
             var outputTensor = output.AsTensor<float>();
             return TensorToImage(outputTensor);

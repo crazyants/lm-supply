@@ -65,8 +65,8 @@ internal sealed class ClipTextEncoder : IAsyncDisposable
             cancellationToken);
 
         // Get input/output names
-        var inputName = session.InputNames.First();
-        var outputName = session.OutputNames.First();
+        var inputName = session.InputNames[0];
+        var outputName = session.OutputNames[0];
 
         // Determine embedding dimension from output shape
         var outputMeta = session.OutputMetadata[outputName];
@@ -106,7 +106,7 @@ internal sealed class ClipTextEncoder : IAsyncDisposable
         var result = await Task.Run(() =>
         {
             using var outputs = _session.Run(inputs);
-            var output = outputs.First();
+            var output = outputs[0];
 
             // Copy to our own tensor
             var outputTensor = output.AsTensor<float>();
@@ -160,7 +160,7 @@ internal sealed class ClipTextEncoder : IAsyncDisposable
         var result = await Task.Run(() =>
         {
             using var outputs = _session.Run(inputs);
-            var output = outputs.First();
+            var output = outputs[0];
 
             var outputTensor = output.AsTensor<float>();
             var dims = outputTensor.Dimensions.ToArray();

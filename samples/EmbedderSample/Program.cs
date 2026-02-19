@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using LMSupply;
 using LMSupply.Embedder;
 
@@ -84,7 +85,7 @@ public static class Program
         Console.WriteLine($"Text: \"{sentences[0]}\"");
         Console.WriteLine($"Dimension: {embedding1.Length}");
         Console.WriteLine($"Time: {sw.ElapsedMilliseconds}ms");
-        Console.WriteLine($"First 5 values: [{string.Join(", ", embedding1.Take(5).Select(v => v.ToString("F4")))}]");
+        Console.WriteLine($"First 5 values: [{string.Join(", ", embedding1.Take(5).Select(v => v.ToString("F4", CultureInfo.InvariantCulture)))}]");
 
         // Test 2: Batch embedding
         Console.WriteLine("\n--- Test 2: Batch Embedding ---");

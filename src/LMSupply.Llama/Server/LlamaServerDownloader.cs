@@ -242,7 +242,7 @@ public sealed class LlamaServerDownloader : IDisposable
 
         return Directory.GetDirectories(_cacheDirectory)
             .Select(Path.GetFileName)
-            .Where(v => v != null && v.StartsWith("b"))
+            .Where(v => v != null && v.StartsWith('b'))
             .OrderByDescending(v => v)
             .ToList()!;
     }

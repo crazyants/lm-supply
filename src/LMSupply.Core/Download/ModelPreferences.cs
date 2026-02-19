@@ -16,7 +16,7 @@ public sealed class ModelPreferences
     public static ModelPreferences LowMemory { get; } = new()
     {
         PreferLowMemory = true,
-        QuantizationPriority = [Quantization.Int4, Quantization.Int8, Quantization.Fp16, Quantization.Default]
+        QuantizationPriority = [Quantization.Quant4, Quantization.Quant8, Quantization.Fp16, Quantization.Default]
     };
 
     /// <summary>
@@ -25,7 +25,7 @@ public sealed class ModelPreferences
     public static ModelPreferences HighQuality { get; } = new()
     {
         PreferLowMemory = false,
-        QuantizationPriority = [Quantization.Default, Quantization.Fp16, Quantization.Int8, Quantization.Int4]
+        QuantizationPriority = [Quantization.Default, Quantization.Fp16, Quantization.Quant8, Quantization.Quant4]
     };
 
     /// <summary>
@@ -43,7 +43,7 @@ public sealed class ModelPreferences
     /// First matching variant will be selected.
     /// </summary>
     public IReadOnlyList<Quantization> QuantizationPriority { get; init; } =
-        [Quantization.Default, Quantization.Fp16, Quantization.Int8, Quantization.Int4];
+        [Quantization.Default, Quantization.Fp16, Quantization.Quant8, Quantization.Quant4];
 
     /// <summary>
     /// Specific subfolder to use. If set, overrides auto-detection.
@@ -93,8 +93,8 @@ public enum Quantization
     Fp16,
 
     /// <summary>8-bit integer quantization.</summary>
-    Int8,
+    Quant8,
 
     /// <summary>4-bit integer quantization.</summary>
-    Int4
+    Quant4
 }

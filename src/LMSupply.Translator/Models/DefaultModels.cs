@@ -14,7 +14,7 @@ public static class DefaultModels
     public static TranslatorModelInfo OpusMtKoEn { get; } = new()
     {
         Id = "onnx-community/opus-mt-ko-en",
-        Alias = "default",
+        AliasName = "default",
         DisplayName = "OPUS-MT Ko-En",
         Architecture = "MarianMT",
         SourceLanguage = "ko",
@@ -36,7 +36,7 @@ public static class DefaultModels
     public static TranslatorModelInfo OpusMtKoEnAlias { get; } = new()
     {
         Id = "onnx-community/opus-mt-ko-en",
-        Alias = "ko-en",
+        AliasName = "ko-en",
         DisplayName = "OPUS-MT Ko-En",
         Architecture = "MarianMT",
         SourceLanguage = "ko",
@@ -59,7 +59,7 @@ public static class DefaultModels
     public static TranslatorModelInfo OpusMtEnKo { get; } = new()
     {
         Id = "onnx-community/opus-mt-en-ko",
-        Alias = "en-ko",
+        AliasName = "en-ko",
         DisplayName = "OPUS-MT En-Ko",
         Architecture = "MarianMT",
         SourceLanguage = "en",
@@ -82,7 +82,7 @@ public static class DefaultModels
     public static TranslatorModelInfo OpusMtJaEn { get; } = new()
     {
         Id = "onnx-community/opus-mt-ja-en",
-        Alias = "ja-en",
+        AliasName = "ja-en",
         DisplayName = "OPUS-MT Ja-En",
         Architecture = "MarianMT",
         SourceLanguage = "ja",
@@ -105,7 +105,7 @@ public static class DefaultModels
     public static TranslatorModelInfo OpusMtZhEn { get; } = new()
     {
         Id = "onnx-community/opus-mt-zh-en",
-        Alias = "zh-en",
+        AliasName = "zh-en",
         DisplayName = "OPUS-MT Zh-En",
         Architecture = "MarianMT",
         SourceLanguage = "zh",

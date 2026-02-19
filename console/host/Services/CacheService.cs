@@ -5,7 +5,7 @@ namespace LMSupply.Console.Host.Services;
 /// <summary>
 /// HuggingFace cache management service (thin wrapper over CacheManager).
 /// </summary>
-public sealed class CacheService
+public sealed partial class CacheService
 {
     private readonly string _cacheDirectory;
     private readonly ILogger<CacheService> _logger;
@@ -16,7 +16,7 @@ public sealed class CacheService
             ?? CacheManager.GetDefaultCacheDirectory();
         _logger = logger;
 
-        _logger.LogInformation("Cache directory: {CacheDirectory}", _cacheDirectory);
+        LogCacheDirectory(_logger, _cacheDirectory);
     }
 
     /// <summary>
@@ -47,17 +47,17 @@ public sealed class CacheService
             var deleted = CacheManager.DeleteModel(_cacheDirectory, repoId);
             if (deleted)
             {
-                _logger.LogInformation("Deleted model: {RepoId}", repoId);
+                LogModelDeleted(_logger, repoId);
             }
             else
             {
-                _logger.LogWarning("Model not found for deletion: {RepoId}", repoId);
+                LogModelNotFoundForDeletion(_logger, repoId);
             }
             return deleted;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete model: {RepoId}", repoId);
+            LogDeleteModelFailed(_logger, ex, repoId);
             return false;
         }
     }
@@ -67,4 +67,16 @@ public sealed class CacheService
     /// </summary>
     public long GetTotalCacheSize()
         => CacheManager.GetTotalCacheSize(_cacheDirectory);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cache directory: {CacheDirectory}")]
+    private static partial void LogCacheDirectory(ILogger logger, string cacheDirectory);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted model: {RepoId}")]
+    private static partial void LogModelDeleted(ILogger logger, string repoId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Model not found for deletion: {RepoId}")]
+    private static partial void LogModelNotFoundForDeletion(ILogger logger, string repoId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to delete model: {RepoId}")]
+    private static partial void LogDeleteModelFailed(ILogger logger, Exception exception, string repoId);
 }

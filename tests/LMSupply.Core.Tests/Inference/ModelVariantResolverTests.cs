@@ -19,6 +19,7 @@ public class ModelVariantResolverTests : IDisposable
         {
             Directory.Delete(_testDirectory, recursive: true);
         }
+        GC.SuppressFinalize(this);
     }
 
     #region ResolveModelPath Tests
@@ -74,7 +75,7 @@ public class ModelVariantResolverTests : IDisposable
     }
 
     [Fact]
-    public void ResolveModelPath_Auto_FallsBackToINT8WhenNoFP16()
+    public void ResolveModelPath_Auto_FallsBackToQuant8WhenNoFP16()
     {
         CreateModelFile("model_fp32.onnx");
         var int8Path = CreateModelFile("model_int8.onnx");
@@ -162,19 +163,19 @@ public class ModelVariantResolverTests : IDisposable
         variants.Should().HaveCount(4);
         variants[ModelPrecision.FP32].Should().Be(fp32Path);
         variants[ModelPrecision.FP16].Should().Be(fp16Path);
-        variants[ModelPrecision.INT8].Should().Be(int8Path);
-        variants[ModelPrecision.INT4].Should().Be(int4Path);
+        variants[ModelPrecision.Quant8].Should().Be(int8Path);
+        variants[ModelPrecision.Quant4].Should().Be(int4Path);
     }
 
     [Fact]
-    public void DiscoverModelVariants_QuantizedModel_MapsToINT8()
+    public void DiscoverModelVariants_QuantizedModel_MapsToQuant8()
     {
         var quantizedPath = CreateModelFile("model_quantized.onnx");
 
         var variants = ModelVariantResolver.DiscoverModelVariants(_testDirectory);
 
-        variants.Should().ContainKey(ModelPrecision.INT8);
-        variants[ModelPrecision.INT8].Should().Be(quantizedPath);
+        variants.Should().ContainKey(ModelPrecision.Quant8);
+        variants[ModelPrecision.Quant8].Should().Be(quantizedPath);
     }
 
     [Fact]
@@ -201,7 +202,7 @@ public class ModelVariantResolverTests : IDisposable
 
         variants.Should().HaveCount(2);
         variants[ModelPrecision.FP16].Should().Be(fp16Path);
-        variants[ModelPrecision.INT8].Should().Be(int8Path);
+        variants[ModelPrecision.Quant8].Should().Be(int8Path);
     }
 
     [Fact]
@@ -235,8 +236,8 @@ public class ModelVariantResolverTests : IDisposable
         info.VariantCount.Should().Be(3);
         info.HasFP32.Should().BeTrue();
         info.HasFP16.Should().BeTrue();
-        info.HasINT8.Should().BeTrue();
-        info.HasINT4.Should().BeFalse();
+        info.HasQuant8.Should().BeTrue();
+        info.HasQuant4.Should().BeFalse();
         info.RecommendedPrecision.Should().Be(ModelPrecision.FP16); // FP16 has priority
     }
 
@@ -248,18 +249,18 @@ public class ModelVariantResolverTests : IDisposable
         info.VariantCount.Should().Be(0);
         info.HasFP32.Should().BeFalse();
         info.HasFP16.Should().BeFalse();
-        info.HasINT8.Should().BeFalse();
-        info.HasINT4.Should().BeFalse();
+        info.HasQuant8.Should().BeFalse();
+        info.HasQuant4.Should().BeFalse();
     }
 
     [Fact]
-    public void GetVariantInfo_OnlyINT8_RecommendsINT8()
+    public void GetVariantInfo_OnlyQuant8_RecommendsQuant8()
     {
         CreateModelFile("model_int8.onnx");
 
         var info = ModelVariantResolver.GetVariantInfo(_testDirectory);
 
-        info.RecommendedPrecision.Should().Be(ModelPrecision.INT8);
+        info.RecommendedPrecision.Should().Be(ModelPrecision.Quant8);
     }
 
     [Fact]
@@ -273,7 +274,7 @@ public class ModelVariantResolverTests : IDisposable
 
         toString.Should().Contain("ModelVariants(2)");
         toString.Should().Contain("FP16");
-        toString.Should().Contain("INT8");
+        toString.Should().Contain("Quant8");
         toString.Should().Contain("Recommended: FP16");
     }
 
@@ -284,33 +285,33 @@ public class ModelVariantResolverTests : IDisposable
     [Fact]
     public void ResolveModelPath_FP32Requested_FallbackOrder()
     {
-        // FP32 fallback: FP16 → INT8 → INT4
+        // FP32 fallback: FP16 → Quant8 → Quant4
         var int8Path = CreateModelFile("model_int8.onnx");
 
         var result = ModelVariantResolver.ResolveModelPath(_testDirectory, ModelPrecision.FP32);
 
-        result.Should().Be(int8Path); // Falls back through FP16 (not found) to INT8
+        result.Should().Be(int8Path); // Falls back through FP16 (not found) to Quant8
     }
 
     [Fact]
-    public void ResolveModelPath_INT4Requested_FallbackOrder()
+    public void ResolveModelPath_Quant4Requested_FallbackOrder()
     {
-        // INT4 fallback: INT8 → FP16 → FP32
+        // Quant4 fallback: Quant8 → FP16 → FP32
         var fp32Path = CreateModelFile("model_fp32.onnx");
 
-        var result = ModelVariantResolver.ResolveModelPath(_testDirectory, ModelPrecision.INT4);
+        var result = ModelVariantResolver.ResolveModelPath(_testDirectory, ModelPrecision.Quant4);
 
-        result.Should().Be(fp32Path); // Falls back through INT8, FP16 (not found) to FP32
+        result.Should().Be(fp32Path); // Falls back through Quant8, FP16 (not found) to FP32
     }
 
     [Fact]
-    public void ResolveModelPath_INT8Requested_PrefersFP16Fallback()
+    public void ResolveModelPath_Quant8Requested_PrefersFP16Fallback()
     {
-        // INT8 fallback: FP16 → FP32 → INT4
+        // Quant8 fallback: FP16 → FP32 → Quant4
         var fp16Path = CreateModelFile("model_fp16.onnx");
         CreateModelFile("model_fp32.onnx");
 
-        var result = ModelVariantResolver.ResolveModelPath(_testDirectory, ModelPrecision.INT8);
+        var result = ModelVariantResolver.ResolveModelPath(_testDirectory, ModelPrecision.Quant8);
 
         result.Should().Be(fp16Path);
     }

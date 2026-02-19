@@ -67,16 +67,16 @@ public static class HardwareDetector
         {
             // GPU scenarios
             (>= 16, _, ExecutionProvider.Cuda) => (14_000_000_000L, "FP16", 16384),
-            (>= 8, _, ExecutionProvider.Cuda) => (7_000_000_000L, "INT8", 8192),
-            (>= 4, _, ExecutionProvider.Cuda or ExecutionProvider.DirectML) => (3_000_000_000L, "INT4", 4096),
+            (>= 8, _, ExecutionProvider.Cuda) => (7_000_000_000L, "Quant8", 8192),
+            (>= 4, _, ExecutionProvider.Cuda or ExecutionProvider.DirectML) => (3_000_000_000L, "Quant4", 4096),
 
             // CPU-only scenarios
-            (_, >= 32, ExecutionProvider.Cpu) => (7_000_000_000L, "INT4", 8192),
-            (_, >= 16, ExecutionProvider.Cpu) => (3_000_000_000L, "INT4", 4096),
-            (_, >= 8, ExecutionProvider.Cpu) => (1_000_000_000L, "INT4", 2048),
+            (_, >= 32, ExecutionProvider.Cpu) => (7_000_000_000L, "Quant4", 8192),
+            (_, >= 16, ExecutionProvider.Cpu) => (3_000_000_000L, "Quant4", 4096),
+            (_, >= 8, ExecutionProvider.Cpu) => (1_000_000_000L, "Quant4", 2048),
 
             // Minimal requirements
-            _ => (1_000_000_000L, "INT4", 2048)
+            _ => (1_000_000_000L, "Quant4", 2048)
         };
 
         // Recommend specific models
@@ -94,11 +94,11 @@ public static class HardwareDetector
         };
     }
 
-    private static IReadOnlyList<string> GetRecommendedModels(long maxParams, string quantization)
+    private static List<string> GetRecommendedModels(long maxParams, string quantization)
     {
         var models = new List<string>();
 
-        // Always recommend Phi-3.5-mini (3.8B) for INT4
+        // Always recommend Phi-3.5-mini (3.8B) for Quant4
         if (maxParams >= 3_000_000_000)
         {
             models.Add("microsoft/Phi-3.5-mini-instruct-onnx");
@@ -165,7 +165,7 @@ public sealed record HardwareRecommendation
     public required long MaxModelParameters { get; init; }
 
     /// <summary>
-    /// Recommended quantization level (FP16, INT8, INT4).
+    /// Recommended quantization level (FP16, Quant8, Quant4).
     /// </summary>
     public required string RecommendedQuantization { get; init; }
 

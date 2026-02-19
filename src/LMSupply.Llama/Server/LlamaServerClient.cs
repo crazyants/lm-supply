@@ -91,7 +91,7 @@ public sealed class LlamaServerClient : IDisposable
             if (string.IsNullOrEmpty(line))
                 continue;
 
-            if (!line.StartsWith("data: "))
+            if (!line.StartsWith("data: ", StringComparison.Ordinal))
                 continue;
 
             var data = line[6..];
@@ -186,7 +186,7 @@ public sealed class LlamaServerClient : IDisposable
             if (string.IsNullOrEmpty(line))
                 continue;
 
-            if (!line.StartsWith("data: "))
+            if (!line.StartsWith("data: ", StringComparison.Ordinal))
                 continue;
 
             var data = line[6..];
@@ -356,8 +356,8 @@ public sealed class ChatCompletionOptions
     public int TopK { get; init; } = 50;
     public float MinP { get; init; } = 0.05f;
     public float RepeatPenalty { get; init; } = 1.1f;
-    public float FrequencyPenalty { get; init; } = 0.0f;
-    public float PresencePenalty { get; init; } = 0.0f;
+    public float FrequencyPenalty { get; init; }
+    public float PresencePenalty { get; init; }
     public int Seed { get; init; } = -1;
     public IReadOnlyList<string>? StopSequences { get; init; }
 
@@ -384,8 +384,8 @@ public sealed class CompletionOptions
     public int TopK { get; init; } = 50;
     public float MinP { get; init; } = 0.05f;
     public float RepeatPenalty { get; init; } = 1.1f;
-    public float FrequencyPenalty { get; init; } = 0.0f;
-    public float PresencePenalty { get; init; } = 0.0f;
+    public float FrequencyPenalty { get; init; }
+    public float PresencePenalty { get; init; }
     public int Seed { get; init; } = -1;
     public IReadOnlyList<string>? StopSequences { get; init; }
 

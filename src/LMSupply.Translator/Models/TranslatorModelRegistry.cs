@@ -27,7 +27,7 @@ public sealed class TranslatorModelRegistry
 
         foreach (var model in modelList)
         {
-            _modelsByAlias[model.Alias] = model;
+            _modelsByAlias[model.AliasName] = model;
             if (!_modelsById.ContainsKey(model.Id))
             {
                 _modelsById[model.Id] = model;
@@ -123,7 +123,7 @@ public sealed class TranslatorModelRegistry
         return new TranslatorModelInfo
         {
             Id = fullPath,
-            Alias = "local",
+            AliasName = "local",
             DisplayName = $"Local: {fileName}",
             Architecture = "Unknown",
             SourceLanguage = "auto",
@@ -161,7 +161,7 @@ public sealed class TranslatorModelRegistry
         return new TranslatorModelInfo
         {
             Id = modelId,
-            Alias = modelId,
+            AliasName = modelId,
             DisplayName = name,
             Architecture = architecture,
             SourceLanguage = sourceLang,

@@ -139,7 +139,7 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         return filtered;
     }
 
-    private DenseTensor<float> PreprocessImage(Image<Rgb24> image, int targetSize)
+    private static DenseTensor<float> PreprocessImage(Image<Rgb24> image, int targetSize)
     {
         // Resize to target size
         image.Mutate(x => x.Resize(targetSize, targetSize));
@@ -333,7 +333,7 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         int inputSize)
     {
         var allDetections = new List<DetectionResult>();
-        var output = outputs.First().AsTensor<float>();
+        var output = outputs[0].AsTensor<float>();
 
         // Standard YOLO format: [1, num_boxes, 4 + num_classes]
         var numBoxes = (int)output.Dimensions[1];

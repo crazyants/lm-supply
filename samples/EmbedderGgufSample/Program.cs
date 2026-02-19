@@ -1,3 +1,4 @@
+using System.Globalization;
 using LMSupply;
 using LMSupply.Embedder;
 
@@ -46,7 +47,7 @@ var embedding = await model.EmbedAsync(text);
 
 Console.WriteLine($"Text: \"{text}\"");
 Console.WriteLine($"Embedding dimensions: {embedding.Length}");
-Console.WriteLine($"First 5 values: [{string.Join(", ", embedding.Take(5).Select(v => v.ToString("F4")))}...]");
+Console.WriteLine($"First 5 values: [{string.Join(", ", embedding.Take(5).Select(v => v.ToString("F4", CultureInfo.InvariantCulture)))}...]");
 Console.WriteLine();
 
 // =============================================================================

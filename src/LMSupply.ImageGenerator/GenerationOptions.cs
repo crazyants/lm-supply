@@ -44,7 +44,7 @@ public sealed class GenerationOptions
     /// Whether to generate step-by-step preview images.
     /// Default: false (faster without previews)
     /// </summary>
-    public bool GeneratePreviews { get; set; } = false;
+    public bool GeneratePreviews { get; set; }
 
     /// <summary>
     /// Validates the options and throws if invalid.

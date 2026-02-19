@@ -116,7 +116,7 @@ internal sealed class LcmPipeline : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
 
             // Scale input
-            var scaledLatents = _scheduler.ScaleModelInput(latents.Buffer.Span, timestep);
+            var scaledLatents = LcmScheduler.ScaleModelInput(latents.Buffer.Span, timestep);
             var latentInput = new DenseTensor<float>(scaledLatents, latentShape);
 
             // For classifier-free guidance, concatenate latents
@@ -224,7 +224,7 @@ internal sealed class LcmPipeline : IAsyncDisposable
             stepNumber++;
 
             // Scale input
-            var scaledLatents = _scheduler.ScaleModelInput(latents.Buffer.Span, timestep);
+            var scaledLatents = LcmScheduler.ScaleModelInput(latents.Buffer.Span, timestep);
             var latentInput = new DenseTensor<float>(scaledLatents, latentShape);
 
             // For classifier-free guidance

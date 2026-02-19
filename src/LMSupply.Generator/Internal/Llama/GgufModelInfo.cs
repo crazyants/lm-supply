@@ -11,9 +11,9 @@ public sealed record GgufModelInfo : IModelInfoBase
     public required string RepoId { get; init; }
 
     /// <summary>
-    /// Short alias for this model (set by registry).
+    /// Short alias name for this model (set by registry).
     /// </summary>
-    public string Alias { get; internal init; } = string.Empty;
+    public string AliasName { get; internal init; } = string.Empty;
 
     /// <summary>
     /// Human-friendly display name.

@@ -27,7 +27,7 @@ public sealed class GemmaChatFormatter : IChatFormatter
                 ChatRole.System => "user", // Gemma treats system as user
                 ChatRole.User => "user",
                 ChatRole.Assistant => "model",
-                _ => throw new ArgumentOutOfRangeException(nameof(message.Role))
+                _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             sb.Append(StartOfTurn);

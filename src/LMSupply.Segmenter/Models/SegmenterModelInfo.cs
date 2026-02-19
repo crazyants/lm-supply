@@ -11,9 +11,9 @@ public sealed class SegmenterModelInfo : IModelInfoBase
     public required string Id { get; init; }
 
     /// <summary>
-    /// Gets or sets the short alias for the model.
+    /// Gets or sets the short alias name for the model.
     /// </summary>
-    public required string Alias { get; init; }
+    public required string AliasName { get; init; }
 
     /// <summary>
     /// Gets or sets the display name.

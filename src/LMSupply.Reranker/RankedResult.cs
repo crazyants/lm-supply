@@ -17,6 +17,11 @@ public readonly record struct RankedResult(
     /// </summary>
     public int CompareTo(RankedResult other) => other.Score.CompareTo(Score);
 
+    public static bool operator <(RankedResult left, RankedResult right) => left.CompareTo(right) < 0;
+    public static bool operator >(RankedResult left, RankedResult right) => left.CompareTo(right) > 0;
+    public static bool operator <=(RankedResult left, RankedResult right) => left.CompareTo(right) <= 0;
+    public static bool operator >=(RankedResult left, RankedResult right) => left.CompareTo(right) >= 0;
+
     /// <summary>
     /// Returns a string representation of the result.
     /// </summary>

@@ -176,7 +176,7 @@ public sealed class LlamaServerPool : IAsyncDisposable
     /// <summary>
     /// Returns a server to the pool.
     /// </summary>
-    internal void Release(PooledServer server)
+    internal static void Release(PooledServer server)
     {
         server.Release();
     }
@@ -218,7 +218,7 @@ public sealed class LlamaServerPool : IAsyncDisposable
         }
     }
 
-    private void CleanupIdleServers(object? state)
+    private async void CleanupIdleServers(object? state)
     {
         if (_disposed)
             return;
@@ -232,8 +232,7 @@ public sealed class LlamaServerPool : IAsyncDisposable
         {
             if (_servers.TryRemove(server.Key, out var removed))
             {
-                // Fire and forget disposal
-                _ = removed.DisposeAsync();
+                await removed.DisposeAsync().ConfigureAwait(false);
             }
         }
 
@@ -243,7 +242,7 @@ public sealed class LlamaServerPool : IAsyncDisposable
         {
             if (_servers.TryRemove(server.Key, out var removed))
             {
-                _ = removed.DisposeAsync();
+                await removed.DisposeAsync().ConfigureAwait(false);
             }
         }
     }
@@ -394,7 +393,7 @@ public sealed class ServerLease : IAsyncDisposable
             return ValueTask.CompletedTask;
 
         _disposed = true;
-        _pool.Release(_server);
+        LlamaServerPool.Release(_server);
         return ValueTask.CompletedTask;
     }
 }

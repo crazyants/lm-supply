@@ -32,7 +32,7 @@ public class SynthesizerModelRegistryTests
         // Assert
         found.Should().BeTrue();
         model.Should().NotBeNull();
-        model!.Alias.Should().Be(alias);
+        model!.AliasName.Should().Be(alias);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class DefaultModelsTests
     public void EnUsLessac_IsDefaultModel()
     {
         // Assert
-        DefaultModels.EnUsLessac.Alias.Should().Be("default");
+        DefaultModels.EnUsLessac.AliasName.Should().Be("default");
         DefaultModels.EnUsLessac.Language.Should().Be("en-US");
         DefaultModels.EnUsLessac.VoiceName.Should().Be("en/en_US/lessac/medium");
     }
@@ -121,7 +121,7 @@ public class DefaultModelsTests
     public void EnUsRyan_IsFastModel()
     {
         // Assert
-        DefaultModels.EnUsRyan.Alias.Should().Be("fast");
+        DefaultModels.EnUsRyan.AliasName.Should().Be("fast");
         DefaultModels.EnUsRyan.Language.Should().Be("en-US");
         DefaultModels.EnUsRyan.SampleRate.Should().Be(16000);
     }
@@ -130,7 +130,7 @@ public class DefaultModelsTests
     public void EnUsAmy_IsQualityModel()
     {
         // Assert
-        DefaultModels.EnUsAmy.Alias.Should().Be("quality");
+        DefaultModels.EnUsAmy.AliasName.Should().Be("quality");
         DefaultModels.EnUsAmy.Language.Should().Be("en-US");
         DefaultModels.EnUsAmy.SampleRate.Should().Be(22050);
     }
@@ -139,7 +139,7 @@ public class DefaultModelsTests
     public void EnGbSemaine_IsBritishModel()
     {
         // Assert
-        DefaultModels.EnGbSemaine.Alias.Should().Be("british");
+        DefaultModels.EnGbSemaine.AliasName.Should().Be("british");
         DefaultModels.EnGbSemaine.Language.Should().Be("en-GB");
     }
 
@@ -147,7 +147,7 @@ public class DefaultModelsTests
     public void KoKr_IsKoreanModel()
     {
         // Assert
-        DefaultModels.KoKr.Alias.Should().Be("korean");
+        DefaultModels.KoKr.AliasName.Should().Be("korean");
         DefaultModels.KoKr.Language.Should().Be("ko-KR");
     }
 
@@ -155,7 +155,7 @@ public class DefaultModelsTests
     public void JaJp_IsJapaneseModel()
     {
         // Assert
-        DefaultModels.JaJp.Alias.Should().Be("japanese");
+        DefaultModels.JaJp.AliasName.Should().Be("japanese");
         DefaultModels.JaJp.Language.Should().Be("ja-JP");
     }
 
@@ -163,7 +163,7 @@ public class DefaultModelsTests
     public void ZhCn_IsChineseModel()
     {
         // Assert
-        DefaultModels.ZhCn.Alias.Should().Be("chinese");
+        DefaultModels.ZhCn.AliasName.Should().Be("chinese");
         DefaultModels.ZhCn.Language.Should().Be("zh-CN");
     }
 
@@ -188,7 +188,7 @@ public class DefaultModelsTests
         DefaultModels.All.Should().AllSatisfy(m =>
         {
             m.Id.Should().NotBeNullOrEmpty();
-            m.Alias.Should().NotBeNullOrEmpty();
+            m.AliasName.Should().NotBeNullOrEmpty();
             m.DisplayName.Should().NotBeNullOrEmpty();
             m.Architecture.Should().Be("VITS");
             m.Language.Should().NotBeNullOrEmpty();
@@ -219,7 +219,7 @@ public class SynthesizerModelInfoTests
         var info = new SynthesizerModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test Model",
             Architecture = "VITS",
             Language = "en-US",
@@ -232,7 +232,7 @@ public class SynthesizerModelInfoTests
 
         // Assert
         info.Id.Should().Be("test/model");
-        info.Alias.Should().Be("test");
+        info.AliasName.Should().Be("test");
         info.DisplayName.Should().Be("Test Model");
         info.VoiceName.Should().Be("test-voice");
         info.ModelFile.Should().Be("custom.onnx");
@@ -248,7 +248,7 @@ public class SynthesizerModelInfoTests
         var info = new SynthesizerModelInfo
         {
             Id = "test",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test"
         };
 

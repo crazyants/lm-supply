@@ -14,7 +14,7 @@ public static class DefaultModels
     public static SegmenterModelInfo SegFormerB0 { get; } = new()
     {
         Id = "optimum/segformer-b0-finetuned-ade-512-512",
-        Alias = "default",
+        AliasName = "default",
         DisplayName = "SegFormer-B0",
         Architecture = "SegFormer",
         ParametersM = 3.7f,
@@ -36,7 +36,7 @@ public static class DefaultModels
     public static SegmenterModelInfo MediaPipeSelfie { get; } = new()
     {
         Id = "onnx-community/mediapipe_selfie_segmentation",
-        Alias = "fast",
+        AliasName = "fast",
         DisplayName = "MediaPipe Selfie",
         Architecture = "MobileNetV3",
         ParametersM = 0.7f,
@@ -58,7 +58,7 @@ public static class DefaultModels
     public static SegmenterModelInfo MaskFormerResNet50 { get; } = new()
     {
         Id = "onnx-community/maskformer-resnet50-ade20k-full",
-        Alias = "quality",
+        AliasName = "quality",
         DisplayName = "MaskFormer ResNet50",
         Architecture = "MaskFormer",
         ParametersM = 44f,
@@ -79,7 +79,7 @@ public static class DefaultModels
     public static SegmenterModelInfo SegFormerB0Large { get; } = new()
     {
         Id = "optimum/segformer-b0-finetuned-ade-512-512",
-        Alias = "large",
+        AliasName = "large",
         DisplayName = "SegFormer-B0 (Quality)",
         Architecture = "SegFormer",
         ParametersM = 3.7f,
@@ -100,7 +100,7 @@ public static class DefaultModels
     public static SegmenterModelInfo MobileSAM { get; } = new()
     {
         Id = "ChaoningZhang/MobileSAM",
-        Alias = "interactive",
+        AliasName = "interactive",
         DisplayName = "MobileSAM",
         Architecture = "MobileSAM",
         ParametersM = 9.8f,

@@ -93,7 +93,7 @@ public sealed class NuGetPackageResolver : IDisposable
         var versions = await GetVersionsAsync(packageId, cancellationToken);
 
         return includePrerelease
-            ? versions.FirstOrDefault()
+            ? (versions.Count > 0 ? versions[0] : null)
             : versions.FirstOrDefault(v => !IsPrerelease(v));
     }
 

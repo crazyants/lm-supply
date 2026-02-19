@@ -181,7 +181,7 @@ public static class VocabularyLoader
         var vocab = new Dictionary<string, int>(StringComparer.Ordinal);
         var cleanJson = json.Trim();
 
-        if (!cleanJson.StartsWith("{") || !cleanJson.EndsWith("}"))
+        if (!cleanJson.StartsWith('{') || !cleanJson.EndsWith('}'))
             return vocab;
 
         cleanJson = cleanJson[1..^1]; // Remove { and }
@@ -273,7 +273,7 @@ public static class VocabularyLoader
         return [];
     }
 
-    private static IEnumerable<string> SplitJsonEntries(string json)
+    private static List<string> SplitJsonEntries(string json)
     {
         var entries = new List<string>();
         var current = new StringBuilder();

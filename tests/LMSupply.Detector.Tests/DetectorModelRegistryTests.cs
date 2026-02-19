@@ -17,7 +17,7 @@ public class DetectorModelRegistryTests
 
         model.Should().NotBeNull();
         model.Id.Should().Be("xnorpx/rt-detr2-onnx:s");
-        model.Alias.Should().Be("default");
+        model.AliasName.Should().Be("default");
     }
 
     [Theory]
@@ -57,7 +57,7 @@ public class DetectorModelRegistryTests
         var model = _registry.Resolve("./models/custom.onnx");
 
         model.Should().NotBeNull();
-        model.Alias.Should().Be("local");
+        model.AliasName.Should().Be("local");
         model.OnnxFile.Should().Be("custom.onnx");
     }
 

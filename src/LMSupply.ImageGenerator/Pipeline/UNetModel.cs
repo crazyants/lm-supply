@@ -128,7 +128,7 @@ internal sealed class UNetModel : IAsyncDisposable
         var result = await Task.Run(() =>
         {
             using var outputs = _session.Run(inputs);
-            var output = outputs.First();
+            var output = outputs[0];
 
             var outputTensor = output.AsTensor<float>();
             var dims = outputTensor.Dimensions.ToArray();

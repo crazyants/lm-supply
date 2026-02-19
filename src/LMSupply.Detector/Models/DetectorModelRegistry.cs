@@ -29,7 +29,7 @@ public sealed class DetectorModelRegistry
 
         foreach (var model in modelList)
         {
-            _modelsByAlias[model.Alias] = model;
+            _modelsByAlias[model.AliasName] = model;
             _modelsById[model.Id] = model;
         }
     }
@@ -160,7 +160,7 @@ public sealed class DetectorModelRegistry
         return new DetectorModelInfo
         {
             Id = fullPath,
-            Alias = "local",
+            AliasName = "local",
             DisplayName = $"Local: {fileName}",
             Architecture = "Unknown",
             ParametersM = 0,
@@ -195,7 +195,7 @@ public sealed class DetectorModelRegistry
         return new DetectorModelInfo
         {
             Id = modelId,
-            Alias = modelId,
+            AliasName = modelId,
             DisplayName = name,
             Architecture = architecture,
             ParametersM = 0,

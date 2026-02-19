@@ -100,7 +100,7 @@ internal static class ModelFormatDetector
         // Check for GGUF indicators in repo name
         if (lowerRepoId.Contains("-gguf") ||
             lowerRepoId.Contains("_gguf") ||
-            lowerRepoId.EndsWith("/gguf"))
+            lowerRepoId.EndsWith("/gguf", StringComparison.Ordinal))
         {
             return ModelFormat.Gguf;
         }
@@ -108,7 +108,7 @@ internal static class ModelFormatDetector
         // Check for ONNX indicators in repo name
         if (lowerRepoId.Contains("-onnx") ||
             lowerRepoId.Contains("_onnx") ||
-            lowerRepoId.EndsWith("/onnx"))
+            lowerRepoId.EndsWith("/onnx", StringComparison.Ordinal))
         {
             return ModelFormat.Onnx;
         }

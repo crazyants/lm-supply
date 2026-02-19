@@ -23,6 +23,10 @@ internal sealed class WhisperDecoder
     private static readonly string[] TokenInputNames = ["input_ids", "tokens", "decoder_input_ids"];
     private static readonly string[] EncoderInputNames = ["encoder_hidden_states", "audio", "encoder_outputs"];
 
+    // Cached constant arrays for tensor creation (CA1861)
+    private static readonly bool[] s_falseArray = [false];
+    private static readonly int[] s_oneDimension = [1];
+
     private readonly string _actualTokenInputName;
     private readonly string _actualEncoderInputName;
     private readonly string _actualLogitsOutputName;
@@ -100,7 +104,7 @@ internal sealed class WhisperDecoder
         {
             // Initialize tokens with SOT sequence
             var useTimestamps = options?.WordTimestamps ?? false;
-            var initialTokens = _tokenizer.GetSotSequence(options?.Language, useTimestamps);
+            var initialTokens = WhisperTokenizer.GetSotSequence(options?.Language, useTimestamps);
             var tokens = new List<int>(initialTokens);
 
             var segments = new List<TranscriptionSegment>();
@@ -113,6 +117,7 @@ internal sealed class WhisperDecoder
                 [1, encoderSequenceLength, hiddenSize]);
 
             string? detectedLanguage = null;
+            float? languageProbability = null;
             int segmentId = 0;
 
             // For merged models, we'll track KV cache state
@@ -146,7 +151,7 @@ internal sealed class WhisperDecoder
                 if (_isMergedModel && kvCache != null)
                 {
                     // Add use_cache_branch = false (we're not using cache efficiently yet)
-                    var useCacheTensor = new DenseTensor<bool>(new[] { false }, new[] { 1 });
+                    var useCacheTensor = new DenseTensor<bool>(s_falseArray, s_oneDimension);
                     inputs.Add(NamedOnnxValue.CreateFromTensor(UseCacheBranchName, useCacheTensor));
 
                     // Add past_key_values tensors
@@ -236,9 +241,10 @@ internal sealed class WhisperDecoder
                 var nextToken = ArgMax(lastLogits);
 
                 // Detect language from first generated token after SOT
-                if (tokens.Count == initialTokens.Length && _tokenizer.IsLanguageToken(nextToken))
+                if (tokens.Count == initialTokens.Length && WhisperTokenizer.IsLanguageToken(nextToken))
                 {
-                    detectedLanguage = _tokenizer.GetLanguageFromToken(nextToken);
+                    detectedLanguage = WhisperTokenizer.GetLanguageFromToken(nextToken);
+                    languageProbability = ComputeLanguageTokenProbability(lastLogits, nextToken);
                 }
 
                 // Check for end of text
@@ -248,9 +254,9 @@ internal sealed class WhisperDecoder
                 }
 
                 // Handle timestamp tokens
-                if (_tokenizer.IsTimestampToken(nextToken))
+                if (WhisperTokenizer.IsTimestampToken(nextToken))
                 {
-                    var timestamp = _tokenizer.TimestampTokenToSeconds(nextToken);
+                    var timestamp = WhisperTokenizer.TimestampTokenToSeconds(nextToken);
 
                     // Start timestamp
                     if (currentSegmentTokens.Count == 0)
@@ -278,7 +284,7 @@ internal sealed class WhisperDecoder
                         currentSegmentTokens.Clear();
                     }
                 }
-                else if (!_tokenizer.IsSpecialToken(nextToken))
+                else if (!WhisperTokenizer.IsSpecialToken(nextToken))
                 {
                     // Regular text token
                     currentSegmentTokens.Add(nextToken);
@@ -331,6 +337,7 @@ internal sealed class WhisperDecoder
             {
                 Text = fullTranscription,
                 Language = detectedLanguage ?? options?.Language ?? "en",
+                LanguageProbability = languageProbability,
                 Segments = segments,
                 TokenCount = tokens.Count - initialTokens.Length
             };
@@ -358,6 +365,34 @@ internal sealed class WhisperDecoder
         return cache;
     }
 
+    /// <summary>
+    /// Computes the softmax probability of the selected language token
+    /// over all language tokens in the logits.
+    /// </summary>
+    internal static float ComputeLanguageTokenProbability(float[] logits, int selectedToken)
+    {
+        var start = WhisperTokenizer.LanguageTokenStart;
+        var end = Math.Min(WhisperTokenizer.LanguageTokenEnd, logits.Length - 1);
+
+        if (start > end || selectedToken < start || selectedToken > end)
+            return 0f;
+
+        // Numerically stable softmax: subtract max before exp
+        var maxLogit = float.NegativeInfinity;
+        for (int i = start; i <= end; i++)
+        {
+            if (logits[i] > maxLogit) maxLogit = logits[i];
+        }
+
+        float sumExp = 0f;
+        for (int i = start; i <= end; i++)
+        {
+            sumExp += MathF.Exp(logits[i] - maxLogit);
+        }
+
+        return MathF.Exp(logits[selectedToken] - maxLogit) / sumExp;
+    }
+
     private static int ArgMax(float[] values)
     {
         int maxIndex = 0;
@@ -383,6 +418,7 @@ internal sealed class DecodingResult
 {
     public required string Text { get; init; }
     public required string Language { get; init; }
+    public float? LanguageProbability { get; init; }
     public required List<TranscriptionSegment> Segments { get; init; }
     public int TokenCount { get; init; }
 }

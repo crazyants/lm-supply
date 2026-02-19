@@ -29,7 +29,7 @@ public sealed class RerankerOptions : LMSupplyOptionsBase
     /// When true, throws an exception if the model is not found locally.
     /// <para>Default: false</para>
     /// </summary>
-    public bool DisableAutoDownload { get; set; } = false;
+    public bool DisableAutoDownload { get; set; }
 
     /// <summary>
     /// Gets or sets the batch size for processing multiple documents.

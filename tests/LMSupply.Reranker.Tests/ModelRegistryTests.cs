@@ -18,7 +18,7 @@ public class ModelRegistryTests
 
         model.Should().NotBeNull();
         model.Id.Should().Be("cross-encoder/ms-marco-MiniLM-L-6-v2");
-        model.Alias.Should().Be("default");
+        model.AliasName.Should().Be("default");
     }
 
     [Theory]
@@ -58,7 +58,7 @@ public class ModelRegistryTests
         var model = _registry.Resolve("./models/custom.onnx");
 
         model.Should().NotBeNull();
-        model.Alias.Should().Be("local");
+        model.AliasName.Should().Be("local");
         model.OnnxFile.Should().Be("custom.onnx");
     }
 

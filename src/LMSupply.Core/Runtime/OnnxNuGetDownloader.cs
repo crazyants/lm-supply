@@ -55,8 +55,8 @@ public sealed class OnnxNuGetDownloader : IDisposable
         PlatformInfo platform,
         string? version = null,
         IProgress<DownloadProgress>? progress = null,
-        CancellationToken cancellationToken = default,
-        string packageType = RuntimePackageRegistry.PackageTypes.OnnxRuntime)
+        string packageType = RuntimePackageRegistry.PackageTypes.OnnxRuntime,
+        CancellationToken cancellationToken = default)
     {
         // Get package configuration from registry
         var config = RuntimePackageRegistry.GetPackageConfig(
@@ -77,7 +77,7 @@ public sealed class OnnxNuGetDownloader : IDisposable
         var cachePath = GetCachePath(packageType, provider, version, platform);
         if (Directory.Exists(cachePath) && IsValidCache(cachePath, config, platform))
         {
-            Debug.WriteLine($"[OnnxNuGetDownloader] Using cached binaries: {cachePath}");
+            Trace.TraceInformation($"[OnnxNuGetDownloader] Using cached binaries: {cachePath}");
             ReportCacheHit(progress);
             return cachePath;
         }
@@ -109,11 +109,11 @@ public sealed class OnnxNuGetDownloader : IDisposable
             var availableVersions = await _packageResolver.GetVersionsAsync(packageId, cancellationToken);
             if (availableVersions.Contains(assemblyVersion, StringComparer.OrdinalIgnoreCase))
             {
-                Debug.WriteLine($"[OnnxNuGetDownloader] Using assembly version: {assemblyVersion}");
+                Trace.TraceInformation($"[OnnxNuGetDownloader] Using assembly version: {assemblyVersion}");
                 return assemblyVersion;
             }
 
-            Debug.WriteLine($"[OnnxNuGetDownloader] Assembly version {assemblyVersion} not found for {packageId}, falling back to latest");
+            Trace.TraceInformation($"[OnnxNuGetDownloader] Assembly version {assemblyVersion} not found for {packageId}, falling back to latest");
         }
 
         // Get latest stable version from NuGet
@@ -129,7 +129,7 @@ public sealed class OnnxNuGetDownloader : IDisposable
                 "Please specify a version explicitly.");
         }
 
-        Debug.WriteLine($"[OnnxNuGetDownloader] Using latest NuGet version: {latestVersion}");
+        Trace.TraceInformation($"[OnnxNuGetDownloader] Using latest NuGet version: {latestVersion}");
         return latestVersion;
     }
 
@@ -202,7 +202,7 @@ public sealed class OnnxNuGetDownloader : IDisposable
     /// <summary>
     /// Extracts native binaries from a .nupkg file for the specified platform.
     /// </summary>
-    private async Task<string?> ExtractNativeBinariesAsync(
+    private static async Task<string?> ExtractNativeBinariesAsync(
         string nupkgPath,
         PlatformInfo platform,
         CancellationToken cancellationToken)

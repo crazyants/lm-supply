@@ -176,12 +176,15 @@ public class GeneratorPoolTests : IAsyncDisposable
         var mock = Substitute.For<IGeneratorModel>();
         mock.ModelId.Returns(modelId);
         mock.MaxContextLength.Returns(4096);
+#pragma warning disable CA2012 // ValueTask consumed by NSubstitute setup
         mock.DisposeAsync().Returns(ValueTask.CompletedTask);
+#pragma warning restore CA2012
         return mock;
     }
 
     public async ValueTask DisposeAsync()
     {
         await _pool.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
 }

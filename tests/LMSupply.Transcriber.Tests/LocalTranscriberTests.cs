@@ -25,7 +25,7 @@ public class LocalTranscriberTests
         models.Should().AllSatisfy(m =>
         {
             m.Id.Should().NotBeNullOrEmpty();
-            m.Alias.Should().NotBeNullOrEmpty();
+            m.AliasName.Should().NotBeNullOrEmpty();
             m.DisplayName.Should().NotBeNullOrEmpty();
             m.Architecture.Should().Be("Whisper");
         });
@@ -46,7 +46,7 @@ public class LocalTranscriberTests
     public void GetAllModels_DefaultModel_ShouldBeWhisperBase()
     {
         var models = LocalTranscriber.GetAllModels().ToList();
-        var defaultModel = models.FirstOrDefault(m => m.Alias == "default");
+        var defaultModel = models.FirstOrDefault(m => m.AliasName == "default");
 
         defaultModel.Should().NotBeNull();
         defaultModel!.Id.Should().Contain("base");

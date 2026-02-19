@@ -146,7 +146,7 @@ internal sealed class OnnxSegmenterModel : ISegmenterModel
         };
     }
 
-    private DenseTensor<float> PreprocessImage(Image<Rgb24> image, int targetSize)
+    private static DenseTensor<float> PreprocessImage(Image<Rgb24> image, int targetSize)
     {
         // Resize to target size
         image.Mutate(x => x.Resize(targetSize, targetSize));
@@ -199,10 +199,10 @@ internal sealed class OnnxSegmenterModel : ISegmenterModel
     /// Parses SegFormer output.
     /// Output shape: [1, num_classes, height, width] (logits)
     /// </summary>
-    private (int[] classMap, float[] confidenceMap, int width, int height) ParseOutput(
+    private static (int[] classMap, float[] confidenceMap, int width, int height) ParseOutput(
         IDisposableReadOnlyCollection<DisposableNamedOnnxValue> outputs)
     {
-        var output = outputs.First().AsTensor<float>();
+        var output = outputs[0].AsTensor<float>();
         var dims = output.Dimensions.ToArray();
 
         // SegFormer output: [1, num_classes, H, W]

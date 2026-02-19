@@ -187,7 +187,7 @@ foreach (var alias in LocalSynthesizer.GetAvailableModels())
 // Get detailed model information
 foreach (var model in LocalSynthesizer.GetAllModels())
 {
-    Console.WriteLine($"{model.Alias}: {model.DisplayName}");
+    Console.WriteLine($"{model.AliasName}: {model.DisplayName}");
     Console.WriteLine($"  Language: {model.Language}");
     Console.WriteLine($"  Voice: {model.VoiceName}");
     Console.WriteLine($"  Sample Rate: {model.SampleRate} Hz");

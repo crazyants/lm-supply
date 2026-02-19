@@ -16,6 +16,8 @@ public sealed class RuntimeCache : IDisposable
 
     private CacheMetadata _metadata;
 
+    private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
+
     private const string BinariesDirectory = "binaries";
     private const string MetadataFileName = "cache-metadata.json";
 
@@ -308,7 +310,7 @@ public sealed class RuntimeCache : IDisposable
         try
         {
             Directory.CreateDirectory(_baseDirectory);
-            var json = JsonSerializer.Serialize(_metadata, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(_metadata, s_indentedJsonOptions);
 
             // Atomic write
             var tempPath = _metadataPath + $".{Guid.NewGuid()}.tmp";

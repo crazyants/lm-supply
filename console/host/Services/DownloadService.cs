@@ -6,7 +6,7 @@ namespace LMSupply.Console.Host.Services;
 /// <summary>
 /// Model download service (thin wrapper over HuggingFaceDownloader).
 /// </summary>
-public sealed class DownloadService : IDisposable
+public sealed partial class DownloadService : IDisposable
 {
     private readonly HuggingFaceDownloader _downloader;
     private readonly ModelDiscoveryService _discoveryService;
@@ -48,7 +48,7 @@ public sealed class DownloadService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Model check failed for {RepoId}", repoId);
+            LogModelCheckFailed(_logger, ex, repoId);
             return new ModelCheckResult
             {
                 Exists = false,
@@ -66,7 +66,7 @@ public sealed class DownloadService : IDisposable
         Func<DownloadProgress, Task> onProgressAsync,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting download: {RepoId}", repoId);
+        LogDownloadStarting(_logger, repoId);
 
         // Use AsyncProgress with cancellation token to properly handle async callbacks
         var progress = new AsyncProgress<DownloadProgress>(onProgressAsync, cancellationToken);
@@ -80,11 +80,11 @@ public sealed class DownloadService : IDisposable
                 progress: progress,
                 cancellationToken: cancellationToken);
 
-            _logger.LogInformation("Download completed: {RepoId}", repoId);
+            LogDownloadCompleted(_logger, repoId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Download failed: {RepoId}", repoId);
+            LogDownloadFailed(_logger, ex, repoId);
             throw;
         }
     }
@@ -96,12 +96,24 @@ public sealed class DownloadService : IDisposable
         _discoveryService.Dispose();
         _disposed = true;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Model check failed for {RepoId}")]
+    private static partial void LogModelCheckFailed(ILogger logger, Exception exception, string repoId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting download: {RepoId}")]
+    private static partial void LogDownloadStarting(ILogger logger, string repoId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Download completed: {RepoId}")]
+    private static partial void LogDownloadCompleted(ILogger logger, string repoId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Download failed: {RepoId}")]
+    private static partial void LogDownloadFailed(ILogger logger, Exception exception, string repoId);
 }
 
 /// <summary>
 /// Thread-safe async progress reporter that serializes async callbacks.
 /// </summary>
-internal sealed class AsyncProgress<T> : IProgress<T>
+internal sealed class AsyncProgress<T> : IProgress<T>, IDisposable
 {
     private readonly Func<T, Task> _handler;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -112,6 +124,8 @@ internal sealed class AsyncProgress<T> : IProgress<T>
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         _cancellationToken = cancellationToken;
     }
+
+    public void Dispose() => _writeLock.Dispose();
 
     public void Report(T value)
     {

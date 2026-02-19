@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="" />
+    <InternalsVisibleTo Include="LMSupply.Transcriber.Tests" />
   </ItemGroup>
 
   <ItemGroup>

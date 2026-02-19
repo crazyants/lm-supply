@@ -14,7 +14,7 @@ public static class DefaultModels
     public static DetectorModelInfo RtDetrV2S { get; } = new()
     {
         Id = "xnorpx/rt-detr2-onnx:s",
-        Alias = "default",
+        AliasName = "default",
         DisplayName = "RT-DETR v2 Small",
         Architecture = "RT-DETR",
         ParametersM = 20f,
@@ -35,7 +35,7 @@ public static class DefaultModels
     public static DetectorModelInfo RtDetrV2M { get; } = new()
     {
         Id = "xnorpx/rt-detr2-onnx:m",
-        Alias = "quality",
+        AliasName = "quality",
         DisplayName = "RT-DETR v2 Medium",
         Architecture = "RT-DETR",
         ParametersM = 36f,
@@ -56,7 +56,7 @@ public static class DefaultModels
     public static DetectorModelInfo RtDetrV2L { get; } = new()
     {
         Id = "xnorpx/rt-detr2-onnx:l",
-        Alias = "large",
+        AliasName = "large",
         DisplayName = "RT-DETR v2 Large",
         Architecture = "RT-DETR",
         ParametersM = 42f,
@@ -77,7 +77,7 @@ public static class DefaultModels
     public static DetectorModelInfo RtDetrV2MS { get; } = new()
     {
         Id = "xnorpx/rt-detr2-onnx:ms",
-        Alias = "fast",
+        AliasName = "fast",
         DisplayName = "RT-DETR v2 Mini-Small",
         Architecture = "RT-DETR",
         ParametersM = 15f,
@@ -98,7 +98,7 @@ public static class DefaultModels
     public static DetectorModelInfo RtDetrV2X { get; } = new()
     {
         Id = "xnorpx/rt-detr2-onnx:x",
-        Alias = "xlarge",
+        AliasName = "xlarge",
         DisplayName = "RT-DETR v2 XLarge",
         Architecture = "RT-DETR",
         ParametersM = 76f,

@@ -12,6 +12,11 @@ namespace LMSupply.Synthesizer.Core;
 /// </summary>
 internal sealed class OnnxSynthesizerModel : ISynthesizerModel
 {
+    private static readonly JsonSerializerOptions s_caseInsensitiveJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly SynthesizerOptions _options;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
@@ -169,7 +174,7 @@ internal sealed class OnnxSynthesizerModel : ISynthesizerModel
 
             // Run inference
             using var results = _session!.Run(inputs);
-            var output = results.First().AsTensor<float>();
+            var output = results[0].AsTensor<float>();
 
             return output.ToArray();
         }
@@ -179,13 +184,13 @@ internal sealed class OnnxSynthesizerModel : ISynthesizerModel
         }
     }
 
-    private long[] TextToPhonemeIds(string text)
+    private static long[] TextToPhonemeIds(string text)
     {
         // Simplified phoneme conversion - in production, use proper G2P (grapheme-to-phoneme)
         // This is a basic character-to-ID mapping for demonstration
         var ids = new List<long> { 0 }; // Start token
 
-        foreach (var c in text.ToLower())
+        foreach (var c in text.ToLowerInvariant())
         {
             var id = c switch
             {
@@ -253,7 +258,7 @@ internal sealed class OnnxSynthesizerModel : ISynthesizerModel
                 _modelInfo = new SynthesizerModelInfo
                 {
                     Id = _options.ModelId,
-                    Alias = _options.ModelId,
+                    AliasName = _options.ModelId,
                     DisplayName = _options.ModelId,
                     Architecture = "VITS"
                 };
@@ -267,10 +272,7 @@ internal sealed class OnnxSynthesizerModel : ISynthesizerModel
             if (File.Exists(configPath))
             {
                 var configJson = await File.ReadAllTextAsync(configPath, cancellationToken);
-                _config = JsonSerializer.Deserialize<VitsConfig>(configJson, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                _config = JsonSerializer.Deserialize<VitsConfig>(configJson, s_caseInsensitiveJsonOptions);
             }
 
             // Load model

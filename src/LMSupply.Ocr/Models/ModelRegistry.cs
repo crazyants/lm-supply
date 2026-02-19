@@ -19,7 +19,7 @@ public static class ModelRegistry
         // Repository structure: detection/v3/det.onnx
         RegisterDetectionModel(new DetectionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "dbnet-v3",
+            AliasName: "dbnet-v3",
             DisplayName: "PaddleOCR v3 Detection (DBNet)",
             ModelFile: "det.onnx",
             InputWidth: 960,
@@ -35,7 +35,7 @@ public static class ModelRegistry
         // Repository structure: languages/{lang}/rec.onnx, dict.txt
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-en-v3",
+            AliasName: "crnn-en-v3",
             DisplayName: "PaddleOCR English Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -46,7 +46,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-korean-v3",
+            AliasName: "crnn-korean-v3",
             DisplayName: "PaddleOCR Korean Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -57,7 +57,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-chinese-v3",
+            AliasName: "crnn-chinese-v3",
             DisplayName: "PaddleOCR Chinese Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -72,7 +72,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-latin-v3",
+            AliasName: "crnn-latin-v3",
             DisplayName: "PaddleOCR Latin Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -83,7 +83,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-arabic-v3",
+            AliasName: "crnn-arabic-v3",
             DisplayName: "PaddleOCR Arabic Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -94,7 +94,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-cyrillic-v3",
+            AliasName: "crnn-cyrillic-v3",
             DisplayName: "PaddleOCR Cyrillic/Slavic Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -105,7 +105,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-devanagari-v3",
+            AliasName: "crnn-devanagari-v3",
             DisplayName: "PaddleOCR Devanagari Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -117,7 +117,7 @@ public static class ModelRegistry
         // Additional language models available in monkt/paddleocr-onnx
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-greek-v3",
+            AliasName: "crnn-greek-v3",
             DisplayName: "PaddleOCR Greek Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -128,7 +128,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-thai-v3",
+            AliasName: "crnn-thai-v3",
             DisplayName: "PaddleOCR Thai Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -139,7 +139,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-tamil-v3",
+            AliasName: "crnn-tamil-v3",
             DisplayName: "PaddleOCR Tamil Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -150,7 +150,7 @@ public static class ModelRegistry
 
         RegisterRecognitionModel(new RecognitionModelInfo(
             RepoId: DefaultRepoId,
-            Alias: "crnn-telugu-v3",
+            AliasName: "crnn-telugu-v3",
             DisplayName: "PaddleOCR Telugu Recognition",
             ModelFile: "rec.onnx",
             DictFile: "dict.txt",
@@ -160,11 +160,11 @@ public static class ModelRegistry
         });
 
         // Register language to recognition model mappings
-        foreach (var model in RecognitionModels.Values.DistinctBy(m => m.Alias))
+        foreach (var model in RecognitionModels.Values.DistinctBy(m => m.AliasName))
         {
             foreach (var lang in model.LanguageCodes)
             {
-                LanguageToRecognitionModel[lang] = model.Alias;
+                LanguageToRecognitionModel[lang] = model.AliasName;
             }
         }
 
@@ -180,7 +180,7 @@ public static class ModelRegistry
     public static void RegisterDetectionModel(DetectionModelInfo model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        DetectionModels[model.Alias] = model;
+        DetectionModels[model.AliasName] = model;
         DetectionModels[model.RepoId + "/" + model.ModelFile] = model;
     }
 
@@ -222,7 +222,7 @@ public static class ModelRegistry
     public static IEnumerable<string> GetAvailableDetectionModels()
     {
         return DetectionModels.Values
-            .Select(m => m.Alias)
+            .Select(m => m.AliasName)
             .Distinct()
             .Order();
     }
@@ -237,13 +237,13 @@ public static class ModelRegistry
     public static void RegisterRecognitionModel(RecognitionModelInfo model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        RecognitionModels[model.Alias] = model;
+        RecognitionModels[model.AliasName] = model;
         RecognitionModels[model.RepoId + "/" + model.ModelFile] = model;
 
         // Update language mappings
         foreach (var lang in model.LanguageCodes)
         {
-            LanguageToRecognitionModel[lang] = model.Alias;
+            LanguageToRecognitionModel[lang] = model.AliasName;
         }
     }
 
@@ -307,7 +307,7 @@ public static class ModelRegistry
     public static IEnumerable<string> GetAvailableRecognitionModels()
     {
         return RecognitionModels.Values
-            .Select(m => m.Alias)
+            .Select(m => m.AliasName)
             .Distinct()
             .Order();
     }
@@ -327,7 +327,7 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<DetectionModelInfo> GetAllDetectionModels()
     {
-        return DetectionModels.Values.DistinctBy(m => m.Alias);
+        return DetectionModels.Values.DistinctBy(m => m.AliasName);
     }
 
     /// <summary>
@@ -335,6 +335,6 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<RecognitionModelInfo> GetAllRecognitionModels()
     {
-        return RecognitionModels.Values.DistinctBy(m => m.Alias);
+        return RecognitionModels.Values.DistinctBy(m => m.AliasName);
     }
 }

@@ -5,13 +5,13 @@ namespace LMSupply.Generator.Tests;
 public class MemoryEstimatorTests
 {
     [Fact]
-    public void CalculateModelMemory_INT4_ReturnsHalfBytePerParam()
+    public void CalculateModelMemory_Quant4_ReturnsHalfBytePerParam()
     {
         // Arrange
         var paramCount = 3_800_000_000L; // Phi-3.5-mini
 
         // Act
-        var memoryBytes = MemoryEstimator.CalculateModelMemory(paramCount, Quantization.INT4);
+        var memoryBytes = MemoryEstimator.CalculateModelMemory(paramCount, Quantization.Quant4);
 
         // Assert
         memoryBytes.Should().Be(1_900_000_000L); // 3.8B * 0.5 bytes
@@ -59,7 +59,7 @@ public class MemoryEstimatorTests
             NumLayers = 32,
             HiddenSize = 3072,
             ContextLength = 4096,
-            Quantization = Quantization.INT4
+            Quantization = Quantization.Quant4
         };
 
         // Act
@@ -83,7 +83,7 @@ public class MemoryEstimatorTests
             NumLayers = 16,
             HiddenSize = 2048,
             ContextLength = 2048,
-            Quantization = Quantization.INT4
+            Quantization = Quantization.Quant4
         };
 
         var availableMemory = 8L * 1024 * 1024 * 1024; // 8GB
@@ -148,13 +148,13 @@ public class MemoryEstimatorTests
         summary.Should().Contain("Model Weights:");
         summary.Should().Contain("KV Cache:");
         summary.Should().Contain("Total:");
-        summary.Should().Contain("INT4");
+        summary.Should().Contain("Quant4");
     }
 
     [Fact]
-    public void Phi35Mini_FitsIn5GB_WithINT4()
+    public void Phi35Mini_FitsIn5GB_WithQuant4()
     {
-        // Arrange - Phi-3.5-mini with INT4 requires ~3.6GB + 20% safety margin = ~4.3GB
+        // Arrange - Phi-3.5-mini with Quant4 requires ~3.6GB + 20% safety margin = ~4.3GB
         var config = MemoryEstimator.GetDefaultConfig("phi-3.5-mini");
         var availableMemory = 5L * 1024 * 1024 * 1024; // 5GB to accommodate safety margin
 
@@ -163,6 +163,6 @@ public class MemoryEstimatorTests
         var canFit = MemoryEstimator.CanFitInMemory(config, availableMemory);
 
         // Assert
-        canFit.Should().BeTrue($"Phi-3.5-mini INT4 requires {estimate.TotalBytes / (1024.0 * 1024 * 1024):F2}GB + 20% margin");
+        canFit.Should().BeTrue($"Phi-3.5-mini Quant4 requires {estimate.TotalBytes / (1024.0 * 1024 * 1024):F2}GB + 20% margin");
     }
 }

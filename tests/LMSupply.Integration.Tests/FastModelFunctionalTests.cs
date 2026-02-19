@@ -254,7 +254,7 @@ public class FastModelFunctionalTests : IAsyncLifetime
         detections.Should().NotBeNull();
         // Simple color image may not have recognizable objects
 
-        _testResults.Add($"Detector (fast): Load={loadTime}ms, Infer={inferTime}ms, Detections={detections.Count()}");
+        _testResults.Add($"Detector (fast): Load={loadTime}ms, Infer={inferTime}ms, Detections={detections.Count}");
     }
 
     [Fact]

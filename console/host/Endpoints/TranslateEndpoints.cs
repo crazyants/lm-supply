@@ -91,7 +91,7 @@ public static class TranslateEndpoints
                 languages = models.Select(m => new
                 {
                     id = m.Id,
-                    alias = m.Alias,
+                    alias = m.AliasName,
                     source = m.SourceLanguage,
                     target = m.TargetLanguage
                 })

@@ -21,7 +21,7 @@ public class RuntimeManagerTests
 
         // Assert
         chain.Should().NotBeEmpty();
-        chain.Last().Should().Be("cpu", "CPU should always be the final fallback");
+        chain[^1].Should().Be("cpu", "CPU should always be the final fallback");
     }
 
     [Fact]
@@ -75,10 +75,10 @@ public class RuntimeManagerTests
         // Assert - Only check if NVIDIA GPU is detected
         if (manager.Gpu.Vendor == GpuVendor.Nvidia && manager.Gpu.CudaDriverVersionMajor >= 11)
         {
-            chain.Should().Contain(p => p.StartsWith("cuda"), "CUDA should be available on NVIDIA GPU");
+            chain.Should().Contain(p => p.StartsWith("cuda", StringComparison.Ordinal), "CUDA should be available on NVIDIA GPU");
 
             // CUDA should come before DirectML in priority
-            var cudaIndex = chain.ToList().FindIndex(p => p.StartsWith("cuda"));
+            var cudaIndex = chain.ToList().FindIndex(p => p.StartsWith("cuda", StringComparison.Ordinal));
             var directmlIndex = chain.ToList().IndexOf("directml");
 
             if (directmlIndex >= 0)
@@ -99,7 +99,7 @@ public class RuntimeManagerTests
         var chain = manager.GetProviderFallbackChain().ToList();
 
         // Assert - Verify order based on what's available
-        var cudaIndex = chain.FindIndex(p => p.StartsWith("cuda"));
+        var cudaIndex = chain.FindIndex(p => p.StartsWith("cuda", StringComparison.Ordinal));
         var directmlIndex = chain.IndexOf("directml");
         var coremlIndex = chain.IndexOf("coreml");
         var cpuIndex = chain.IndexOf("cpu");
@@ -141,7 +141,7 @@ public class RuntimeManagerTests
 
         // The default provider should be the first in the fallback chain
         var chain = manager.GetProviderFallbackChain();
-        defaultProvider.Should().Be(chain.First(), "Default provider should match first in fallback chain");
+        defaultProvider.Should().Be(chain[0], "Default provider should match first in fallback chain");
     }
 
     [Fact]
@@ -173,8 +173,8 @@ public class RuntimeManagerTests
         var managerChain = manager.GetProviderFallbackChain();
 
         // Assert - Both should end with CPU
-        gpuProviders.Last().Should().Be(ExecutionProvider.Cpu);
-        managerChain.Last().Should().Be("cpu");
+        gpuProviders[^1].Should().Be(ExecutionProvider.Cpu);
+        managerChain[^1].Should().Be("cpu");
 
         // The number of providers should be similar (manager may have cuda11/cuda12 variants)
         gpuProviders.Count.Should().BeGreaterThanOrEqualTo(1);

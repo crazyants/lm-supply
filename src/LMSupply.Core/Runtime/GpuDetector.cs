@@ -14,7 +14,7 @@ public static class GpuDetector
     public static GpuInfo DetectPrimaryGpu()
     {
         var allGpus = DetectAllGpus();
-        return allGpus.FirstOrDefault() ?? CreateCpuOnlyInfo();
+        return allGpus.Count > 0 ? allGpus[0] : CreateCpuOnlyInfo();
     }
 
     /// <summary>

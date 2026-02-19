@@ -382,7 +382,7 @@ public static class TokenizerFactory
         return WordPieceTokenizer.Create(vocabStream2);
     }
 
-    private static Tokenizer CreateWordPieceFromJson(string tokenizerJsonPath)
+    private static WordPieceTokenizer CreateWordPieceFromJson(string tokenizerJsonPath)
     {
         var json = File.ReadAllText(tokenizerJsonPath);
         using var doc = JsonDocument.Parse(json);
@@ -514,7 +514,7 @@ public static class TokenizerFactory
         }
     }
 
-    private static Tokenizer? CreateBpeTokenizer(string modelDir)
+    private static CodeGenTokenizer? CreateBpeTokenizer(string modelDir)
     {
         var vocabPath = Path.Combine(modelDir, "vocab.json");
         var mergesPath = Path.Combine(modelDir, "merges.txt");

@@ -124,7 +124,7 @@ public static class LocalEmbedder
             // Find the main model ONNX file
             var mainOnnxFile = discovery.OnnxFiles.FirstOrDefault(f =>
                 f.EndsWith("model.onnx", StringComparison.OrdinalIgnoreCase)) ??
-                discovery.OnnxFiles.FirstOrDefault();
+                (discovery.OnnxFiles.Count > 0 ? discovery.OnnxFiles[0] : null);
 
             if (mainOnnxFile is null)
             {
@@ -168,7 +168,7 @@ public static class LocalEmbedder
         var tokenizer = await TokenizerFactory.CreateWordPieceAsync(tokenizerDir, options.MaxSequenceLength);
 
         // Load inference engine (use async to ensure RuntimeManager initializes native binaries)
-        var engine = await OnnxInferenceEngine.CreateAsync(modelPath, options.Provider);
+        var engine = await OnnxInferenceEngine.CreateAsync(modelPath, options.Provider, cancellationToken: cancellationToken);
 
         // Create pooling strategy
         var poolingStrategy = PoolingFactory.Create(options.PoolingMode);

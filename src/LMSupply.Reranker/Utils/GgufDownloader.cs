@@ -94,7 +94,7 @@ internal sealed class GgufDownloader : IDisposable
         return response?.Siblings?.ToList() ?? [];
     }
 
-    private RepoFile SelectBestFile(List<RepoFile> files, string? preferredQuantization)
+    private static RepoFile SelectBestFile(List<RepoFile> files, string? preferredQuantization)
     {
         // If specific quantization requested, find it
         if (!string.IsNullOrEmpty(preferredQuantization))

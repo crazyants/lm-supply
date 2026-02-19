@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LMSupply.Console.Host.Models.OpenAI;
 
 /// <summary>
@@ -32,7 +34,8 @@ public sealed record Usage
 public sealed record ModelInfo
 {
     public required string Id { get; init; }
-    public string Object { get; init; } = "model";
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "model";
     public long Created { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public string OwnedBy { get; init; } = "lmsupply";
 }
@@ -42,6 +45,7 @@ public sealed record ModelInfo
 /// </summary>
 public sealed record ModelListResponse
 {
-    public string Object { get; init; } = "list";
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "list";
     public required IReadOnlyList<ModelInfo> Data { get; init; }
 }

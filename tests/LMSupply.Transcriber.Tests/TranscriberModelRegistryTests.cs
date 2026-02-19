@@ -41,7 +41,7 @@ public class TranscriberModelRegistryTests
 
         result.Should().BeTrue();
         model.Should().NotBeNull();
-        model!.Alias.Should().Be(alias);
+        model!.AliasName.Should().Be(alias);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class TranscriberModelRegistryTests
         foreach (var model in models)
         {
             gatedModels.Should().NotContain(model.Id,
-                $"Model '{model.Alias}' uses gated repository '{model.Id}' which requires HuggingFace auth");
+                $"Model '{model.AliasName}' uses gated repository '{model.Id}' which requires HuggingFace auth");
         }
     }
 

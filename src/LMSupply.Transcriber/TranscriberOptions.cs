@@ -100,7 +100,7 @@ public sealed class TranscribeOptions
     /// Lower values make output more deterministic.
     /// <para>Default: 0.0 (greedy)</para>
     /// </summary>
-    public float Temperature { get; set; } = 0.0f;
+    public float Temperature { get; set; }
 
     /// <summary>
     /// Gets or sets the compression ratio threshold.

@@ -1,0 +1,55 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/benchmark/">
+    <Project Path="benchmark/LMSupply.Benchmarks/LMSupply.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/console/" />
+  <Folder Name="/console/host/">
+    <Project Path="console/host/LMSupply.Console.Host.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/EmbedderGgufSample/EmbedderGgufSample.csproj" />
+    <Project Path="samples/EmbedderSample/EmbedderSample.csproj" />
+    <Project Path="samples/GeneratorGgufSample/GeneratorGgufSample.csproj" />
+    <Project Path="samples/TextGeneratorBuilderSample/TextGeneratorBuilderSample.csproj" />
+    <Project Path="samples/TranscriberSample/TranscriberSample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/LMSupply.Captioner/LMSupply.Captioner.csproj" />
+    <Project Path="src/LMSupply.Core/LMSupply.Core.csproj" />
+    <Project Path="src/LMSupply.Detector/LMSupply.Detector.csproj" />
+    <Project Path="src/LMSupply.Embedder/LMSupply.Embedder.csproj" />
+    <Project Path="src/LMSupply.Generator/LMSupply.Generator.csproj" />
+    <Project Path="src/LMSupply.ImageGenerator/LMSupply.ImageGenerator.csproj" />
+    <Project Path="src/LMSupply.Llama/LMSupply.Llama.csproj" />
+    <Project Path="src/LMSupply.Ocr/LMSupply.Ocr.csproj" />
+    <Project Path="src/LMSupply.Reranker/LMSupply.Reranker.csproj" />
+    <Project Path="src/LMSupply.Segmenter/LMSupply.Segmenter.csproj" />
+    <Project Path="src/LMSupply.Synthesizer/LMSupply.Synthesizer.csproj" />
+    <Project Path="src/LMSupply.Text.Core/LMSupply.Text.Core.csproj" />
+    <Project Path="src/LMSupply.Transcriber/LMSupply.Transcriber.csproj" />
+    <Project Path="src/LMSupply.Translator/LMSupply.Translator.csproj" />
+    <Project Path="src/LMSupply.Vision.Core/LMSupply.Vision.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LMSupply.Captioner.Tests/LMSupply.Captioner.Tests.csproj" />
+    <Project Path="tests/LMSupply.Core.Tests/LMSupply.Core.Tests.csproj" />
+    <Project Path="tests/LMSupply.Detector.Tests/LMSupply.Detector.Tests.csproj" />
+    <Project Path="tests/LMSupply.Embedder.Tests/LMSupply.Embedder.Tests.csproj" />
+    <Project Path="tests/LMSupply.Generator.Tests/LMSupply.Generator.Tests.csproj" />
+    <Project Path="tests/LMSupply.ImageGenerator.Tests/LMSupply.ImageGenerator.Tests.csproj" />
+    <Project Path="tests/LMSupply.Integration.Tests/LMSupply.Integration.Tests.csproj" />
+    <Project Path="tests/LMSupply.Llama.Tests/LMSupply.Llama.Tests.csproj" />
+    <Project Path="tests/LMSupply.Ocr.Tests/LMSupply.Ocr.Tests.csproj" />
+    <Project Path="tests/LMSupply.Reranker.Tests/LMSupply.Reranker.Tests.csproj" />
+    <Project Path="tests/LMSupply.Segmenter.Tests/LMSupply.Segmenter.Tests.csproj" />
+    <Project Path="tests/LMSupply.Synthesizer.Tests/LMSupply.Synthesizer.Tests.csproj" />
+    <Project Path="tests/LMSupply.Text.Core.Tests/LMSupply.Text.Core.Tests.csproj" />
+    <Project Path="tests/LMSupply.Transcriber.Tests/LMSupply.Transcriber.Tests.csproj" />
+    <Project Path="tests/LMSupply.Vision.Core.Tests/LMSupply.Vision.Core.Tests.csproj" />
+  </Folder>
+</Solution>

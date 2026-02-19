@@ -1,3 +1,4 @@
+using System.Globalization;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 
@@ -90,7 +91,7 @@ public static class GeneratorExtensions
         var sb = new StringBuilder();
         foreach (var message in messages)
         {
-            sb.AppendLine($"{message.Role}: {message.Content}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{message.Role}: {message.Content}");
         }
         return sb.ToString();
     }

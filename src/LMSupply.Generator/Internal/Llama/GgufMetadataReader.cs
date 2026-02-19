@@ -104,21 +104,21 @@ public static class GgufMetadataReader
                 // Quantization type is inferred from general.file_type
                 default:
                     // Architecture-specific keys
-                    if (key.EndsWith(".block_count"))
+                    if (key.EndsWith(".block_count", StringComparison.Ordinal))
                         layerCount = ConvertToInt(value);
-                    else if (key.EndsWith(".context_length"))
+                    else if (key.EndsWith(".context_length", StringComparison.Ordinal))
                         contextLength = ConvertToInt(value);
-                    else if (key.EndsWith(".embedding_length"))
+                    else if (key.EndsWith(".embedding_length", StringComparison.Ordinal))
                         embeddingLength = ConvertToInt(value);
-                    else if (key.EndsWith(".attention.head_count"))
+                    else if (key.EndsWith(".attention.head_count", StringComparison.Ordinal))
                         headCount = ConvertToInt(value);
-                    else if (key.EndsWith(".attention.head_count_kv"))
+                    else if (key.EndsWith(".attention.head_count_kv", StringComparison.Ordinal))
                         headCountKv = ConvertToInt(value);
-                    else if (key.EndsWith(".feed_forward_length"))
+                    else if (key.EndsWith(".feed_forward_length", StringComparison.Ordinal))
                         ffnLength = ConvertToInt(value);
-                    else if (key.EndsWith(".rope.freq_base"))
+                    else if (key.EndsWith(".rope.freq_base", StringComparison.Ordinal))
                         ropeFreqBase = ConvertToFloat(value);
-                    else if (key.EndsWith(".vocab_size") || key == "tokenizer.ggml.tokens")
+                    else if (key.EndsWith(".vocab_size", StringComparison.Ordinal) || key == "tokenizer.ggml.tokens")
                         vocabSize ??= value is string[] arr ? arr.Length : ConvertToInt(value);
                     break;
             }

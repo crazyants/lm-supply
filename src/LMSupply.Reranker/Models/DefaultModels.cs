@@ -19,7 +19,7 @@ public static class DefaultModels
     public static ModelInfo MsMarcoMiniLML6V2 { get; } = new()
     {
         Id = "cross-encoder/ms-marco-MiniLM-L-6-v2",
-        Alias = "default",
+        AliasName = "default",
         DisplayName = "MS MARCO MiniLM L6",
         Parameters = 22_700_000,
         MaxSequenceLength = 512,
@@ -40,7 +40,7 @@ public static class DefaultModels
     public static ModelInfo MsMarcoTinyBertL2V2 { get; } = new()
     {
         Id = "cross-encoder/ms-marco-TinyBERT-L-2-v2",
-        Alias = "fast",
+        AliasName = "fast",
         DisplayName = "MS MARCO TinyBERT L2",
         Parameters = 4_400_000,
         MaxSequenceLength = 512,
@@ -61,7 +61,7 @@ public static class DefaultModels
     public static ModelInfo MsMarcoMiniLML12V2 { get; } = new()
     {
         Id = "cross-encoder/ms-marco-MiniLM-L-12-v2",
-        Alias = "ms-marco-l12",
+        AliasName = "ms-marco-l12",
         DisplayName = "MS MARCO MiniLM L12",
         Parameters = 33_400_000,
         MaxSequenceLength = 512,
@@ -82,7 +82,7 @@ public static class DefaultModels
     public static ModelInfo BgeRerankerBase { get; } = new()
     {
         Id = "BAAI/bge-reranker-base",
-        Alias = "quality",
+        AliasName = "quality",
         DisplayName = "BGE Reranker Base",
         Parameters = 278_000_000,
         MaxSequenceLength = 512,
@@ -103,7 +103,7 @@ public static class DefaultModels
     public static ModelInfo BgeRerankerLarge { get; } = new()
     {
         Id = "BAAI/bge-reranker-large",
-        Alias = "large",
+        AliasName = "large",
         DisplayName = "BGE Reranker Large",
         Parameters = 560_000_000,
         MaxSequenceLength = 512,
@@ -124,7 +124,7 @@ public static class DefaultModels
     public static ModelInfo BgeRerankerV2M3 { get; } = new()
     {
         Id = "BAAI/bge-reranker-v2-m3",
-        Alias = "multilingual",
+        AliasName = "multilingual",
         DisplayName = "BGE Reranker v2 M3",
         Parameters = 568_000_000,
         MaxSequenceLength = 8192,

@@ -215,13 +215,13 @@ internal static class ModelRegistry
     {
         if (modelId.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            info = GetAutoModel() with { Alias = "auto" };
+            info = GetAutoModel() with { AliasName = "auto" };
             return true;
         }
 
         if (_models.TryGetValue(modelId, out info))
         {
-            info = info with { Alias = modelId };
+            info = info with { AliasName = modelId };
             return true;
         }
 
@@ -278,10 +278,10 @@ public sealed record ModelInfo : IModelInfoBase
     public required string RepoId { get; init; }
 
     /// <summary>
-    /// Gets the user-friendly alias for this model (e.g., "default", "fast").
+    /// Gets the user-friendly alias name for this model (e.g., "default", "fast").
     /// Set internally by the registry when resolving.
     /// </summary>
-    public string Alias { get; internal init; } = string.Empty;
+    public string AliasName { get; internal init; } = string.Empty;
 
     /// <summary>
     /// Gets the embedding dimensions.

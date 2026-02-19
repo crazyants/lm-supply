@@ -238,7 +238,7 @@ public class InteractiveSegmentationTests
         var model = new SegmenterModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test Model",
             Architecture = "SAM",
             EncoderFile = "encoder.onnx",
@@ -254,7 +254,7 @@ public class InteractiveSegmentationTests
         var model = new SegmenterModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test Model",
             Architecture = "Test",
             EncoderFile = "encoder.onnx"
@@ -269,7 +269,7 @@ public class InteractiveSegmentationTests
         var model = new SegmenterModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test Model",
             Architecture = "Test",
             DecoderFile = "decoder.onnx"
@@ -284,7 +284,7 @@ public class InteractiveSegmentationTests
         var model = new SegmenterModelInfo
         {
             Id = "test/model",
-            Alias = "test",
+            AliasName = "test",
             DisplayName = "Test Model",
             Architecture = "Test"
         };

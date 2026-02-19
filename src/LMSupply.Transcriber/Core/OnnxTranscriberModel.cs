@@ -211,7 +211,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         try
         {
             // Log language settings for debugging
-            Debug.WriteLine($"[OnnxTranscriberModel] Transcribing chunk - Language: {options?.Language ?? "auto-detect"}, " +
+            Trace.TraceInformation($"[OnnxTranscriberModel] Transcribing chunk - Language: {options?.Language ?? "auto-detect"}, " +
                 $"WordTimestamps: {options?.WordTimestamps ?? false}");
 
             // Compute mel spectrogram
@@ -221,19 +221,19 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             // Run encoder
             var encoderOutput = await RunEncoderAsync(melSpec, numMelBins, cancellationToken);
 
-            // Run decoder with greedy decoding
-            var (text, segments) = await RunDecoderAsync(encoderOutput, options, cancellationToken);
+            // Run decoder with greedy decoding (includes language detection)
+            var decoderResult = await RunDecoderAsync(encoderOutput, options, cancellationToken);
 
-            var resultLanguage = options?.Language ?? "en"; // TODO: Implement language detection
-            Debug.WriteLine($"[OnnxTranscriberModel] Transcription result - Language: {resultLanguage}, " +
-                $"Text length: {text.Length}, Segments: {segments.Count}");
+            Trace.TraceInformation($"[OnnxTranscriberModel] Transcription result - Language: {decoderResult.Language}, " +
+                $"Probability: {decoderResult.LanguageProbability?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "N/A"}, " +
+                $"Text length: {decoderResult.Text.Length}, Segments: {decoderResult.Segments.Count}");
 
             return new TranscriptionResult
             {
-                Text = text,
-                Language = resultLanguage,
-                LanguageProbability = null,
-                Segments = segments
+                Text = decoderResult.Text,
+                Language = decoderResult.Language,
+                LanguageProbability = decoderResult.LanguageProbability,
+                Segments = decoderResult.Segments
             };
         }
         finally
@@ -255,14 +255,14 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             };
 
             using var results = _encoderSession!.Run(inputs);
-            var output = results.First().AsTensor<float>();
+            var output = results[0].AsTensor<float>();
 
             // Copy tensor output to array
             return output.ToArray();
         }, cancellationToken);
     }
 
-    private async Task<(string text, List<TranscriptionSegment> segments)> RunDecoderAsync(
+    private async Task<DecodingResult> RunDecoderAsync(
         float[] encoderOutput,
         TranscribeOptions? options,
         CancellationToken cancellationToken)
@@ -278,14 +278,12 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         var hiddenSize = _modelInfo?.HiddenSize ?? 512; // Default for base model
         var sequenceLength = encoderOutput.Length / hiddenSize;
 
-        var result = await _decoder.DecodeAsync(
+        return await _decoder.DecodeAsync(
             encoderOutput,
             sequenceLength,
             hiddenSize,
             options,
             cancellationToken);
-
-        return (result.Text, result.Segments);
     }
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
@@ -304,7 +302,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
                 _modelInfo = new TranscriberModelInfo
                 {
                     Id = _options.ModelId,
-                    Alias = _options.ModelId,
+                    AliasName = _options.ModelId,
                     DisplayName = _options.ModelId,
                     Architecture = "Whisper"
                 };
@@ -328,7 +326,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
                 // Tokenizer files are typically in the base model directory
                 tokenizerPath = baseModelPath;
 
-                Debug.WriteLine($"[OnnxTranscriberModel] Using discovery-based paths - Subfolder: {discovery.Subfolder ?? "(root)"}, " +
+                Trace.TraceInformation($"[OnnxTranscriberModel] Using discovery-based paths - Subfolder: {discovery.Subfolder ?? "(root)"}, " +
                     $"Encoder: {Path.GetFileName(encoderPath)}, Decoder: {Path.GetFileName(decoderPath)}");
             }
             else
@@ -353,12 +351,12 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             _encoderSession = _encoderSessionInfo.Session;
 
             // Log GPU provider status
-            Debug.WriteLine($"[OnnxTranscriberModel] Encoder loaded - Requested: {_encoderSessionInfo.RequestedProvider}, " +
+            Trace.TraceInformation($"[OnnxTranscriberModel] Encoder loaded - Requested: {_encoderSessionInfo.RequestedProvider}, " +
                 $"Active providers: [{string.Join(", ", _encoderSessionInfo.ActiveProviders)}], GPU active: {_encoderSessionInfo.IsGpuActive}");
 
             if (_options.Provider != ExecutionProvider.Cpu && !_encoderSessionInfo.IsGpuActive)
             {
-                Debug.WriteLine("[OnnxTranscriberModel] WARNING: GPU provider was requested but only CPU is active. " +
+                Trace.TraceInformation("[OnnxTranscriberModel] WARNING: GPU provider was requested but only CPU is active. " +
                     "Check CUDA/DirectML installation and GPU availability.");
             }
 
@@ -372,12 +370,12 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
                     cancellationToken: cancellationToken);
                 _decoderSession = decoderSessionInfo.Session;
 
-                Debug.WriteLine($"[OnnxTranscriberModel] Decoder loaded - Requested: {decoderSessionInfo.RequestedProvider}, " +
+                Trace.TraceInformation($"[OnnxTranscriberModel] Decoder loaded - Requested: {decoderSessionInfo.RequestedProvider}, " +
                     $"Active providers: [{string.Join(", ", decoderSessionInfo.ActiveProviders)}], GPU active: {decoderSessionInfo.IsGpuActive}");
 
                 if (_options.Provider != ExecutionProvider.Cpu && !decoderSessionInfo.IsGpuActive)
                 {
-                    Debug.WriteLine("[OnnxTranscriberModel] WARNING: Decoder GPU provider was requested but only CPU is active.");
+                    Trace.TraceInformation("[OnnxTranscriberModel] WARNING: Decoder GPU provider was requested but only CPU is active.");
                 }
             }
 

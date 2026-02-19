@@ -10,7 +10,7 @@ namespace LMSupply.Console.Host.Services;
 /// <summary>
 /// 시스템 리소스 모니터링 서비스
 /// </summary>
-public sealed class SystemMonitorService : IDisposable
+public sealed partial class SystemMonitorService : IDisposable
 {
     private readonly ILogger<SystemMonitorService> _logger;
     private readonly Process _currentProcess;
@@ -108,7 +108,7 @@ public sealed class SystemMonitorService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to get memory metrics");
+            LogGetMemoryMetricsFailed(_logger, ex);
             return new HostMemoryMetrics();
         }
     }
@@ -179,7 +179,7 @@ public sealed class SystemMonitorService : IDisposable
         };
     }
 
-    private HostMemoryMetrics GetWindowsMemoryMetrics()
+    private static HostMemoryMetrics GetWindowsMemoryMetrics()
     {
         try
         {
@@ -224,4 +224,7 @@ public sealed class SystemMonitorService : IDisposable
 
         _currentProcess.Dispose();
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to get memory metrics")]
+    private static partial void LogGetMemoryMetricsFailed(ILogger logger, Exception exception);
 }

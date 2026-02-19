@@ -170,7 +170,7 @@ foreach (var alias in LocalTranscriber.GetAvailableModels())
 // Get detailed model information
 foreach (var model in LocalTranscriber.GetAllModels())
 {
-    Console.WriteLine($"{model.Alias}: {model.DisplayName}");
+    Console.WriteLine($"{model.AliasName}: {model.DisplayName}");
     Console.WriteLine($"  Parameters: {model.ParametersM}M");
     Console.WriteLine($"  WER: {model.WerLibriSpeech}%");
     Console.WriteLine($"  Multilingual: {model.IsMultilingual}");

@@ -10,8 +10,8 @@ public class PrecisionConfigTests
     [Theory]
     [InlineData(ModelPrecision.FP32, 4.0)]
     [InlineData(ModelPrecision.FP16, 2.0)]
-    [InlineData(ModelPrecision.INT8, 1.0)]
-    [InlineData(ModelPrecision.INT4, 0.5)]
+    [InlineData(ModelPrecision.Quant8, 1.0)]
+    [InlineData(ModelPrecision.Quant4, 0.5)]
     [InlineData(ModelPrecision.Auto, 2.0)] // Defaults to FP16 estimate
     public void GetBytesPerParameter_ReturnsCorrectValue(ModelPrecision precision, double expected)
     {
@@ -47,9 +47,9 @@ public class PrecisionConfigTests
     }
 
     [Fact]
-    public void EstimateModelMemory_INT8_CalculatesCorrectly()
+    public void EstimateModelMemory_Quant8_CalculatesCorrectly()
     {
-        var config = new PrecisionConfig { ModelPrecision = ModelPrecision.INT8 };
+        var config = new PrecisionConfig { ModelPrecision = ModelPrecision.Quant8 };
         const long parameterCount = 1_000_000;
 
         var memory = config.EstimateModelMemory(parameterCount);
@@ -58,9 +58,9 @@ public class PrecisionConfigTests
     }
 
     [Fact]
-    public void EstimateModelMemory_INT4_CalculatesCorrectly()
+    public void EstimateModelMemory_Quant4_CalculatesCorrectly()
     {
-        var config = new PrecisionConfig { ModelPrecision = ModelPrecision.INT4 };
+        var config = new PrecisionConfig { ModelPrecision = ModelPrecision.Quant4 };
         const long parameterCount = 1_000_000;
 
         var memory = config.EstimateModelMemory(parameterCount);
@@ -106,25 +106,25 @@ public class PrecisionConfigTests
     }
 
     [Fact]
-    public void GetRecommendedPrecision_LimitedMemory_ReturnsINT8()
+    public void GetRecommendedPrecision_LimitedMemory_ReturnsQuant8()
     {
         const long availableMemory = 2_000_000_000; // 2GB
-        const long parameterCount = 1_000_000_000; // 1B params needs ~1.5GB for INT8
+        const long parameterCount = 1_000_000_000; // 1B params needs ~1.5GB for Quant8
 
         var precision = PrecisionConfig.GetRecommendedPrecision(availableMemory, parameterCount);
 
-        precision.Should().Be(ModelPrecision.INT8);
+        precision.Should().Be(ModelPrecision.Quant8);
     }
 
     [Fact]
-    public void GetRecommendedPrecision_VeryLimitedMemory_ReturnsINT4()
+    public void GetRecommendedPrecision_VeryLimitedMemory_ReturnsQuant4()
     {
         const long availableMemory = 500_000_000; // 500MB
-        const long parameterCount = 1_000_000_000; // 1B params needs ~750MB for INT4
+        const long parameterCount = 1_000_000_000; // 1B params needs ~750MB for Quant4
 
         var precision = PrecisionConfig.GetRecommendedPrecision(availableMemory, parameterCount);
 
-        precision.Should().Be(ModelPrecision.INT4);
+        precision.Should().Be(ModelPrecision.Quant4);
     }
 
     #endregion
@@ -169,7 +169,7 @@ public class PrecisionConfigTests
     {
         var config = PrecisionConfig.LowMemory;
 
-        config.ModelPrecision.Should().Be(ModelPrecision.INT8);
+        config.ModelPrecision.Should().Be(ModelPrecision.Quant8);
         config.ComputePrecision.Should().Be(ComputePrecision.FP16);
         config.EnableGraphOptimization.Should().BeTrue();
         config.OptimizationLevel.Should().Be(OptimizationLevel.All);

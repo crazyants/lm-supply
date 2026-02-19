@@ -29,7 +29,7 @@ public static class Program
         Console.WriteLine("Available models:");
         foreach (var model in LocalTranscriber.GetAllModels())
         {
-            Console.WriteLine($"  - {model.Alias,-12} : {model.DisplayName} ({model.ParametersM:F0}M params)");
+            Console.WriteLine($"  - {model.AliasName,-12} : {model.DisplayName} ({model.ParametersM:F0}M params)");
         }
         Console.WriteLine();
 

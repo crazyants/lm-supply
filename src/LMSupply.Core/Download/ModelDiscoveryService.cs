@@ -358,8 +358,8 @@ public sealed class ModelDiscoveryService : IDisposable
         {
             var keyword = quant switch
             {
-                Quantization.Int4 => "int4",
-                Quantization.Int8 => "int8",
+                Quantization.Quant4 => "int4",
+                Quantization.Quant8 => "int8",
                 Quantization.Fp16 => "fp16",
                 _ => null
             };
@@ -675,8 +675,8 @@ public sealed class ModelDiscoveryService : IDisposable
             {
                 var suffix = quant switch
                 {
-                    Quantization.Int4 => "_int4",
-                    Quantization.Int8 => "_int8",
+                    Quantization.Quant4 => "_int4",
+                    Quantization.Quant8 => "_int8",
                     Quantization.Fp16 => "_fp16",
                     _ => ""
                 };
@@ -827,8 +827,8 @@ public sealed class ModelDiscoveryService : IDisposable
         {
             Default = paths.Where(p => !HasQuantizationSuffix(Path.GetFileName(p))).ToList(),
             Fp16 = paths.Where(p => p.Contains("fp16", StringComparison.OrdinalIgnoreCase)).ToList(),
-            Int8 = paths.Where(p => p.Contains("int8", StringComparison.OrdinalIgnoreCase)).ToList(),
-            Int4 = paths.Where(p => p.Contains("int4", StringComparison.OrdinalIgnoreCase)).ToList(),
+            Quant8 = paths.Where(p => p.Contains("int8", StringComparison.OrdinalIgnoreCase)).ToList(),
+            Quant4 = paths.Where(p => p.Contains("int4", StringComparison.OrdinalIgnoreCase)).ToList(),
             Cpu = paths.Where(p => p.Contains("cpu", StringComparison.OrdinalIgnoreCase)).ToList(),
             Cuda = paths.Where(p => p.Contains("cuda", StringComparison.OrdinalIgnoreCase) ||
                                     p.Contains("gpu", StringComparison.OrdinalIgnoreCase)).ToList()

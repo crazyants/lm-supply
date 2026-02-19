@@ -121,7 +121,7 @@ public static class OnnxSessionFactory
 
         if (isGpuRequested && !hasGpuProvider)
         {
-            Debug.WriteLine($"[OnnxSessionFactory] Warning: GPU provider {provider} was requested but only CPU is active. " +
+            Trace.TraceWarning($"[OnnxSessionFactory] Warning: GPU provider {provider} was requested but only CPU is active. " +
                 $"Active providers: {string.Join(", ", activeProviders)}");
         }
 
@@ -469,12 +469,12 @@ public static class OnnxSessionFactory
         try
         {
             options.AppendExecutionProvider_CUDA();
-            Debug.WriteLine("[OnnxSessionFactory] CUDA provider added successfully");
+            Trace.TraceInformation("[OnnxSessionFactory] CUDA provider added successfully");
             return true;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[OnnxSessionFactory] Failed to add CUDA provider: {ex.Message}");
+            Trace.TraceWarning($"[OnnxSessionFactory] Failed to add CUDA provider: {ex.Message}");
             return false;
         }
     }
@@ -489,12 +489,12 @@ public static class OnnxSessionFactory
             options.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
             
             options.AppendExecutionProvider_DML();
-            Debug.WriteLine("[OnnxSessionFactory] DirectML provider added successfully");
+            Trace.TraceInformation("[OnnxSessionFactory] DirectML provider added successfully");
             return true;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[OnnxSessionFactory] Failed to add DirectML provider: {ex.Message}");
+            Trace.TraceWarning($"[OnnxSessionFactory] Failed to add DirectML provider: {ex.Message}");
             return false;
         }
     }

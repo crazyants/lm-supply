@@ -216,7 +216,7 @@ public class GgufMetadataReaderTests
         config!.NumLayers.Should().Be(32);
         config.HiddenSize.Should().Be(4096);
         config.ContextLength.Should().Be(4096);
-        config.Quantization.Should().Be(Quantization.INT4);
+        config.Quantization.Should().Be(Quantization.Quant4);
     }
 
     [Fact]

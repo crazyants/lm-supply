@@ -296,7 +296,7 @@ public sealed class HuggingFaceDownloader : IDisposable
         if (contentLength < 1024 && filename.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase))
         {
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (content.StartsWith("version https://git-lfs.github.com/spec/v1"))
+            if (content.StartsWith("version https://git-lfs.github.com/spec/v1", StringComparison.Ordinal))
             {
                 throw new ModelDownloadException(
                     $"Received LFS pointer for '{filename}'. This may indicate a network or redirect issue.",

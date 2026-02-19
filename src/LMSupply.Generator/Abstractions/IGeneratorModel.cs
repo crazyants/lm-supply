@@ -80,9 +80,9 @@ public readonly record struct GeneratorModelInfo(
     string IModelInfoBase.Id => ModelId;
 
     /// <summary>
-    /// Gets the model alias (same as ModelId for Generator).
+    /// Gets the model alias name (same as ModelId for Generator).
     /// </summary>
-    string IModelInfoBase.Alias => ModelId;
+    string IModelInfoBase.AliasName => ModelId;
 
     /// <summary>
     /// Gets the model description.

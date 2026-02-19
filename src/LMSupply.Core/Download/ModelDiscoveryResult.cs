@@ -123,7 +123,7 @@ public sealed class ModelDiscoveryResult
     /// <param name="baseModelDir">The base model directory from cache.</param>
     /// <param name="relativePath">The relative path of the file (may include subfolder).</param>
     /// <returns>The full local path to the file.</returns>
-    public string GetFilePath(string baseModelDir, string relativePath)
+    public static string GetFilePath(string baseModelDir, string relativePath)
     {
         return Path.Combine(baseModelDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
     }
@@ -173,14 +173,14 @@ public sealed class ModelVariants
     public IReadOnlyList<string> Fp16 { get; init; } = [];
 
     /// <summary>
-    /// INT8 quantized variants.
+    /// 8-bit quantized variants.
     /// </summary>
-    public IReadOnlyList<string> Int8 { get; init; } = [];
+    public IReadOnlyList<string> Quant8 { get; init; } = [];
 
     /// <summary>
-    /// INT4 quantized variants.
+    /// 4-bit quantized variants.
     /// </summary>
-    public IReadOnlyList<string> Int4 { get; init; } = [];
+    public IReadOnlyList<string> Quant4 { get; init; } = [];
 
     /// <summary>
     /// CPU-optimized variants.

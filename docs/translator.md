@@ -139,7 +139,7 @@ Console.WriteLine(string.Join(", ", models));
 var allModels = LocalTranslator.GetAllModels();
 foreach (var model in allModels)
 {
-    Console.WriteLine($"{model.Alias}: {model.SourceLanguage} → {model.TargetLanguage}");
+    Console.WriteLine($"{model.AliasName}: {model.SourceLanguage} → {model.TargetLanguage}");
 }
 ```
 

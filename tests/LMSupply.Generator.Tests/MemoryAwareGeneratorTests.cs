@@ -53,7 +53,7 @@ public class MemoryAwareGeneratorTests
         var wrapper = new MemoryAwareGenerator(inner);
 
         // Act
-        var result = wrapper.GetCurrentMemoryUsage();
+        var result = MemoryAwareGenerator.GetCurrentMemoryUsage();
 
         // Assert
         result.Should().BeGreaterThan(0);

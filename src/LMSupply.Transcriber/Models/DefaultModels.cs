@@ -13,7 +13,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperTiny { get; } = new()
     {
         Id = "onnx-community/whisper-tiny",
-        Alias = "fast",
+        AliasName = "fast",
         DisplayName = "Whisper Tiny",
         Architecture = "Whisper",
         ParametersM = 39f,
@@ -36,7 +36,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperBase { get; } = new()
     {
         Id = "onnx-community/whisper-base",
-        Alias = "default",
+        AliasName = "default",
         DisplayName = "Whisper Base",
         Architecture = "Whisper",
         ParametersM = 74f,
@@ -59,7 +59,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperSmall { get; } = new()
     {
         Id = "onnx-community/whisper-small",
-        Alias = "quality",
+        AliasName = "quality",
         DisplayName = "Whisper Small",
         Architecture = "Whisper",
         ParametersM = 244f,
@@ -83,7 +83,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperMedium { get; } = new()
     {
         Id = "onnx-community/whisper-medium.en_timestamped",
-        Alias = "medium",
+        AliasName = "medium",
         DisplayName = "Whisper Medium (English)",
         Architecture = "Whisper",
         ParametersM = 769f,
@@ -108,7 +108,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperLargeV3 { get; } = new()
     {
         Id = "onnx-community/whisper-large-v3-turbo",
-        Alias = "large",
+        AliasName = "large",
         DisplayName = "Whisper Large V3 Turbo",
         Architecture = "Whisper",
         ParametersM = 809f,
@@ -132,7 +132,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperLargeV3Turbo { get; } = new()
     {
         Id = "onnx-community/whisper-large-v3-turbo",
-        Alias = "turbo",
+        AliasName = "turbo",
         DisplayName = "Whisper Large V3 Turbo",
         Architecture = "Whisper",
         ParametersM = 809f,
@@ -156,7 +156,7 @@ public static class DefaultModels
     public static TranscriberModelInfo DistilWhisperLargeV3 { get; } = new()
     {
         Id = "distil-whisper/distil-large-v3",
-        Alias = "distil",
+        AliasName = "distil",
         DisplayName = "Distil-Whisper Large V3",
         Architecture = "Whisper",
         ParametersM = 756f,
@@ -180,7 +180,7 @@ public static class DefaultModels
     public static TranscriberModelInfo WhisperBaseEn { get; } = new()
     {
         Id = "onnx-community/whisper-base.en",
-        Alias = "english",
+        AliasName = "english",
         DisplayName = "Whisper Base (English)",
         Architecture = "Whisper",
         ParametersM = 74f,

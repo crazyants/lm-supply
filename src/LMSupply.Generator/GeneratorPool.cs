@@ -184,7 +184,7 @@ public sealed class GeneratorPool : IAsyncDisposable
         }
     }
 
-    private long EstimateModelMemory(string modelId, GeneratorOptions? options)
+    private static long EstimateModelMemory(string modelId, GeneratorOptions? options)
     {
         var modelInfo = ModelRegistry.GetModel(modelId);
         if (modelInfo != null)
@@ -201,7 +201,7 @@ public sealed class GeneratorPool : IAsyncDisposable
             NumLayers = 32,
             HiddenSize = 2560,
             ContextLength = options?.MaxContextLength ?? 4096,
-            Quantization = Quantization.INT4
+            Quantization = Quantization.Quant4
         }).TotalBytes;
     }
 

@@ -14,7 +14,7 @@ public sealed class ImageGeneratorModelInfo : IModelInfoBase
 
     // IModelInfoBase explicit implementation
     string IModelInfoBase.Id => ModelId;
-    string IModelInfoBase.Alias => ModelName ?? ModelId;
+    string IModelInfoBase.AliasName => ModelName ?? ModelId;
 
     /// <summary>
     /// Friendly name of the model.

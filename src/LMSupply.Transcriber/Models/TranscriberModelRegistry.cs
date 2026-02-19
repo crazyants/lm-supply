@@ -33,7 +33,7 @@ public sealed class TranscriberModelRegistry
     /// <param name="info">The model information to register.</param>
     public void Register(TranscriberModelInfo info)
     {
-        _models[info.Alias] = info;
+        _models[info.AliasName] = info;
         _byId[info.Id] = info;
     }
 

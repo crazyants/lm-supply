@@ -12,9 +12,9 @@ public interface IModelInfoBase
     string Id { get; }
 
     /// <summary>
-    /// Gets the user-friendly alias for this model (e.g., "default", "fast", "quality").
+    /// Gets the user-friendly alias name for this model (e.g., "default", "fast", "quality").
     /// </summary>
-    string Alias { get; }
+    string AliasName { get; }
 
     /// <summary>
     /// Gets a human-readable description of the model.

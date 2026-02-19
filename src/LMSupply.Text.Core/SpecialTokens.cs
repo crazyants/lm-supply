@@ -95,7 +95,7 @@ public sealed class SpecialTokens
     /// <summary>
     /// UNK token ID.
     /// </summary>
-    public int UnkTokenId { get; init; } = 0;
+    public int UnkTokenId { get; init; }
 
     /// <summary>
     /// BOS token ID.

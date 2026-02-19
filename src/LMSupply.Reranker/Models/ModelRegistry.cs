@@ -31,7 +31,7 @@ public sealed class ModelRegistry
 
         foreach (var model in modelList)
         {
-            _modelsByAlias[model.Alias] = model;
+            _modelsByAlias[model.AliasName] = model;
             _modelsById[model.Id] = model;
 
             // Also index by model name (part after "/" in HuggingFace IDs)
@@ -180,7 +180,7 @@ public sealed class ModelRegistry
         return new ModelInfo
         {
             Id = fullPath,
-            Alias = "local",
+            AliasName = "local",
             DisplayName = $"Local: {fileName}",
             Parameters = 0,
             MaxSequenceLength = 512, // Default assumption
@@ -201,7 +201,7 @@ public sealed class ModelRegistry
         return new ModelInfo
         {
             Id = modelId,
-            Alias = modelId,
+            AliasName = modelId,
             DisplayName = name,
             Parameters = 0, // Unknown
             MaxSequenceLength = 512, // Default assumption

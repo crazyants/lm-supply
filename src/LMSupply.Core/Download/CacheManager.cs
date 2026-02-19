@@ -5,6 +5,11 @@ namespace LMSupply.Download;
 /// </summary>
 public static class CacheManager
 {
+    private static readonly System.Text.Json.JsonSerializerOptions s_jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     /// <summary>
     /// Gets the default cache directory following HuggingFace Hub standard.
     /// </summary>
@@ -84,7 +89,7 @@ public static class CacheManager
         try
         {
             var content = File.ReadAllText(filePath);
-            return content.StartsWith("version https://git-lfs.github.com/spec/v1");
+            return content.StartsWith("version https://git-lfs.github.com/spec/v1", StringComparison.Ordinal);
         }
         catch
         {
@@ -252,8 +257,7 @@ public static class CacheManager
                 return null;
 
             var json = File.ReadAllText(metadataPath);
-            return System.Text.Json.JsonSerializer.Deserialize<ModelMetadata>(json,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return System.Text.Json.JsonSerializer.Deserialize<ModelMetadata>(json, s_jsonOptions);
         }
         catch
         {

@@ -11,9 +11,9 @@ public sealed class DetectorModelInfo : IModelInfoBase
     public required string Id { get; init; }
 
     /// <summary>
-    /// Gets or sets the model alias (e.g., "default", "fast").
+    /// Gets or sets the model alias name (e.g., "default", "fast").
     /// </summary>
-    public required string Alias { get; init; }
+    public required string AliasName { get; init; }
 
     /// <summary>
     /// Gets or sets the display name.

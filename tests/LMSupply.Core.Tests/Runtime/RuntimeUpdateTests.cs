@@ -30,6 +30,7 @@ public class RuntimeUpdateTests : IDisposable
         {
             // Ignore cleanup errors
         }
+        GC.SuppressFinalize(this);
     }
 
     #region RuntimeVersionState Tests

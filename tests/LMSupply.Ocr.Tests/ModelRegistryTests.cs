@@ -16,7 +16,7 @@ public class ModelRegistryTests
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.Alias.Should().Be("dbnet-v3");
+        modelInfo!.AliasName.Should().Be("dbnet-v3");
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class ModelRegistryTests
 
         // Assert
         model.Should().NotBeNull();
-        model.Alias.Should().Be("dbnet-v3");
+        model.AliasName.Should().Be("dbnet-v3");
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class ModelRegistryTests
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.Alias.Should().Be("crnn-en-v3");
+        modelInfo!.AliasName.Should().Be("crnn-en-v3");
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class ModelRegistryTests
         var model = ModelRegistry.GetRecognitionModelForLanguage("en");
 
         // Assert
-        model.Alias.Should().Be("crnn-en-v3");
+        model.AliasName.Should().Be("crnn-en-v3");
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class ModelRegistryTests
         var model = ModelRegistry.GetRecognitionModelForLanguage("ko");
 
         // Assert
-        model.Alias.Should().Be("crnn-korean-v3");
+        model.AliasName.Should().Be("crnn-korean-v3");
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class ModelRegistryTests
         var model = ModelRegistry.GetRecognitionModelForLanguage("unknown");
 
         // Assert
-        model.Alias.Should().Be("crnn-en-v3");
+        model.AliasName.Should().Be("crnn-en-v3");
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public class ModelRegistryTests
         var model = ModelRegistry.GetRecognitionModelForLanguage("en-US");
 
         // Assert
-        model.Alias.Should().Be("crnn-en-v3");
+        model.AliasName.Should().Be("crnn-en-v3");
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class ModelRegistryTests
         // Arrange
         var newModel = new DetectionModelInfo(
             RepoId: "test/test-detection",
-            Alias: "test-detection",
+            AliasName: "test-detection",
             DisplayName: "Test Detection Model",
             ModelFile: "test_det.onnx");
 
@@ -283,7 +283,7 @@ public class ModelRegistryTests
         // Arrange
         var newModel = new RecognitionModelInfo(
             RepoId: "test/test-recognition",
-            Alias: "test-recognition",
+            AliasName: "test-recognition",
             DisplayName: "Test Recognition Model",
             ModelFile: "test_rec.onnx",
             DictFile: "test_dict.txt",
@@ -320,7 +320,7 @@ public class ModelRegistryTests
 
         // Assert
         result.Should().BeTrue();
-        model!.Alias.Should().Be("dbnet-v3");
+        model!.AliasName.Should().Be("dbnet-v3");
     }
 
     [Fact]
@@ -346,7 +346,7 @@ public class ModelRegistryTests
 
         // Assert
         result.Should().BeTrue();
-        model!.Alias.Should().Be("crnn-en-v3");
+        model!.AliasName.Should().Be("crnn-en-v3");
     }
 
     #endregion

@@ -180,7 +180,7 @@ public sealed class MemoryAwareGenerator : IGeneratorModel
     /// <summary>
     /// Gets the current memory usage in bytes.
     /// </summary>
-    public long GetCurrentMemoryUsage() => GC.GetTotalMemory(forceFullCollection: false);
+    public static long GetCurrentMemoryUsage() => GC.GetTotalMemory(forceFullCollection: false);
 
     /// <summary>
     /// Gets the memory usage as a percentage of the configured limit.
@@ -219,7 +219,7 @@ public sealed class MemoryAwareGenerator : IGeneratorModel
         {
             var currentMB = GetCurrentMemoryUsage() / (1024 * 1024);
             var maxMB = _options.MaxMemoryBytes / (1024 * 1024);
-            throw new OutOfMemoryException(
+            throw new InvalidOperationException(
                 $"Insufficient memory for generation. Current: {currentMB}MB, Limit: {maxMB}MB ({usagePercent:P1})");
         }
     }

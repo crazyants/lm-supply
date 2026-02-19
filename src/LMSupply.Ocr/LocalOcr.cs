@@ -41,7 +41,7 @@ public static class LocalOcr
             detectionModel, options, progress, cancellationToken).ConfigureAwait(false);
 
         // Resolve recognition model based on language hint if not specified
-        recognitionModel ??= ModelRegistry.GetRecognitionModelForLanguage(options.LanguageHint).Alias;
+        recognitionModel ??= ModelRegistry.GetRecognitionModelForLanguage(options.LanguageHint).AliasName;
 
         var (recModelInfo, recModelPath, dictPath) = await ResolveRecognitionModelAsync(
             recognitionModel, options, progress, cancellationToken).ConfigureAwait(false);
@@ -75,7 +75,7 @@ public static class LocalOcr
         options ??= new OcrOptions { LanguageHint = languageCode };
         options.LanguageHint = languageCode;
 
-        var recognitionModel = ModelRegistry.GetRecognitionModelForLanguage(languageCode).Alias;
+        var recognitionModel = ModelRegistry.GetRecognitionModelForLanguage(languageCode).AliasName;
         return await LoadAsync("default", recognitionModel, options, progress, cancellationToken).ConfigureAwait(false);
     }
 
@@ -283,7 +283,7 @@ public static class LocalOcr
         // Create model info for the discovered model
         var modelInfo = new DetectionModelInfo(
             RepoId: repoId,
-            Alias: repoId,
+            AliasName: repoId,
             DisplayName: $"HuggingFace: {repoId}",
             ModelFile: Path.GetFileName(modelPath),
             InputWidth: 960,
@@ -376,7 +376,7 @@ public static class LocalOcr
         // Create model info for the discovered model
         var modelInfo = new RecognitionModelInfo(
             RepoId: repoId,
-            Alias: repoId,
+            AliasName: repoId,
             DisplayName: $"HuggingFace: {repoId}",
             ModelFile: Path.GetFileName(modelPath),
             DictFile: Path.GetFileName(dictPath),

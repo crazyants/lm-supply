@@ -40,7 +40,8 @@ public sealed record EmbeddingRequest
 /// </summary>
 public sealed record EmbeddingResponse
 {
-    public string Object { get; init; } = "list";
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "list";
     public required IReadOnlyList<EmbeddingData> Data { get; init; }
     public required string Model { get; init; }
     public required EmbeddingUsage Usage { get; init; }
@@ -51,7 +52,8 @@ public sealed record EmbeddingResponse
 /// </summary>
 public sealed record EmbeddingData
 {
-    public string Object { get; init; } = "embedding";
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "embedding";
     public int Index { get; init; }
     public required float[] Embedding { get; init; }
 }

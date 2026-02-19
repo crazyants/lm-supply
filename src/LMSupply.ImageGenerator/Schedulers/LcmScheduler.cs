@@ -192,7 +192,7 @@ public sealed class LcmScheduler
     /// <summary>
     /// Scales the model input based on the current timestep.
     /// </summary>
-    public float[] ScaleModelInput(ReadOnlySpan<float> sample, int timestep)
+    public static float[] ScaleModelInput(ReadOnlySpan<float> sample, int timestep)
     {
         // LCM doesn't require input scaling
         var result = new float[sample.Length];

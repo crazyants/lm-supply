@@ -30,7 +30,7 @@ public sealed class Llama3ChatFormatter : IChatFormatter
                 ChatRole.System => "system",
                 ChatRole.User => "user",
                 ChatRole.Assistant => "assistant",
-                _ => throw new ArgumentOutOfRangeException(nameof(message.Role))
+                _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             // Add begin_of_text only at the start

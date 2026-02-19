@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using LMSupply.Text;
@@ -358,7 +359,7 @@ internal sealed class TranslatorTokenizer : IDisposable
             "Expected one of: source.spm, sentencepiece.bpe.model, tokenizer.json, or vocab.json + merges.txt");
     }
 
-    private static Tokenizer? CreateTokenizerFromJson(string tokenizerJsonPath)
+    private static WordPieceTokenizer? CreateTokenizerFromJson(string tokenizerJsonPath)
     {
         var json = File.ReadAllText(tokenizerJsonPath);
         using var doc = JsonDocument.Parse(json);
@@ -420,7 +421,7 @@ internal sealed class TranslatorTokenizer : IDisposable
             }
             else
             {
-                vocabLines.AppendLine($"[unused{i}]");
+                vocabLines.AppendLine(CultureInfo.InvariantCulture, $"[unused{i}]");
             }
         }
 

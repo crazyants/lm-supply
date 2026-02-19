@@ -16,6 +16,9 @@ namespace LMSupply.Translator.Core;
 /// </summary>
 internal sealed class OnnxTranslatorModel : ITranslatorModel
 {
+    private static readonly bool[] s_falseArray = [false];
+    private static readonly int[] s_oneDimension = [1];
+
     private readonly TranslatorOptions _options;
     private readonly TranslatorModelInfo _modelInfo;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
@@ -167,7 +170,7 @@ internal sealed class OnnxTranslatorModel : ITranslatorModel
             };
 
             using var outputs = _encoderSession!.Run(inputs);
-            var lastHiddenState = outputs.First().AsTensor<float>();
+            var lastHiddenState = outputs[0].AsTensor<float>();
 
             // Clone the tensor since we're disposing the outputs
             var dims = lastHiddenState.Dimensions.ToArray();
@@ -220,12 +223,12 @@ internal sealed class OnnxTranslatorModel : ITranslatorModel
                 var inputNames = _decoderSession!.InputMetadata.Keys;
                 if (inputNames.Contains("use_cache_branch"))
                 {
-                    var useCacheBranch = new DenseTensor<bool>(new[] { false }, new[] { 1 });
+                    var useCacheBranch = new DenseTensor<bool>(s_falseArray, s_oneDimension);
                     inputs.Add(NamedOnnxValue.CreateFromTensor("use_cache_branch", useCacheBranch));
                 }
 
                 using var outputs = _decoderSession.Run(inputs);
-                var logits = outputs.First().AsTensor<float>();
+                var logits = outputs[0].AsTensor<float>();
 
                 // Get the last token's logits
                 var lastPosition = outputIds.Count - 1;

@@ -33,7 +33,7 @@ public sealed class LlamaServerUpdateOptions
     /// Whether to include prerelease versions.
     /// Default: false (only stable releases).
     /// </summary>
-    public bool IncludePrerelease { get; set; } = false;
+    public bool IncludePrerelease { get; set; }
 
     /// <summary>
     /// Maximum number of previous versions to keep for rollback.
@@ -51,5 +51,5 @@ public sealed class LlamaServerUpdateOptions
     /// Whether to enable verbose logging.
     /// Default: false.
     /// </summary>
-    public bool Verbose { get; set; } = false;
+    public bool Verbose { get; set; }
 }

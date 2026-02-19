@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace LMSupply.Runtime;
@@ -223,17 +224,17 @@ public sealed class CudaEnvironment
         var sb = new System.Text.StringBuilder();
         var platform = GetPlatformName();
 
-        sb.AppendLine($"=== CUDA Environment Diagnostics ({platform}) ===");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"=== CUDA Environment Diagnostics ({platform}) ===");
         sb.AppendLine();
 
         // Environment variables
         sb.AppendLine("Environment Variables:");
-        sb.AppendLine($"  CUDA_PATH: {Environment.GetEnvironmentVariable("CUDA_PATH") ?? "(not set)"}");
-        sb.AppendLine($"  CUDAToolkit_ROOT: {Environment.GetEnvironmentVariable("CUDAToolkit_ROOT") ?? "(not set)"}");
-        sb.AppendLine($"  CUDNN_PATH: {Environment.GetEnvironmentVariable("CUDNN_PATH") ?? "(not set)"}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"  CUDA_PATH: {Environment.GetEnvironmentVariable("CUDA_PATH") ?? "(not set)"}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"  CUDAToolkit_ROOT: {Environment.GetEnvironmentVariable("CUDAToolkit_ROOT") ?? "(not set)"}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"  CUDNN_PATH: {Environment.GetEnvironmentVariable("CUDNN_PATH") ?? "(not set)"}");
         if (!OperatingSystem.IsWindows())
         {
-            sb.AppendLine($"  LD_LIBRARY_PATH: {Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "(not set)"}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  LD_LIBRARY_PATH: {Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "(not set)"}");
         }
         sb.AppendLine();
 
@@ -247,10 +248,10 @@ public sealed class CudaEnvironment
             foreach (var cuda in _cudaInstallations)
             {
                 var isPrimary = cuda == _primaryCuda ? " [PRIMARY]" : "";
-                sb.AppendLine($"  - CUDA {cuda.Version} at {cuda.Path}{isPrimary}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  - CUDA {cuda.Version} at {cuda.Path}{isPrimary}");
                 foreach (var libPath in cuda.LibraryPaths.Where(Directory.Exists))
                 {
-                    sb.AppendLine($"    lib: {libPath}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"    lib: {libPath}");
                 }
             }
         }
@@ -265,14 +266,14 @@ public sealed class CudaEnvironment
         {
             foreach (var cudnn in _cudnnInstallations)
             {
-                sb.AppendLine($"  - cuDNN {cudnn.Version} for CUDA {cudnn.CudaMajorVersion}.x");
-                sb.AppendLine($"    lib: {cudnn.LibraryPath}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  - cuDNN {cudnn.Version} for CUDA {cudnn.CudaMajorVersion}.x");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"    lib: {cudnn.LibraryPath}");
 
                 // Only show zlib status for cuDNN 8.x or non-Windows
                 if (cudnn.MajorVersion < 9 || !OperatingSystem.IsWindows())
                 {
                     var zlibStatus = CheckZlibAvailability(cudnn.LibraryPath) ? "found" : "not found";
-                    sb.AppendLine($"    zlib: {zlibStatus}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"    zlib: {zlibStatus}");
                 }
             }
         }
@@ -701,9 +702,9 @@ public sealed class CudaEnvironment
 
                 if (majorMatch.Success && minorMatch.Success)
                 {
-                    var major = int.Parse(majorMatch.Groups[1].Value);
-                    var minor = int.Parse(minorMatch.Groups[1].Value);
-                    var patch = patchMatch.Success ? int.Parse(patchMatch.Groups[1].Value) : 0;
+                    var major = int.Parse(majorMatch.Groups[1].Value, CultureInfo.InvariantCulture);
+                    var minor = int.Parse(minorMatch.Groups[1].Value, CultureInfo.InvariantCulture);
+                    var patch = patchMatch.Success ? int.Parse(patchMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
                     return new Version(major, minor, patch);
                 }
             }
@@ -895,7 +896,7 @@ public sealed class CudaInstallation
         LibraryPaths = DiscoverLibraryPaths(path);
     }
 
-    private static IReadOnlyList<string> DiscoverLibraryPaths(string cudaPath)
+    private static List<string> DiscoverLibraryPaths(string cudaPath)
     {
         var paths = new List<string>();
 

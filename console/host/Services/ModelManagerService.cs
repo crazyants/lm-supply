@@ -22,7 +22,7 @@ namespace LMSupply.Console.Host.Services;
 /// - LRU 캐싱
 /// - 동시성 제어
 /// </summary>
-public sealed class ModelManagerService : IAsyncDisposable
+public sealed partial class ModelManagerService : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, LoadedModelEntry> _loadedModels = new();
     private readonly SemaphoreSlim _loadLock = new(1, 1);
@@ -46,8 +46,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         // 주기적 정리 타이머 (5분마다)
         _cleanupTimer = new Timer(CleanupIdleModels, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
 
-        _logger.LogInformation("ModelManager initialized: MaxModels={Max}, IdleTimeout={Timeout}",
-            _maxLoadedModels, _idleTimeout);
+        LogManagerInitialized(_logger, _maxLoadedModels, _idleTimeout);
     }
 
     /// <summary>
@@ -60,7 +59,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"generator:{modelId}";
         return (IGeneratorModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Generator model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Generator", modelId);
             var model = await LocalGenerator.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -77,7 +76,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"embedder:{modelId}";
         return (IEmbeddingModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Embedder model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Embedder", modelId);
             var model = await LocalEmbedder.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -94,7 +93,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"reranker:{modelId}";
         return (IRerankerModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Reranker model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Reranker", modelId);
             var model = await LocalReranker.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -111,7 +110,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"transcriber:{modelId}";
         return (ITranscriberModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Transcriber model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Transcriber", modelId);
             var model = await LocalTranscriber.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -128,7 +127,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"synthesizer:{modelId}";
         return (ISynthesizerModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Synthesizer model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Synthesizer", modelId);
             var model = await LocalSynthesizer.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -145,7 +144,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"captioner:{modelId}";
         return (ICaptionerModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Captioner model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Captioner", modelId);
             var model = await LocalCaptioner.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -162,7 +161,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"ocr:{languageHint}";
         return (IOcr)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading OCR model for language: {Language}", languageHint);
+            LogLoadingOcrModel(_logger, languageHint);
             var model = await LocalOcr.LoadForLanguageAsync(languageHint, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -179,7 +178,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"detector:{modelId}";
         return (IDetectorModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Detector model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Detector", modelId);
             var model = await LocalDetector.LoadAsync(modelId, cancellationToken: cancellationToken);
             // LocalDetector.LoadAsync already calls WarmupAsync internally
             return model;
@@ -196,7 +195,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"segmenter:{modelId}";
         return (ISegmenterModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Segmenter model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Segmenter", modelId);
             var model = await LocalSegmenter.LoadAsync(modelId, cancellationToken: cancellationToken);
             // LocalSegmenter.LoadAsync already calls WarmupAsync internally
             return model;
@@ -213,7 +212,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"translator:{modelId}";
         return (ITranslatorModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading Translator model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "Translator", modelId);
             var model = await LocalTranslator.LoadAsync(modelId, cancellationToken: cancellationToken);
             // LocalTranslator.LoadAsync already calls WarmupAsync internally
             return model;
@@ -230,7 +229,7 @@ public sealed class ModelManagerService : IAsyncDisposable
         var key = $"imagegen:{modelId}";
         return (IImageGeneratorModel)await GetOrLoadModelAsync(key, async () =>
         {
-            _logger.LogInformation("Loading ImageGenerator model: {ModelId}", modelId);
+            LogLoadingModel(_logger, "ImageGenerator", modelId);
             var model = await LocalImageGenerator.LoadAsync(modelId, cancellationToken: cancellationToken);
             await model.WarmupAsync(cancellationToken);
             return model;
@@ -261,7 +260,7 @@ public sealed class ModelManagerService : IAsyncDisposable
     {
         if (_loadedModels.TryRemove(key, out var entry))
         {
-            _logger.LogInformation("Unloading model: {Key}", key);
+            LogUnloadingModel(_logger, key);
             await entry.Model.DisposeAsync();
         }
     }
@@ -305,7 +304,7 @@ public sealed class ModelManagerService : IAsyncDisposable
             await entry.Model.DisposeAsync();
         }
 
-        _logger.LogInformation("Unloaded all {Count} models", entries.Count);
+        LogUnloadedAllModels(_logger, entries.Count);
     }
 
     private async Task<IAsyncDisposable> GetOrLoadModelAsync(
@@ -348,7 +347,7 @@ public sealed class ModelManagerService : IAsyncDisposable
             };
 
             _loadedModels[key] = newEntry;
-            _logger.LogInformation("Model loaded: {Key} (Total: {Count})", key, _loadedModels.Count);
+            LogModelLoaded(_logger, key, _loadedModels.Count);
 
             return model;
         }
@@ -392,7 +391,7 @@ public sealed class ModelManagerService : IAsyncDisposable
 
         if (idleModels.Count > 0)
         {
-            _logger.LogInformation("Cleaned up {Count} idle models", idleModels.Count);
+            LogCleanedUpIdleModels(_logger, idleModels.Count);
         }
     }
 
@@ -415,7 +414,28 @@ public sealed class ModelManagerService : IAsyncDisposable
         public required DateTime LoadedAt { get; init; }
         public DateTime LastUsedAt { get; set; }
         public int ActiveUsageCount;
-        
+
         public bool IsInUse => ActiveUsageCount > 0;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "ModelManager initialized: MaxModels={Max}, IdleTimeout={Timeout}")]
+    private static partial void LogManagerInitialized(ILogger logger, int max, TimeSpan timeout);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading {ModelType} model: {ModelId}")]
+    private static partial void LogLoadingModel(ILogger logger, string modelType, string modelId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loading OCR model for language: {Language}")]
+    private static partial void LogLoadingOcrModel(ILogger logger, string language);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Unloading model: {Key}")]
+    private static partial void LogUnloadingModel(ILogger logger, string key);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Unloaded all {Count} models")]
+    private static partial void LogUnloadedAllModels(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Model loaded: {Key} (Total: {Count})")]
+    private static partial void LogModelLoaded(ILogger logger, string key, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} idle models")]
+    private static partial void LogCleanedUpIdleModels(ILogger logger, int count);
 }

@@ -19,7 +19,7 @@ public static class ModelsEndpoints
             var loadedModels = manager.GetLoadedModels();
             var models = loadedModels.Select(m => new ModelInfo
             {
-                Id = $"{m.ModelType.ToString().ToLower()}:{m.ModelId}",
+                Id = $"{m.ModelType.ToString().ToLowerInvariant()}:{m.ModelId}",
                 OwnedBy = "lmsupply"
             }).ToList();
 

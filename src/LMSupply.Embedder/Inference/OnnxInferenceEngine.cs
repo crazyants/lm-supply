@@ -182,7 +182,7 @@ internal sealed class OnnxInferenceEngine : IDisposable
 
         // Run inference
         using var results = _session.Run(inputs);
-        var output = results.First().AsTensor<float>();
+        var output = results[0].AsTensor<float>();
 
         // Output shape: [1, seqLength, hiddenSize]
         // Copy to flat array

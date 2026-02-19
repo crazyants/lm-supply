@@ -59,10 +59,10 @@ internal sealed class OcrPipeline : IOcr
     }
 
     /// <inheritdoc />
-    public string DetectionModelId => _detectionModel.Alias;
+    public string DetectionModelId => _detectionModel.AliasName;
 
     /// <inheritdoc />
-    public string RecognitionModelId => _recognitionModel.Alias;
+    public string RecognitionModelId => _recognitionModel.AliasName;
 
     /// <inheritdoc />
     public IReadOnlyList<string> SupportedLanguages => _recognizer.SupportedLanguages;
@@ -83,7 +83,7 @@ internal sealed class OcrPipeline : IOcr
     {
         var sw = Stopwatch.StartNew();
 
-        using var image = await _detector.LoadImageAsync(imagePath, cancellationToken).ConfigureAwait(false);
+        using var image = await DbNetDetector.LoadImageAsync(imagePath, cancellationToken).ConfigureAwait(false);
         var result = await RecognizeImageAsync(image, cancellationToken).ConfigureAwait(false);
 
         sw.Stop();
@@ -95,7 +95,7 @@ internal sealed class OcrPipeline : IOcr
     {
         var sw = Stopwatch.StartNew();
 
-        using var image = await _detector.LoadImageAsync(imageStream, cancellationToken).ConfigureAwait(false);
+        using var image = await DbNetDetector.LoadImageAsync(imageStream, cancellationToken).ConfigureAwait(false);
         var result = await RecognizeImageAsync(image, cancellationToken).ConfigureAwait(false);
 
         sw.Stop();
@@ -107,7 +107,7 @@ internal sealed class OcrPipeline : IOcr
     {
         var sw = Stopwatch.StartNew();
 
-        using var image = _detector.LoadImage(imageData);
+        using var image = DbNetDetector.LoadImage(imageData);
         var result = await RecognizeImageAsync(image, cancellationToken).ConfigureAwait(false);
 
         sw.Stop();

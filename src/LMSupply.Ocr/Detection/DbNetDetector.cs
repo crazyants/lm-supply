@@ -52,8 +52,8 @@ internal sealed class DbNetDetector : IDisposable
         RequestedProvider = requestedProvider;
 
         // Get input/output names from the model
-        _inputName = session.InputNames.First();
-        _outputName = session.OutputNames.First();
+        _inputName = session.InputNames[0];
+        _outputName = session.OutputNames[0];
     }
 
     /// <summary>
@@ -114,7 +114,7 @@ internal sealed class DbNetDetector : IDisposable
         }, cancellationToken).ConfigureAwait(false);
 
         // Get output tensor
-        using var outputResult = results.First();
+        using var outputResult = results[0];
         var outputTensor = outputResult.AsTensor<float>();
 
         // Extract probability map
@@ -151,7 +151,7 @@ internal sealed class DbNetDetector : IDisposable
     /// <summary>
     /// Gets the loaded image for use in recognition.
     /// </summary>
-    public async Task<Image<Rgb24>> LoadImageAsync(string imagePath, CancellationToken cancellationToken = default)
+    public static async Task<Image<Rgb24>> LoadImageAsync(string imagePath, CancellationToken cancellationToken = default)
     {
         return await Image.LoadAsync<Rgb24>(imagePath, cancellationToken).ConfigureAwait(false);
     }
@@ -159,7 +159,7 @@ internal sealed class DbNetDetector : IDisposable
     /// <summary>
     /// Gets the loaded image for use in recognition.
     /// </summary>
-    public async Task<Image<Rgb24>> LoadImageAsync(Stream imageStream, CancellationToken cancellationToken = default)
+    public static async Task<Image<Rgb24>> LoadImageAsync(Stream imageStream, CancellationToken cancellationToken = default)
     {
         return await Image.LoadAsync<Rgb24>(imageStream, cancellationToken).ConfigureAwait(false);
     }
@@ -167,7 +167,7 @@ internal sealed class DbNetDetector : IDisposable
     /// <summary>
     /// Gets the loaded image for use in recognition.
     /// </summary>
-    public Image<Rgb24> LoadImage(byte[] imageData)
+    public static Image<Rgb24> LoadImage(byte[] imageData)
     {
         return Image.Load<Rgb24>(imageData);
     }

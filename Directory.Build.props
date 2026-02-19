@@ -10,12 +10,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <!-- Only src/ projects are packable (override in src/Directory.Build.props) -->
     <IsPackable>false</IsPackable>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>

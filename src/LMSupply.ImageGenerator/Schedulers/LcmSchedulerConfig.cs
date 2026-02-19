@@ -39,7 +39,7 @@ public sealed class LcmSchedulerConfig
     /// Whether to clip the predicted sample.
     /// Default: false
     /// </summary>
-    public bool ClipSample { get; set; } = false;
+    public bool ClipSample { get; set; }
 
     /// <summary>
     /// Range for sample clipping.
@@ -57,7 +57,7 @@ public sealed class LcmSchedulerConfig
     /// Offset added to the computed timesteps.
     /// Default: 0
     /// </summary>
-    public int StepsOffset { get; set; } = 0;
+    public int StepsOffset { get; set; }
 
     /// <summary>
     /// Type of prediction the model makes.
@@ -69,7 +69,7 @@ public sealed class LcmSchedulerConfig
     /// Whether to apply dynamic thresholding.
     /// Default: false
     /// </summary>
-    public bool Thresholding { get; set; } = false;
+    public bool Thresholding { get; set; }
 
     /// <summary>
     /// Ratio for dynamic thresholding percentile calculation.

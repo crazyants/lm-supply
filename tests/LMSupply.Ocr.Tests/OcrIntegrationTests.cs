@@ -30,6 +30,7 @@ public class OcrIntegrationTests : IDisposable
             try { Directory.Delete(_testImagesDir, true); }
             catch { /* ignore cleanup errors */ }
         }
+        GC.SuppressFinalize(this);
     }
 
     #region Default Model Tests
@@ -202,7 +203,7 @@ public class OcrIntegrationTests : IDisposable
     {
         // Arrange
         var testImagePath = Path.Combine(_testImagesDir, "multiline_test.png");
-        CreateMultiLineTestImage(testImagePath, new[] { "Line One", "Line Two", "Line Three" }, 400, 200);
+        CreateMultiLineTestImage(testImagePath, ["Line One", "Line Two", "Line Three"], 400, 200);
 
         await using var ocr = await LocalOcr.LoadAsync();
 
@@ -226,7 +227,7 @@ public class OcrIntegrationTests : IDisposable
     {
         // Arrange
         var testImagePath = Path.Combine(_testImagesDir, "layout_test.png");
-        CreateMultiLineTestImage(testImagePath, new[] { "First Line", "Second Line" }, 400, 150);
+        CreateMultiLineTestImage(testImagePath, ["First Line", "Second Line"], 400, 150);
 
         await using var ocr = await LocalOcr.LoadAsync();
 

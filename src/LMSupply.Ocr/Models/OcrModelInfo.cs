@@ -12,12 +12,12 @@ public record OcrModelInfo(
     /// <summary>
     /// Gets the combined model identifier.
     /// </summary>
-    public string Id => $"{DetectionModel.Alias}+{RecognitionModel.Alias}";
+    public string Id => $"{DetectionModel.AliasName}+{RecognitionModel.AliasName}";
 
     /// <summary>
-    /// Gets the alias for this OCR pipeline configuration.
+    /// Gets the alias name for this OCR pipeline configuration.
     /// </summary>
-    public string Alias => Id;
+    public string AliasName => Id;
 
     /// <summary>
     /// Gets the description.

@@ -35,7 +35,7 @@ public class DetectorOptionsTests
         cloned.ConfidenceThreshold.Should().Be(0.5f);
         cloned.IouThreshold.Should().Be(0.6f);
         cloned.MaxDetections.Should().Be(50);
-        cloned.ClassFilter.Should().BeEquivalentTo(new[] { 0, 1, 2 });
+        cloned.ClassFilter.Should().BeEquivalentTo([0, 1, 2]);
     }
 
     [Fact]

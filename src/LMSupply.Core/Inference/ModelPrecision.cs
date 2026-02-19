@@ -22,13 +22,13 @@ public enum ModelPrecision
     /// 8-bit integer quantization (1 byte per parameter).
     /// Lower memory usage with minimal accuracy loss for most models.
     /// </summary>
-    INT8,
+    Quant8,
 
     /// <summary>
     /// 4-bit integer quantization (0.5 bytes per parameter).
     /// Lowest memory usage, primarily used for large language models.
     /// </summary>
-    INT4,
+    Quant4,
 
     /// <summary>
     /// Automatically select the best precision based on hardware capabilities.
@@ -95,7 +95,7 @@ public sealed class PrecisionConfig
     /// </summary>
     public static PrecisionConfig LowMemory { get; } = new()
     {
-        ModelPrecision = ModelPrecision.INT8,
+        ModelPrecision = ModelPrecision.Quant8,
         ComputePrecision = ComputePrecision.FP16,
         EnableGraphOptimization = true,
         OptimizationLevel = OptimizationLevel.All
@@ -128,8 +128,8 @@ public sealed class PrecisionConfig
     {
         ModelPrecision.FP32 => 4.0,
         ModelPrecision.FP16 => 2.0,
-        ModelPrecision.INT8 => 1.0,
-        ModelPrecision.INT4 => 0.5,
+        ModelPrecision.Quant8 => 1.0,
+        ModelPrecision.Quant4 => 0.5,
         ModelPrecision.Auto => 2.0, // Default to FP16 estimate
         _ => 2.0
     };
@@ -157,19 +157,19 @@ public sealed class PrecisionConfig
 
         var fp32Memory = (long)(parameterCount * GetBytesPerParameter(ModelPrecision.FP32) * overheadFactor);
         var fp16Memory = (long)(parameterCount * GetBytesPerParameter(ModelPrecision.FP16) * overheadFactor);
-        var int8Memory = (long)(parameterCount * GetBytesPerParameter(ModelPrecision.INT8) * overheadFactor);
-        var int4Memory = (long)(parameterCount * GetBytesPerParameter(ModelPrecision.INT4) * overheadFactor);
+        var quant8Memory = (long)(parameterCount * GetBytesPerParameter(ModelPrecision.Quant8) * overheadFactor);
+        var quant4Memory = (long)(parameterCount * GetBytesPerParameter(ModelPrecision.Quant4) * overheadFactor);
 
         if (availableMemoryBytes >= fp32Memory)
             return ModelPrecision.FP32;
         if (availableMemoryBytes >= fp16Memory)
             return ModelPrecision.FP16;
-        if (availableMemoryBytes >= int8Memory)
-            return ModelPrecision.INT8;
-        if (availableMemoryBytes >= int4Memory)
-            return ModelPrecision.INT4;
+        if (availableMemoryBytes >= quant8Memory)
+            return ModelPrecision.Quant8;
+        if (availableMemoryBytes >= quant4Memory)
+            return ModelPrecision.Quant4;
 
-        return ModelPrecision.INT4; // Use lowest precision if memory is very constrained
+        return ModelPrecision.Quant4; // Use lowest precision if memory is very constrained
     }
 }
 

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace LMSupply;
 
 /// <summary>
@@ -59,7 +61,7 @@ public record DownloadProgress
         null => "",
         { TotalSeconds: < 60 } eta => $"{eta.Seconds}s",
         { TotalMinutes: < 60 } eta => $"{eta.Minutes}m {eta.Seconds}s",
-        _ => EstimatedRemaining.Value.ToString(@"h\h\ m\m")
+        _ => EstimatedRemaining.Value.ToString(@"h\h\ m\m", CultureInfo.InvariantCulture)
     };
 }
 

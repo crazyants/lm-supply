@@ -46,7 +46,7 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
     }
 
     /// <inheritdoc />
-    public string ModelId => _modelInfo.Alias;
+    public string ModelId => _modelInfo.AliasName;
 
     /// <inheritdoc />
     public bool IsGpuActive => _isGpuActive;
@@ -91,9 +91,9 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
         var decoderPath = Path.Combine(modelDir, modelInfo.DecoderFile);
 
         if (!File.Exists(encoderPath))
-            throw new ModelNotFoundException($"Encoder file not found: {encoderPath}", modelInfo.Alias);
+            throw new ModelNotFoundException($"Encoder file not found: {encoderPath}", modelInfo.AliasName);
         if (!File.Exists(decoderPath))
-            throw new ModelNotFoundException($"Decoder file not found: {decoderPath}", modelInfo.Alias);
+            throw new ModelNotFoundException($"Decoder file not found: {decoderPath}", modelInfo.AliasName);
 
         // Load ONNX sessions
         var encoderResult = await OnnxSessionFactory.CreateWithInfoAsync(encoderPath, options.Provider).ConfigureAwait(false);
@@ -182,7 +182,7 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
         };
 
         using var results = _encoder.Run(inputs);
-        var output = results.First();
+        var output = results[0];
 
         // Copy the output data
         var embeddings = output.AsEnumerable<float>().ToArray();

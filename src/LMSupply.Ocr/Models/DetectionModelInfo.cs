@@ -4,14 +4,14 @@ namespace LMSupply.Ocr.Models;
 /// Metadata about a text detection model (DBNet).
 /// </summary>
 /// <param name="RepoId">HuggingFace repository ID.</param>
-/// <param name="Alias">Short alias for the model.</param>
+/// <param name="AliasName">Short alias name for the model.</param>
 /// <param name="DisplayName">Human-readable display name.</param>
 /// <param name="ModelFile">ONNX model file name.</param>
 /// <param name="InputWidth">Expected input image width.</param>
 /// <param name="InputHeight">Expected input image height.</param>
 public record DetectionModelInfo(
     string RepoId,
-    string Alias,
+    string AliasName,
     string DisplayName,
     string ModelFile,
     int InputWidth = 960,

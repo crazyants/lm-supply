@@ -66,7 +66,7 @@ public sealed class GenerationOptions
     /// Higher values reduce repetition of frequent tokens.
     /// Range: 0.0 to 2.0. Defaults to 0.0 (disabled).
     /// </summary>
-    public float FrequencyPenalty { get; set; } = 0.0f;
+    public float FrequencyPenalty { get; set; }
 
     /// <summary>
     /// Gets or sets the presence penalty.
@@ -74,7 +74,7 @@ public sealed class GenerationOptions
     /// Higher values encourage the model to discuss new topics.
     /// Range: 0.0 to 2.0. Defaults to 0.0 (disabled).
     /// </summary>
-    public float PresencePenalty { get; set; } = 0.0f;
+    public float PresencePenalty { get; set; }
 
     /// <summary>
     /// Gets or sets the stop sequences that will terminate generation.

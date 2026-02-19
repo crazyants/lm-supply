@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using LMSupply.Download;
 using LMSupply.Generator.Abstractions;
@@ -110,7 +111,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         if (llamaOpts.Threads.HasValue)
         {
             additionalArgs.Add("--threads");
-            additionalArgs.Add(llamaOpts.Threads.Value.ToString());
+            additionalArgs.Add(llamaOpts.Threads.Value.ToString(CultureInfo.InvariantCulture));
         }
 
         var serverConfig = new LlamaServerConfig
@@ -403,7 +404,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         RuntimeVersion = _serverVersion
     };
 
-    private IReadOnlyList<string>? MergeStopSequences(IReadOnlyList<string>? userStops)
+    private List<string>? MergeStopSequences(IReadOnlyList<string>? userStops)
     {
         var merged = new List<string>();
 

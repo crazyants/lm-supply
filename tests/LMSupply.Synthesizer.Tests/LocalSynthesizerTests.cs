@@ -30,7 +30,7 @@ public class LocalSynthesizerTests
         models.Should().AllSatisfy(m =>
         {
             m.Id.Should().NotBeNullOrEmpty();
-            m.Alias.Should().NotBeNullOrEmpty();
+            m.AliasName.Should().NotBeNullOrEmpty();
             m.DisplayName.Should().NotBeNullOrEmpty();
         });
     }

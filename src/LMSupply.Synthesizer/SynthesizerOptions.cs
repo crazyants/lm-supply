@@ -41,13 +41,13 @@ public sealed class SynthesizeOptions
     /// Gets or sets the pitch shift in semitones.
     /// <para>Default: 0.0</para>
     /// </summary>
-    public float Pitch { get; set; } = 0.0f;
+    public float Pitch { get; set; }
 
     /// <summary>
     /// Gets or sets the speaker ID for multi-speaker models.
     /// <para>Default: 0</para>
     /// </summary>
-    public int SpeakerId { get; set; } = 0;
+    public int SpeakerId { get; set; }
 
     /// <summary>
     /// Gets or sets the noise scale for variability.

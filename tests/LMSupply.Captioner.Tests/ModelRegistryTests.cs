@@ -15,7 +15,7 @@ public class ModelRegistryTests
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.Alias.Should().Be("vit-gpt2");
+        modelInfo!.AliasName.Should().Be("vit-gpt2");
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class ModelRegistryTests
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.Alias.Should().Be("vit-gpt2");
+        modelInfo!.AliasName.Should().Be("vit-gpt2");
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class ModelRegistryTests
 
         // Assert
         model.Should().NotBeNull();
-        model.Alias.Should().Be("vit-gpt2");
+        model.AliasName.Should().Be("vit-gpt2");
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class ModelRegistryTests
         // Arrange
         var newModel = new ModelInfo(
             RepoId: "test/test-model",
-            Alias: "test-model",
+            AliasName: "test-model",
             DisplayName: "Test Model",
             EncoderFile: "encoder.onnx",
             DecoderFile: "decoder.onnx",
@@ -199,7 +199,7 @@ public class ModelRegistryTests
 
         // Assert
         result.Should().BeTrue();
-        model!.Alias.Should().Be("vit-gpt2");
+        model!.AliasName.Should().Be("vit-gpt2");
     }
 
     [Fact]

@@ -58,8 +58,8 @@ public static class MemoryEstimator
     /// Memory per parameter:
     /// - FP32: 4 bytes
     /// - FP16: 2 bytes
-    /// - INT8: 1 byte
-    /// - INT4: 0.5 bytes
+    /// - Quant8: 1 byte
+    /// - Quant4: 0.5 bytes
     /// </remarks>
     public static long CalculateModelMemory(long parameterCount, Quantization quantization)
     {
@@ -67,8 +67,8 @@ public static class MemoryEstimator
         {
             Quantization.FP32 => 4.0,
             Quantization.FP16 => 2.0,
-            Quantization.INT8 => 1.0,
-            Quantization.INT4 => 0.5,
+            Quantization.Quant8 => 1.0,
+            Quantization.Quant4 => 0.5,
             _ => 2.0 // Default to FP16
         };
 
@@ -93,7 +93,7 @@ public static class MemoryEstimator
         {
             KvCachePrecision.FP32 => 4,
             KvCachePrecision.FP16 => 2,
-            KvCachePrecision.INT8 => 1,
+            KvCachePrecision.Quant8 => 1,
             _ => 2
         };
 
@@ -324,7 +324,7 @@ public static class MemoryEstimator
                 NumLayers = 32,
                 HiddenSize = 3072,
                 ContextLength = 4096,
-                Quantization = Quantization.INT4
+                Quantization = Quantization.Quant4
             },
             "phi-4" => new ModelMemoryConfig
             {
@@ -332,7 +332,7 @@ public static class MemoryEstimator
                 NumLayers = 40,
                 HiddenSize = 5120,
                 ContextLength = 8192,
-                Quantization = Quantization.INT4
+                Quantization = Quantization.Quant4
             },
             "llama-3.2-1b" => new ModelMemoryConfig
             {
@@ -340,7 +340,7 @@ public static class MemoryEstimator
                 NumLayers = 16,
                 HiddenSize = 2048,
                 ContextLength = 4096,
-                Quantization = Quantization.INT4
+                Quantization = Quantization.Quant4
             },
             "llama-3.2-3b" => new ModelMemoryConfig
             {
@@ -348,7 +348,7 @@ public static class MemoryEstimator
                 NumLayers = 28,
                 HiddenSize = 3072,
                 ContextLength = 4096,
-                Quantization = Quantization.INT4
+                Quantization = Quantization.Quant4
             },
             _ => new ModelMemoryConfig
             {
@@ -356,7 +356,7 @@ public static class MemoryEstimator
                 NumLayers = 32,
                 HiddenSize = 2560,
                 ContextLength = 4096,
-                Quantization = Quantization.INT4
+                Quantization = Quantization.Quant4
             }
         };
     }
@@ -395,7 +395,7 @@ public sealed record ModelMemoryConfig
     /// <summary>
     /// Model quantization level.
     /// </summary>
-    public Quantization Quantization { get; init; } = Quantization.INT4;
+    public Quantization Quantization { get; init; } = Quantization.Quant4;
 
     /// <summary>
     /// KV cache precision.
@@ -573,10 +573,10 @@ public enum Quantization
     FP32,
     /// <summary>16-bit floating point (2 bytes per parameter).</summary>
     FP16,
-    /// <summary>8-bit integer (1 byte per parameter).</summary>
-    INT8,
-    /// <summary>4-bit integer (0.5 bytes per parameter).</summary>
-    INT4
+    /// <summary>8-bit quantization (1 byte per parameter).</summary>
+    Quant8,
+    /// <summary>4-bit quantization (0.5 bytes per parameter).</summary>
+    Quant4
 }
 
 /// <summary>
@@ -588,6 +588,6 @@ public enum KvCachePrecision
     FP32,
     /// <summary>16-bit floating point KV cache (default).</summary>
     FP16,
-    /// <summary>8-bit integer KV cache (quantized).</summary>
-    INT8
+    /// <summary>8-bit quantized KV cache.</summary>
+    Quant8
 }

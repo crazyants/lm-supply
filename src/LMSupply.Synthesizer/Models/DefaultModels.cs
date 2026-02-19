@@ -14,7 +14,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo EnUsLessac { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "default",
+        AliasName = "default",
         DisplayName = "English US (Lessac)",
         Architecture = "VITS",
         Language = "en-US",
@@ -36,7 +36,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo EnUsRyan { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "fast",
+        AliasName = "fast",
         DisplayName = "English US (Ryan)",
         Architecture = "VITS",
         Language = "en-US",
@@ -58,7 +58,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo EnUsAmy { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "quality",
+        AliasName = "quality",
         DisplayName = "English US (Amy)",
         Architecture = "VITS",
         Language = "en-US",
@@ -80,7 +80,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo EnGbSemaine { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "british",
+        AliasName = "british",
         DisplayName = "English GB (Semaine)",
         Architecture = "VITS",
         Language = "en-GB",
@@ -102,7 +102,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo KoKr { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "korean",
+        AliasName = "korean",
         DisplayName = "Korean (KSS)",
         Architecture = "VITS",
         Language = "ko-KR",
@@ -124,7 +124,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo JaJp { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "japanese",
+        AliasName = "japanese",
         DisplayName = "Japanese",
         Architecture = "VITS",
         Language = "ja-JP",
@@ -146,7 +146,7 @@ public static class DefaultModels
     public static SynthesizerModelInfo ZhCn { get; } = new()
     {
         Id = "rhasspy/piper-voices",
-        Alias = "chinese",
+        AliasName = "chinese",
         DisplayName = "Chinese (Mandarin)",
         Architecture = "VITS",
         Language = "zh-CN",

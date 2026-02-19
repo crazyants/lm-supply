@@ -11,9 +11,9 @@ public sealed record SynthesizerModelInfo : IModelInfoBase
     public required string Id { get; init; }
 
     /// <summary>
-    /// Gets the friendly alias for this model.
+    /// Gets the friendly alias name for this model.
     /// </summary>
-    public required string Alias { get; init; }
+    public required string AliasName { get; init; }
 
     /// <summary>
     /// Gets the display name for this model.

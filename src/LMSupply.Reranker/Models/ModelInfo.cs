@@ -11,9 +11,9 @@ public sealed record ModelInfo : IModelInfoBase
     public required string Id { get; init; }
 
     /// <summary>
-    /// Gets the short alias for the model (e.g., "default", "quality").
+    /// Gets the short alias name for the model (e.g., "default", "quality").
     /// </summary>
-    public required string Alias { get; init; }
+    public required string AliasName { get; init; }
 
     /// <summary>
     /// Gets the human-readable display name.

@@ -37,7 +37,7 @@ public class TranslatorModelRegistryTests
         var model = _registry.Resolve(alias);
 
         model.Should().NotBeNull();
-        model.Alias.Should().Be(alias);
+        model.AliasName.Should().Be(alias);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class TranslatorModelRegistryTests
         var model = _registry.Resolve(path);
 
         model.Should().NotBeNull();
-        model.Alias.Should().Be("local");
+        model.AliasName.Should().Be("local");
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class TranslatorModelRegistryTests
 
         model.Should().NotBeNull();
         model.Id.Should().Be("org/unknown-model");
-        model.Alias.Should().Be("org/unknown-model");
+        model.AliasName.Should().Be("org/unknown-model");
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class TranslatorModelRegistryTests
             new()
             {
                 Id = "custom/model",
-                Alias = "custom",
+                AliasName = "custom",
                 DisplayName = "Custom Model",
                 Architecture = "Custom",
                 SourceLanguage = "en",

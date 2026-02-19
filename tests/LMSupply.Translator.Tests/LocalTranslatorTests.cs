@@ -25,7 +25,7 @@ public class LocalTranslatorTests
         models.Should().AllSatisfy(m =>
         {
             m.Id.Should().NotBeNullOrEmpty();
-            m.Alias.Should().NotBeNullOrEmpty();
+            m.AliasName.Should().NotBeNullOrEmpty();
             m.SourceLanguage.Should().NotBeNullOrEmpty();
             m.TargetLanguage.Should().NotBeNullOrEmpty();
         });
@@ -51,7 +51,7 @@ public class LocalTranslatorTests
     public void GetAllModels_DefaultModel_ShouldBeKoreanToEnglish()
     {
         var models = LocalTranslator.GetAllModels().ToList();
-        var defaultModel = models.FirstOrDefault(m => m.Alias == "default");
+        var defaultModel = models.FirstOrDefault(m => m.AliasName == "default");
 
         defaultModel.Should().NotBeNull();
         defaultModel!.SourceLanguage.Should().Be("ko");

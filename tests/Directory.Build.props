@@ -1,0 +1,6 @@
+<Project>
+  <!-- Import parent props first -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- CA1707 now handled via .editorconfig at submodule root -->
+</Project>

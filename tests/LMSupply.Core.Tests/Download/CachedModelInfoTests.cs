@@ -198,11 +198,14 @@ public class ModelMetadataTests
     [Fact]
     public void RecordEquality_ShouldWork()
     {
-        var a = new ModelMetadata { License = "mit", Downloads = 100 };
-        var b = new ModelMetadata { License = "mit", Downloads = 100 };
+        var now = DateTime.UtcNow;
+        var a = new ModelMetadata { License = "mit", Downloads = 100, FetchedAt = now };
+        var b = new ModelMetadata { License = "mit", Downloads = 100, FetchedAt = now };
 
-        // FetchedAt differs, so they won't be equal unless we set it
-        a.Should().NotBe(b); // FetchedAt is different
+        a.Should().Be(b); // Same values → equal
+
+        var c = new ModelMetadata { License = "mit", Downloads = 200, FetchedAt = now };
+        a.Should().NotBe(c); // Different Downloads → not equal
     }
 }
 

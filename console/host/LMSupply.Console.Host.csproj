@@ -9,11 +9,12 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>lm-supply</AssemblyName>
     <!-- 임베디드 파일 매니페스트 생성 (ManifestEmbeddedFileProvider용) -->
-    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <!-- wwwroot는 npm build로 생성되므로, 폴더가 없으면 매니페스트 생성을 건너뜀 -->
+    <GenerateEmbeddedFilesManifest Condition="Exists('wwwroot')">true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
   <!-- wwwroot 파일을 임베디드 리소스로 포함 (단일 실행파일에 포함) -->
-  <ItemGroup>
+  <ItemGroup Condition="Exists('wwwroot')">
     <EmbeddedResource Include="wwwroot\**" />
     <Content Remove="wwwroot\**" />
   </ItemGroup>

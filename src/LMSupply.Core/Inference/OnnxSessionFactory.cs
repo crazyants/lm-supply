@@ -160,7 +160,7 @@ public static class OnnxSessionFactory
                     var (cudaAvailable, missingLibs) = CheckCudaRuntimeAvailability();
                     if (!cudaAvailable)
                     {
-                        Console.WriteLine($"[Fallback] CUDA: skipped (missing: {string.Join(", ", missingLibs)})");
+                        Trace.TraceInformation($"[Fallback] CUDA: skipped (missing: {string.Join(", ", missingLibs)})");
                         triedProviders.Add("CUDA(skipped)");
                         continue;
                     }
@@ -194,11 +194,11 @@ public static class OnnxSessionFactory
                     if (IsCudaProviderLoaded())
                     {
                         activeProviders.Add("CUDAExecutionProvider");
-                        Console.WriteLine($"[Fallback] CUDA: success");
+                        Trace.TraceInformation($"[Fallback] CUDA: success");
                     }
                     else
                     {
-                        Console.WriteLine($"[Fallback] CUDA: failed (provider not loaded), trying next...");
+                        Trace.TraceInformation($"[Fallback] CUDA: failed (provider not loaded), trying next...");
                         triedProviders.Add("CUDA(failed)");
                         session.Dispose();
                         continue;
@@ -209,12 +209,12 @@ public static class OnnxSessionFactory
                     // DirectML is managed by Windows - trust the session creation
                     // If it fails, ONNX Runtime would have thrown or fallen back internally
                     activeProviders.Add("DmlExecutionProvider");
-                    Console.WriteLine($"[Fallback] DirectML: success");
+                    Trace.TraceInformation($"[Fallback] DirectML: success");
                 }
                 else if (providerToTry == ExecutionProvider.CoreML)
                 {
                     activeProviders.Add("CoreMLExecutionProvider");
-                    Console.WriteLine($"[Fallback] CoreML: success");
+                    Trace.TraceInformation($"[Fallback] CoreML: success");
                 }
 
                 activeProviders.Add("CPUExecutionProvider");
@@ -240,19 +240,19 @@ public static class OnnxSessionFactory
                     var cudaMajor = cuda?.MajorVersion ?? 12;
                     var cudnnMajor = cudaMajor >= 12 ? 9 : 8;
 
-                    Console.WriteLine($"[Fallback] {providerToTry}: cuDNN initialization failed. Ensure cuDNN {cudnnMajor}.x bin is in PATH.");
+                    Trace.TraceInformation($"[Fallback] {providerToTry}: cuDNN initialization failed. Ensure cuDNN {cudnnMajor}.x bin is in PATH.");
 
                     // Show detected cuDNN installations or suggest installation
                     var cudnn = cudaEnv.GetBestCuDnn(cudaMajor);
                     if (cudnn is not null)
                     {
-                        Console.WriteLine($"           Found: cuDNN {cudnn.Version} at {cudnn.LibraryPath}");
+                        Trace.TraceInformation($"Found: cuDNN {cudnn.Version} at {cudnn.LibraryPath}");
                         if (cudnn.MajorVersion < 9)
-                            Console.WriteLine($"           Note: zlibwapi.dll may be required for cuDNN 8.x");
+                            Trace.TraceInformation($"Note: zlibwapi.dll may be required for cuDNN 8.x");
                     }
                     else
                     {
-                        Console.WriteLine($"           Install cuDNN {cudnnMajor}.x from https://developer.nvidia.com/cudnn");
+                        Trace.TraceInformation($"Install cuDNN {cudnnMajor}.x from https://developer.nvidia.com/cudnn");
                     }
                 }
                 else
@@ -261,13 +261,13 @@ public static class OnnxSessionFactory
                     var missingLibs = ParseMissingLibrariesFromError(ex.Message);
                     if (missingLibs.Length > 0)
                     {
-                        Console.WriteLine($"[Fallback] {providerToTry}: missing {string.Join(", ", missingLibs)}");
+                        Trace.TraceInformation($"[Fallback] {providerToTry}: missing {string.Join(", ", missingLibs)}");
                     }
                     else
                     {
                         // Truncate long error messages
                         var msg = ex.Message.Length > 100 ? ex.Message[..100] + "..." : ex.Message;
-                        Console.WriteLine($"[Fallback] {providerToTry}: {msg}");
+                        Trace.TraceInformation($"[Fallback] {providerToTry}: {msg}");
                     }
                 }
                 triedProviders.Add($"{providerToTry}(error)");
@@ -276,7 +276,7 @@ public static class OnnxSessionFactory
         }
 
         // Final fallback to CPU
-        Console.WriteLine($"[Fallback] Using CPU (tried: {string.Join(" -> ", triedProviders)})");
+        Trace.TraceInformation($"[Fallback] Using CPU (tried: {string.Join(" -> ", triedProviders)})");
 
         await RuntimeManager.Instance.EnsureRuntimeAsync(
             "onnxruntime", provider: "cpu", progress: progress, cancellationToken: cancellationToken);

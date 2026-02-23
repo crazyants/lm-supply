@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using LMSupply.Core;
 using LMSupply.ImageGenerator.Models;
@@ -250,7 +251,10 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
             options.AppendExecutionProvider_CUDA(deviceId);
             return;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Trace.TraceInformation($"[Fallback] CUDA provider not available: {ex.Message}");
+        }
 
         // Try DirectML (Windows with any DirectX 12 GPU)
         try
@@ -261,7 +265,10 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
             options.AppendExecutionProvider_DML(deviceId);
             return;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Trace.TraceInformation($"[Fallback] DirectML provider not available: {ex.Message}");
+        }
 
         // Try CoreML (macOS)
         try
@@ -269,9 +276,13 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
             options.AppendExecutionProvider_CoreML();
             return;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Trace.TraceInformation($"[Fallback] CoreML provider not available: {ex.Message}");
+        }
 
         // CPU fallback is implicit
+        Trace.TraceInformation("[Fallback] Using CPU execution provider");
     }
 
     public async ValueTask DisposeAsync()

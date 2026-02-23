@@ -392,7 +392,10 @@ public static class OnnxSessionFactory
                     return true;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Trace.TraceInformation($"[Fallback] Failed to enumerate process modules: {ex.Message}");
+        }
         return false;
     }
 

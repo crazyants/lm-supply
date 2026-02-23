@@ -616,7 +616,10 @@ public sealed class CudaEnvironment
                 if (match.Success && Version.TryParse(match.Value, out var v))
                     return v;
             }
-            catch { /* Ignore read errors */ }
+            catch (Exception ex)
+            {
+                Trace.TraceInformation($"[CUDA] Failed to read version.txt: {ex.Message}");
+            }
         }
 
         // Try nvcc --version as fallback (expensive, only if necessary)
@@ -646,7 +649,10 @@ public sealed class CudaEnvironment
                         return v;
                 }
             }
-            catch { /* Ignore process errors */ }
+            catch (Exception ex)
+            {
+                Trace.TraceInformation($"[CUDA] Failed to run nvcc: {ex.Message}");
+            }
         }
 
         return null;
@@ -708,7 +714,10 @@ public sealed class CudaEnvironment
                     return new Version(major, minor, patch);
                 }
             }
-            catch { /* Ignore read errors */ }
+            catch (Exception ex)
+            {
+                Trace.TraceInformation($"[CUDA] Failed to read cudnn_version.h: {ex.Message}");
+            }
         }
 
         return null;

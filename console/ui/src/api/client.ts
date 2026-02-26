@@ -363,8 +363,8 @@ export const api = {
   },
 
   getOcrLanguages: async (): Promise<OcrLanguage[]> => {
-    const response = await fetchJson<{ languages: OcrLanguage[] }>(`${V1_BASE}/images/ocr/languages`);
-    return response.languages;
+    const response = await fetchJson<{ languages: string[] }>(`${V1_BASE}/images/ocr/languages`);
+    return response.languages.map(code => ({ code }));
   },
 
   // ============================================================================

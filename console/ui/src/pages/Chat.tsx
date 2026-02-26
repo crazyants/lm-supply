@@ -187,6 +187,7 @@ export function Chat() {
               type="button"
               onClick={handleCancel}
               className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg flex items-center gap-2 hover:bg-destructive/90"
+              aria-label="Cancel generation"
               title="Cancel generation"
             >
               <Square className="w-4 h-4" />
@@ -196,6 +197,7 @@ export function Chat() {
               type="submit"
               disabled={!input.trim() || !modelId}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50 flex items-center gap-2"
+              aria-label="Send message"
             >
               <Send className="w-4 h-4" />
             </button>

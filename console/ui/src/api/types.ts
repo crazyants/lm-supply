@@ -339,7 +339,7 @@ export interface TranslateLanguage {
 // ============================================================================
 
 export interface ModelAliasInfo {
-  alias: string;
+  aliasName: string;
   repoId: string;
   description: string;
   isCached: boolean;

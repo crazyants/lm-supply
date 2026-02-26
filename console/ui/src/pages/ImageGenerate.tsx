@@ -226,6 +226,7 @@ export function ImageGenerate() {
                     onClick={randomizeSeed}
                     className="px-3 py-2 bg-secondary rounded hover:bg-secondary/80"
                     disabled={isLoading}
+                    aria-label="Randomize seed"
                     title="Randomize seed"
                   >
                     <RefreshCw className="w-4 h-4" />

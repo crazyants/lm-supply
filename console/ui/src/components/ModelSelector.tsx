@@ -59,7 +59,7 @@ export function ModelSelector({ modelType, value, onChange, disabled }: ModelSel
           // Registry models: show all with cache status
           const items: ModelItem[] = registryData.models.map(m => ({
             repoId: m.repoId,
-            alias: m.alias,
+            alias: m.aliasName,
             isCached: m.isCached || cachedMap.has(m.repoId),
             sizeMB: cachedMap.get(m.repoId),
           }));

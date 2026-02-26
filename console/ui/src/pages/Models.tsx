@@ -633,10 +633,10 @@ export function Models() {
                           const downloadState = downloadingModels.get(model.repoId);
                           const isCached = model.isCached || cachedRepoIds.has(model.repoId);
                           return (
-                            <tr key={model.alias} className="border-b border-border/30">
+                            <tr key={model.aliasName} className="border-b border-border/30">
                               <td className="py-2">
                                 <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium">
-                                  {model.alias}
+                                  {model.aliasName}
                                 </span>
                               </td>
                               <td className="py-2">

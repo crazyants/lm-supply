@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
@@ -201,9 +202,9 @@ public sealed class NativeLoader : IDisposable
                     _dllDirectoryCookies.Add(cookie);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore - AddDllDirectory may fail in some environments
+                Trace.TraceInformation($"[NativeLoader] AddDllDirectory failed for {fullPath}: {ex.Message}");
             }
         }
     }
@@ -484,9 +485,9 @@ public sealed class NativeLoader : IDisposable
                     {
                         NativeLibrary.Free(handle);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Ignore unload errors
+                        Trace.TraceInformation($"[NativeLoader] Native library unload failed: {ex.Message}");
                     }
                 }
             }
@@ -502,9 +503,9 @@ public sealed class NativeLoader : IDisposable
                         {
                             RemoveDllDirectory(cookie);
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // Ignore removal errors
+                            Trace.TraceInformation($"[NativeLoader] RemoveDllDirectory failed: {ex.Message}");
                         }
                     }
                 }

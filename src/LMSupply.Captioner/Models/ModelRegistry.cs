@@ -135,14 +135,11 @@ public static class ModelRegistry
     }
 
     /// <summary>
-    /// Gets a list of available model aliases.
+    /// Gets a list of available model identifiers (aliases, model names, and repo IDs).
     /// </summary>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return Models.Values
-            .Select(m => m.AliasName)
-            .Distinct()
-            .Order();
+        return Models.Keys.Order();
     }
 
     /// <summary>

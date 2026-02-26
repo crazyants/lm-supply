@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace LMSupply.Text;
 
 /// <summary>
@@ -275,9 +277,9 @@ public static class TokenizerFactory
                 return typeElement.GetString();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall through
+            Trace.TraceInformation($"[TokenizerFactory] Tokenizer type parsing failed: {ex.Message}");
         }
 
         return null;
@@ -508,8 +510,9 @@ public static class TokenizerFactory
             _ = LlamaTokenizer.Create(stream);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[TokenizerFactory] LlamaTokenizer validation failed: {ex.Message}");
             return false;
         }
     }
@@ -542,9 +545,9 @@ public static class TokenizerFactory
                 using var doc = JsonDocument.Parse(json);
                 ParseVocabElement(doc.RootElement, vocab);
             }
-            catch
+            catch (Exception ex)
             {
-                // Return empty vocab on parse failure
+                Trace.TraceInformation($"[TokenizerFactory] vocab.json parse failed: {ex.Message}");
             }
 
             return vocab;
@@ -565,9 +568,9 @@ public static class TokenizerFactory
                     return vocab;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Fall through
+                Trace.TraceInformation($"[TokenizerFactory] tokenizer.json vocab parse failed: {ex.Message}");
             }
         }
 

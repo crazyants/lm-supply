@@ -54,6 +54,7 @@ builder.Services.AddSingleton<CacheService>();
 builder.Services.AddSingleton<SystemMonitorService>();
 builder.Services.AddSingleton<ModelManagerService>();
 builder.Services.AddSingleton<DownloadService>();
+builder.Services.AddSingleton<UpdateService>();
 
 var app = builder.Build();
 
@@ -67,13 +68,13 @@ app.UseSwaggerUI(c =>
 
 app.UseCors();
 
-// 임베디드 리소스에서 정적 파일 제공
+// 임베디드 리소스에서 정적 파일 제공 (wwwroot가 빌드 시 없으면 매니페스트도 없음)
 var assembly = Assembly.GetExecutingAssembly();
-var embeddedProvider = new ManifestEmbeddedFileProvider(assembly, "wwwroot");
-var hasEmbeddedFiles = embeddedProvider.GetDirectoryContents("/").Exists;
-
-if (hasEmbeddedFiles)
+var manifestName = $"{assembly.GetName().Name}.Microsoft.Extensions.FileProviders.Embedded.Manifest.xml";
+ManifestEmbeddedFileProvider? embeddedProvider = null;
+if (assembly.GetManifestResourceInfo(manifestName) is not null)
 {
+    embeddedProvider = new ManifestEmbeddedFileProvider(assembly, "wwwroot");
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = embeddedProvider });
     app.UseStaticFiles(new StaticFileOptions { FileProvider = embeddedProvider });
 }
@@ -100,8 +101,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = Dat
 // 루트 엔드포인트
 app.MapGet("/", () =>
 {
-    var indexFile = embeddedProvider.GetFileInfo("index.html");
-    if (indexFile.Exists)
+    var indexFile = embeddedProvider?.GetFileInfo("index.html");
+    if (indexFile is { Exists: true })
     {
         return Results.Stream(indexFile.CreateReadStream(), "text/html");
     }
@@ -111,8 +112,8 @@ app.MapGet("/", () =>
 // SPA 폴백: API 이외의 경로는 index.html로 (클라이언트 사이드 라우팅)
 app.MapFallback(() =>
 {
-    var indexFile = embeddedProvider.GetFileInfo("index.html");
-    if (indexFile.Exists)
+    var indexFile = embeddedProvider?.GetFileInfo("index.html");
+    if (indexFile is { Exists: true })
     {
         return Results.Stream(indexFile.CreateReadStream(), "text/html");
     }

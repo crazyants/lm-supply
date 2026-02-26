@@ -10,8 +10,10 @@ export function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [lastElapsedMs, setLastElapsedMs] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const streamStartRef = useRef<number>(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -44,6 +46,8 @@ export function Chat() {
     setInput('');
     setIsLoading(true);
     setStreamingContent('');
+    setLastElapsedMs(null);
+    streamStartRef.current = performance.now();
 
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
@@ -61,6 +65,7 @@ export function Chat() {
         setStreamingContent(fullContent);
       }
 
+      setLastElapsedMs(Math.round(performance.now() - streamStartRef.current));
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: fullContent },
@@ -158,6 +163,13 @@ export function Chat() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Elapsed time */}
+      {lastElapsedMs != null && !isLoading && (
+        <div className="px-4 py-1 text-xs text-muted-foreground text-right border-t border-border/50">
+          {lastElapsedMs.toLocaleString()} ms
+        </div>
+      )}
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-border">

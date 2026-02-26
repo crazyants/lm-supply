@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Hardware;
 
 namespace LMSupply.Detector.Models;
@@ -117,8 +118,9 @@ public sealed class DetectorModelRegistry
             modelInfo = Resolve(modelIdOrAlias);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[DetectorModelRegistry] Model resolve failed for '{modelIdOrAlias}': {ex.Message}");
             modelInfo = null;
             return false;
         }

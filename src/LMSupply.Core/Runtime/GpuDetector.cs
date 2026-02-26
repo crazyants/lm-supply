@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace LMSupply.Runtime;
@@ -177,9 +178,9 @@ internal static class NvmlDetector
                 Shutdown();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // NVML not available or failed
+            Trace.TraceInformation($"[GpuDetector] NVML detection failed: {ex.Message}");
         }
 
         return gpus;
@@ -256,8 +257,9 @@ internal static class NvmlDetector
 
             return _nvmlInit is not null && _nvmlShutdown is not null;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] NVML function pointer loading failed: {ex.Message}");
             return false;
         }
     }
@@ -288,8 +290,9 @@ internal static class NvmlDetector
             _initialized = _nvmlInit() == NVML_SUCCESS;
             return _initialized;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] NVML initialization failed: {ex.Message}");
             return false;
         }
     }
@@ -301,9 +304,9 @@ internal static class NvmlDetector
             _nvmlShutdown?.Invoke();
             _initialized = false;
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore shutdown errors
+            Trace.TraceInformation($"[GpuDetector] NVML shutdown error: {ex.Message}");
         }
     }
 
@@ -316,8 +319,9 @@ internal static class NvmlDetector
                 return false;
             return _nvmlGetCudaDriverVersion(out version) == NVML_SUCCESS;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] CUDA driver version query failed: {ex.Message}");
             return false;
         }
     }
@@ -331,8 +335,9 @@ internal static class NvmlDetector
                 return false;
             return _nvmlGetDeviceCount(out count) == NVML_SUCCESS;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] NVML device count query failed: {ex.Message}");
             return false;
         }
     }
@@ -396,8 +401,9 @@ internal static class NvmlDetector
 
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] NVML device info query failed: {ex.Message}");
             return false;
         }
     }
@@ -440,8 +446,9 @@ internal static class DirectMLDetector
             // Additional check: verify d3d12.dll is available
             return IsD3D12Available();
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] DirectML support check failed: {ex.Message}");
             return false;
         }
     }
@@ -455,8 +462,9 @@ internal static class DirectMLDetector
             var d3d12Path = Path.Combine(systemPath, "d3d12.dll");
             return File.Exists(d3d12Path);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] D3D12 availability check failed: {ex.Message}");
             return false;
         }
     }
@@ -484,8 +492,9 @@ internal static class CoreMLDetector
             var osVersion = Environment.OSVersion;
             return osVersion.Version.Major >= 10 && osVersion.Version.Minor >= 13;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GpuDetector] CoreML support check failed: {ex.Message}");
             return false;
         }
     }
@@ -538,9 +547,9 @@ internal static class DxgiDetector
                 Marshal.Release(factoryPtr);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // DXGI not available
+            Trace.TraceInformation($"[GpuDetector] DXGI detection failed: {ex.Message}");
         }
 
         return gpus;
@@ -567,8 +576,9 @@ internal static class DxgiDetector
                 _createFactory = Marshal.GetDelegateForFunctionPointer<CreateDXGIFactory1Delegate>(funcPtr);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Trace.TraceInformation($"[GpuDetector] DXGI library loading failed: {ex.Message}");
                 return false;
             }
         }

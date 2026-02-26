@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -251,9 +252,9 @@ public sealed class RuntimeCache : IDisposable
                     Directory.Delete(directory, recursive: true);
                     CleanupEmptyDirectories(Path.GetDirectoryName(directory)!);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore deletion errors for now
+                    Trace.TraceInformation($"[RuntimeCache] Cache directory deletion failed: {ex.Message}");
                 }
             }
 
@@ -281,9 +282,9 @@ public sealed class RuntimeCache : IDisposable
                 directory = Path.GetDirectoryName(directory)!;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cleanup errors
+            Trace.TraceInformation($"[RuntimeCache] Empty directory cleanup failed: {ex.Message}");
         }
     }
 
@@ -297,9 +298,9 @@ public sealed class RuntimeCache : IDisposable
                 return JsonSerializer.Deserialize<CacheMetadata>(json) ?? new CacheMetadata();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore load errors, start fresh
+            Trace.TraceInformation($"[RuntimeCache] Metadata load failed, starting fresh: {ex.Message}");
         }
 
         return new CacheMetadata();
@@ -317,9 +318,9 @@ public sealed class RuntimeCache : IDisposable
             await File.WriteAllTextAsync(tempPath, json, cancellationToken);
             File.Move(tempPath, _metadataPath, overwrite: true);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore save errors
+            Trace.TraceInformation($"[RuntimeCache] Metadata save failed: {ex.Message}");
         }
     }
 

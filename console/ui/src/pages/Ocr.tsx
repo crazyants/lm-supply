@@ -9,6 +9,7 @@ export function Ocr() {
   const [result, setResult] = useState<OcrResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,9 +29,12 @@ export function Ocr() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.ocr(file, language);
+      setElapsedMs(Math.round(performance.now() - start));
       setResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -59,10 +63,10 @@ export function Ocr() {
               ))
             ) : (
               <>
-                <option value="en">English (en)</option>
-                <option value="ko">Korean (ko)</option>
-                <option value="zh">Chinese (zh)</option>
-                <option value="ja">Japanese (ja)</option>
+                <option key="en" value="en">English (en)</option>
+                <option key="ko" value="ko">Korean (ko)</option>
+                <option key="zh" value="zh">Chinese (zh)</option>
+                <option key="ja" value="ja">Japanese (ja)</option>
               </>
             )}
           </select>
@@ -123,6 +127,7 @@ export function Ocr() {
           <div className="flex gap-4 text-sm text-muted-foreground">
             <span>Model: {result.model}</span>
             <span>Blocks: {result.blocks?.length ?? 0}</span>
+            {elapsedMs != null && <span>{elapsedMs.toLocaleString()} ms</span>}
           </div>
 
           {result.blocks && result.blocks.length > 0 && (

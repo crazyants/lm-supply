@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 using LMSupply.Runtime;
@@ -58,9 +59,23 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
             Math.Max(1, options.MaxConcurrentRequests),
             Math.Max(1, options.MaxConcurrentRequests));
 
-        // Detect max context length from model config, or use provided/default value
-        MaxContextLength = options.MaxContextLength
-            ?? GenAiConfigReader.ReadMaxContextLength(modelPath);
+        // Detect max context length from model config, capped by hardware capability
+        if (options.MaxContextLength is not null)
+        {
+            MaxContextLength = options.MaxContextLength.Value;
+        }
+        else
+        {
+            var configContextLength = GenAiConfigReader.ReadMaxContextLength(modelPath);
+            var hwMaxContext = HardwareDetector.GetRecommendation().MaxContextLength;
+            if (configContextLength > hwMaxContext)
+            {
+                Trace.TraceInformation(
+                    $"[OnnxGeneratorModel] Context length capped: {configContextLength} -> {hwMaxContext} (hardware limit)");
+                configContextLength = hwMaxContext;
+            }
+            MaxContextLength = configContextLength;
+        }
     }
 
     /// <inheritdoc />

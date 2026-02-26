@@ -55,5 +55,32 @@ public static class SystemEndpoints
         })
         .WithName("StreamMetrics")
         .WithSummary("실시간 메트릭 스트림 (SSE)");
+
+        // 현재 버전 정보
+        group.MapGet("/version", (UpdateService updateService) =>
+        {
+            return Results.Ok(new { version = updateService.CurrentVersion, rid = updateService.CurrentRid });
+        })
+        .WithName("GetVersion")
+        .WithSummary("현재 버전 정보 조회");
+
+        // 업데이트 확인
+        group.MapGet("/update", async (UpdateService updateService) =>
+        {
+            var result = await updateService.CheckForUpdateAsync();
+            return Results.Ok(result);
+        })
+        .WithName("CheckUpdate")
+        .WithSummary("최신 버전 업데이트 확인");
+
+        // 업데이트 적용 (SSE 스트림)
+        group.MapPost("/update", async (HttpContext context, UpdateService updateService) =>
+        {
+            var ct = context.RequestAborted;
+            var progress = updateService.ApplyUpdateAsync(ct);
+            await SseHelper.StreamAsync(context, progress, ct);
+        })
+        .WithName("ApplyUpdate")
+        .WithSummary("업데이트 다운로드 및 적용");
     }
 }

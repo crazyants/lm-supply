@@ -36,6 +36,23 @@ public sealed partial class DownloadService : IDisposable
             // Calculate total size
             var totalSize = files.Sum(f => f.Size);
 
+            // Check for GGUF files (provide selection options)
+            var hasOnnx = files.Any(f => f.Path.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase));
+            List<GgufFileInfo>? ggufFileInfos = null;
+            if (!hasOnnx)
+            {
+                var ggufFiles = files
+                    .Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(f => f.Size)
+                    .ToList();
+                if (ggufFiles.Count > 0)
+                {
+                    ggufFileInfos = ggufFiles
+                        .Select(f => new GgufFileInfo { FileName = f.Path, SizeBytes = f.Size })
+                        .ToList();
+                }
+            }
+
             return new ModelCheckResult
             {
                 Exists = true,
@@ -43,7 +60,8 @@ public sealed partial class DownloadService : IDisposable
                 DetectedType = detectedType,
                 FileCount = files.Count,
                 TotalSizeBytes = totalSize,
-                Files = fileNames
+                Files = fileNames,
+                GgufFiles = ggufFileInfos
             };
         }
         catch (Exception ex)
@@ -60,10 +78,16 @@ public sealed partial class DownloadService : IDisposable
 
     /// <summary>
     /// Downloads a model with async progress reporting via callback.
+    /// Supports both ONNX and GGUF model formats.
     /// </summary>
+    /// <param name="repoId">HuggingFace repository ID.</param>
+    /// <param name="onProgressAsync">Progress callback.</param>
+    /// <param name="fileName">Optional GGUF file name to download. If null, auto-selects based on system specs.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     public async Task DownloadModelAsync(
         string repoId,
         Func<DownloadProgress, Task> onProgressAsync,
+        string? fileName = null,
         CancellationToken cancellationToken = default)
     {
         LogDownloadStarting(_logger, repoId);
@@ -73,12 +97,28 @@ public sealed partial class DownloadService : IDisposable
 
         try
         {
-            await _downloader.DownloadWithDiscoveryAsync(
-                repoId,
-                preferences: null,
-                revision: "main",
-                progress: progress,
-                cancellationToken: cancellationToken);
+            // Pre-check repository files to determine format
+            var allFiles = await _discoveryService.ListRepositoryFilesAsync(repoId, "main", cancellationToken);
+            var hasOnnx = allFiles.Any(f => f.Path.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase));
+            var ggufFiles = allFiles
+                .Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (!hasOnnx && ggufFiles.Count > 0)
+            {
+                // GGUF-only repository: select file and download with configs
+                await DownloadGgufModelAsync(repoId, allFiles, ggufFiles, fileName, progress, cancellationToken);
+            }
+            else
+            {
+                // ONNX repository: use standard discovery-based download
+                await _downloader.DownloadWithDiscoveryAsync(
+                    repoId,
+                    preferences: null,
+                    revision: "main",
+                    progress: progress,
+                    cancellationToken: cancellationToken);
+            }
 
             LogDownloadCompleted(_logger, repoId);
         }
@@ -86,6 +126,139 @@ public sealed partial class DownloadService : IDisposable
         {
             LogDownloadFailed(_logger, ex, repoId);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Config file names to download alongside GGUF models.
+    /// </summary>
+    private static readonly HashSet<string> GgufConfigFileNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "config.json", "tokenizer.json", "tokenizer_config.json",
+        "vocab.json", "vocab.txt", "merges.txt",
+        "special_tokens_map.json", "sentencepiece.bpe.model",
+        "generation_config.json", "preprocessor_config.json"
+    };
+
+    /// <summary>
+    /// Downloads a GGUF model file plus config files.
+    /// If fileName is specified, downloads that exact file.
+    /// Otherwise, auto-selects based on system RAM/VRAM.
+    /// </summary>
+    private async Task DownloadGgufModelAsync(
+        string repoId,
+        IReadOnlyList<RepoFile> allFiles,
+        List<RepoFile> ggufFiles,
+        string? fileName,
+        IProgress<DownloadProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        RepoFile? selected = null;
+
+        if (!string.IsNullOrEmpty(fileName))
+        {
+            // User explicitly selected a file
+            selected = ggufFiles.FirstOrDefault(f =>
+                f.Path.Equals(fileName, StringComparison.OrdinalIgnoreCase) ||
+                f.FileName.Equals(fileName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Auto-select based on system specs
+        selected ??= SelectGgufBySystemSpec(ggufFiles);
+
+        var modelDir = CacheManager.GetModelDirectory(_downloader.CacheDirectory, repoId, "main");
+        Directory.CreateDirectory(modelDir);
+
+        // Download the GGUF file
+        var ggufLocalPath = Path.Combine(modelDir, selected.Path.Replace('/', Path.DirectorySeparatorChar));
+        var ggufParentDir = Path.GetDirectoryName(ggufLocalPath);
+        if (!string.IsNullOrEmpty(ggufParentDir))
+            Directory.CreateDirectory(ggufParentDir);
+
+        if (!File.Exists(ggufLocalPath) || CacheManager.IsLfsPointerFile(ggufLocalPath))
+        {
+            await _downloader.DownloadFileAsync(
+                repoId, selected.Path, ggufLocalPath,
+                revision: "main", subfolder: null,
+                progress: progress, cancellationToken: cancellationToken);
+        }
+
+        // Download config/tokenizer files from root
+        foreach (var file in allFiles)
+        {
+            if (!file.IsFile) continue;
+            if (file.Directory is not null) continue; // root-level only
+            if (!GgufConfigFileNames.Contains(file.FileName)) continue;
+
+            var localPath = Path.Combine(modelDir, file.Path);
+            if (!File.Exists(localPath))
+            {
+                try
+                {
+                    await _downloader.DownloadFileAsync(
+                        repoId, file.Path, localPath,
+                        revision: "main", subfolder: null,
+                        progress: progress, cancellationToken: cancellationToken);
+                }
+                catch (HttpRequestException)
+                {
+                    // Non-critical config file - skip if not found
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Selects the best GGUF file based on available system RAM/VRAM.
+    /// Strategy: pick the largest quantization that fits comfortably in memory.
+    /// </summary>
+    private static RepoFile SelectGgufBySystemSpec(List<RepoFile> ggufFiles)
+    {
+        // Get available memory (GGUF models are loaded into RAM, or VRAM if GPU offloading)
+        var availableBytes = GetAvailableMemoryBytes();
+
+        if (availableBytes > 0)
+        {
+            // Allow using up to ~70% of available memory for the model
+            var budget = (long)(availableBytes * 0.7);
+
+            // Prefer the largest file that fits within budget (higher quality)
+            var fits = ggufFiles
+                .Where(f => f.Size <= budget)
+                .OrderByDescending(f => f.Size)
+                .FirstOrDefault();
+
+            if (fits is not null)
+                return fits;
+        }
+
+        // Fallback: use static quantization priority
+        string[] priority = ["Q4_K_M", "Q4_K_S", "Q5_K_M", "Q5_K_S", "Q8_0", "F16"];
+        foreach (var quant in priority)
+        {
+            var match = ggufFiles.FirstOrDefault(f =>
+                f.Path.Contains(quant, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+                return match;
+        }
+
+        // Last resort: smallest file
+        return ggufFiles.OrderBy(f => f.Size).First();
+    }
+
+    /// <summary>
+    /// Gets total system memory in bytes for GGUF file sizing decisions.
+    /// </summary>
+    private static long GetAvailableMemoryBytes()
+    {
+        try
+        {
+            var gcInfo = GC.GetGCMemoryInfo();
+            return gcInfo.TotalAvailableMemoryBytes;
+        }
+        catch
+        {
+            return 0;
         }
     }
 
@@ -169,5 +342,19 @@ public record ModelCheckResult
     public long TotalSizeBytes { get; init; }
     public double TotalSizeMB => TotalSizeBytes / (1024.0 * 1024.0);
     public IReadOnlyList<string> Files { get; init; } = [];
+    /// <summary>
+    /// GGUF files available for selection (only populated for GGUF-only repositories).
+    /// </summary>
+    public IReadOnlyList<GgufFileInfo>? GgufFiles { get; init; }
     public string? Error { get; init; }
+}
+
+/// <summary>
+/// Information about a GGUF file in a repository.
+/// </summary>
+public record GgufFileInfo
+{
+    public required string FileName { get; init; }
+    public long SizeBytes { get; init; }
+    public double SizeMB => SizeBytes / (1024.0 * 1024.0);
 }

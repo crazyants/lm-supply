@@ -454,9 +454,9 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
             {
                 await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5));
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore timeout
+                Trace.TraceInformation($"[RuntimeUpdateService] Dispose wait failed: {ex.Message}");
             }
         }
 

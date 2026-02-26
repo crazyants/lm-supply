@@ -11,6 +11,7 @@ using LMSupply.Segmenter;
 using LMSupply.Synthesizer;
 using LMSupply.Transcriber;
 using LMSupply.Translator;
+using LMSupply.Console.Host.Models.Requests;
 using LMSupply.Console.Host.Models.Responses;
 using HostLoadedModelInfo = LMSupply.Console.Host.Models.Responses.LoadedModelInfo;
 
@@ -234,6 +235,148 @@ public sealed partial class ModelManagerService : IAsyncDisposable
             await model.WarmupAsync(cancellationToken);
             return model;
         }, "imagegen", modelId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pre-load a model with explicit options.
+    /// Returns the cache key (e.g., "generator:default").
+    /// </summary>
+    public async Task<string> LoadModelAsync(ModelLoadRequest request, CancellationToken ct = default)
+    {
+        var type = request.Type.ToLowerInvariant();
+        var modelId = request.ModelId;
+        var key = $"{type}:{modelId}";
+
+        // If already loaded, just touch it
+        if (_loadedModels.TryGetValue(key, out var existing))
+        {
+            existing.LastUsedAt = DateTime.UtcNow;
+            return key;
+        }
+
+        // Build common options helper
+        void ApplyBase(LMSupplyOptionsBase opts)
+        {
+            if (request.Provider is not null &&
+                Enum.TryParse<ExecutionProvider>(request.Provider, ignoreCase: true, out var provider))
+            {
+                opts.Provider = provider;
+            }
+            if (request.ThreadCount is not null)
+                opts.ThreadCount = request.ThreadCount;
+        }
+
+        Func<Task<IAsyncDisposable>> loadFunc = type switch
+        {
+            "generator" => async () =>
+            {
+                var opts = new GeneratorOptions();
+                ApplyBase(opts);
+                if (request.MaxContextLength is not null) opts.MaxContextLength = request.MaxContextLength;
+                if (request.MaxConcurrentRequests is not null) opts.MaxConcurrentRequests = request.MaxConcurrentRequests.Value;
+                LogLoadingModel(_logger, "Generator", modelId);
+                var model = await LocalGenerator.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "embedder" => async () =>
+            {
+                var opts = new EmbedderOptions();
+                ApplyBase(opts);
+                if (request.MaxSequenceLength is not null) opts.MaxSequenceLength = request.MaxSequenceLength.Value;
+                LogLoadingModel(_logger, "Embedder", modelId);
+                var model = await LocalEmbedder.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "reranker" => async () =>
+            {
+                var opts = new RerankerOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Reranker", modelId);
+                var model = await LocalReranker.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "transcriber" => async () =>
+            {
+                var opts = new TranscriberOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Transcriber", modelId);
+                var model = await LocalTranscriber.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "synthesizer" => async () =>
+            {
+                var opts = new SynthesizerOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Synthesizer", modelId);
+                var model = await LocalSynthesizer.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "translator" => async () =>
+            {
+                var opts = new TranslatorOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Translator", modelId);
+                var model = await LocalTranslator.LoadAsync(modelId, opts, cancellationToken: ct);
+                return model;
+            },
+            "captioner" => async () =>
+            {
+                var opts = new CaptionerOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Captioner", modelId);
+                var model = await LocalCaptioner.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "ocr" => async () =>
+            {
+                var opts = new OcrOptions();
+                ApplyBase(opts);
+                LogLoadingOcrModel(_logger, modelId);
+                var model = await LocalOcr.LoadForLanguageAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            "detector" => async () =>
+            {
+                var opts = new DetectorOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Detector", modelId);
+                var model = await LocalDetector.LoadAsync(modelId, opts, cancellationToken: ct);
+                return model;
+            },
+            "segmenter" => async () =>
+            {
+                var opts = new SegmenterOptions();
+                ApplyBase(opts);
+                LogLoadingModel(_logger, "Segmenter", modelId);
+                var model = await LocalSegmenter.LoadAsync(modelId, opts, cancellationToken: ct);
+                return model;
+            },
+            "imagegen" => async () =>
+            {
+                var opts = new ImageGeneratorOptions();
+                if (request.Provider is not null &&
+                    Enum.TryParse<ExecutionProvider>(request.Provider, ignoreCase: true, out var imgProvider))
+                {
+                    opts.Provider = imgProvider;
+                }
+                if (request.ThreadCount is not null) opts.ThreadCount = request.ThreadCount;
+                LogLoadingModel(_logger, "ImageGenerator", modelId);
+                var model = await LocalImageGenerator.LoadAsync(modelId, opts, cancellationToken: ct);
+                await model.WarmupAsync(ct);
+                return model;
+            },
+            _ => throw new ArgumentException($"Unknown model type: {request.Type}")
+        };
+
+        await GetOrLoadModelAsync(key, loadFunc, type, modelId, ct);
+        return key;
     }
 
     /// <summary>

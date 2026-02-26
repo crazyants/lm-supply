@@ -265,6 +265,14 @@ internal static class ModelRegistry
             yield return key;
         }
     }
+
+    /// <summary>
+    /// Gets all registered model information (deduplicated by RepoId).
+    /// </summary>
+    public static IEnumerable<ModelInfo> GetAllModels()
+    {
+        return _models.Values.DistinctBy(m => m.RepoId);
+    }
 }
 
 /// <summary>

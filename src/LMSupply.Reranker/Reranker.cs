@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Reranker.Core;
 using LMSupply.Reranker.Infrastructure;
 using LMSupply.Reranker.Models;
@@ -78,6 +79,14 @@ public sealed class Reranker : IRerankerModel
         ValidateInputs(query, documents, out var docList);
 
         var scores = await ScoreInternalAsync(query, docList, cancellationToken);
+
+        // Warn if all scores are near-zero — may indicate model output shape mismatch
+        if (scores.Length > 0 && scores.All(s => MathF.Abs(s) < 1e-4f))
+        {
+            Trace.TraceWarning(
+                $"[Reranker] All rerank scores are near-zero (max={scores.Max():E2}) for model '{ModelId}'. " +
+                "This may indicate an OutputShape mismatch between the model and the expected configuration.");
+        }
 
         var results = new RankedResult[docList.Count];
         for (var i = 0; i < docList.Count; i++)

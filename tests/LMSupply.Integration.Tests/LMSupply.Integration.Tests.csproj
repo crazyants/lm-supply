@@ -13,9 +13,12 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="NAudio" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\console\host\LMSupply.Console.Host.csproj" />
     <ProjectReference Include="..\..\src\LMSupply.Embedder\LMSupply.Embedder.csproj" />
     <ProjectReference Include="..\..\src\LMSupply.Reranker\LMSupply.Reranker.csproj" />
     <ProjectReference Include="..\..\src\LMSupply.Generator\LMSupply.Generator.csproj" />
@@ -27,6 +30,7 @@
     <ProjectReference Include="..\..\src\LMSupply.Ocr\LMSupply.Ocr.csproj" />
     <ProjectReference Include="..\..\src\LMSupply.Detector\LMSupply.Detector.csproj" />
     <ProjectReference Include="..\..\src\LMSupply.Segmenter\LMSupply.Segmenter.csproj" />
+    <ProjectReference Include="..\..\src\LMSupply.ImageGenerator\LMSupply.ImageGenerator.csproj" />
   </ItemGroup>
 
   <ItemGroup>

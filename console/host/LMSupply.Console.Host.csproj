@@ -13,6 +13,10 @@
     <GenerateEmbeddedFilesManifest Condition="Exists('wwwroot')">true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LMSupply.Integration.Tests" />
+  </ItemGroup>
+
   <!-- wwwroot 파일을 임베디드 리소스로 포함 (단일 실행파일에 포함) -->
   <ItemGroup Condition="Exists('wwwroot')">
     <EmbeddedResource Include="wwwroot\**" />

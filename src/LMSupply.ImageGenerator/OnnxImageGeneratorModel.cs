@@ -74,9 +74,9 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
         {
             _ = await _pipeline.GenerateAsync("warmup", warmupOptions, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore warmup failures
+            Trace.TraceInformation($"[OnnxImageGeneratorModel] Warmup failed: {ex.Message}");
         }
 
         _warmedUp = true;
@@ -198,9 +198,9 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
                 {
                     sessionOptions.AppendExecutionProvider_CUDA(options.DeviceId);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Fall back to CPU if CUDA not available
+                    Trace.TraceInformation($"[OnnxImageGeneratorModel] CUDA not available, falling back to CPU: {ex.Message}");
                 }
                 break;
 
@@ -212,9 +212,9 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
                     sessionOptions.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
                     sessionOptions.AppendExecutionProvider_DML(options.DeviceId);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Fall back to CPU if DirectML not available
+                    Trace.TraceInformation($"[OnnxImageGeneratorModel] DirectML not available, falling back to CPU: {ex.Message}");
                 }
                 break;
 
@@ -223,9 +223,9 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
                 {
                     sessionOptions.AppendExecutionProvider_CoreML();
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Fall back to CPU if CoreML not available
+                    Trace.TraceInformation($"[OnnxImageGeneratorModel] CoreML not available, falling back to CPU: {ex.Message}");
                 }
                 break;
 

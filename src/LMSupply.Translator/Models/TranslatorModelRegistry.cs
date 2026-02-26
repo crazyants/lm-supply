@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace LMSupply.Translator.Models;
 
 /// <summary>
@@ -87,8 +89,9 @@ public sealed class TranslatorModelRegistry
             modelInfo = Resolve(modelIdOrAlias);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[TranslatorModelRegistry] Model resolve failed for '{modelIdOrAlias}': {ex.Message}");
             modelInfo = null;
             return false;
         }

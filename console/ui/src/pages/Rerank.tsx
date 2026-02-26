@@ -12,6 +12,7 @@ export function Rerank() {
   const [results, setResults] = useState<RerankResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +20,9 @@ export function Rerank() {
 
     setIsLoading(true);
     setError(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const docArray = documents.split('\n').filter((d) => d.trim());
       const response = await api.rerank({
@@ -28,6 +31,7 @@ export function Rerank() {
         documents: docArray,
         topN: topK,
       });
+      setElapsedMs(Math.round(performance.now() - start));
       setResults(response.results);
     } catch (err) {
       setError((err as Error).message);
@@ -105,7 +109,14 @@ export function Rerank() {
 
       {results && (
         <div className="bg-card border border-border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-3">Ranked Results</h2>
+          <h2 className="text-lg font-semibold mb-3">
+            Ranked Results
+            {elapsedMs != null && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                {elapsedMs.toLocaleString()} ms
+              </span>
+            )}
+          </h2>
           <div className="space-y-2">
             {results.map((result, i) => (
               <div key={i} className="p-3 bg-muted rounded flex items-start gap-3">

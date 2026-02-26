@@ -356,9 +356,9 @@ internal sealed class WhisperTokenizer : IDisposable
             }
             return Encoding.UTF8.GetString(bytes);
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback to direct string if UTF-8 decoding fails
+            Trace.TraceInformation($"[WhisperTokenizer] UTF-8 decoding failed, using fallback: {ex.Message}");
             return sb.ToString();
         }
     }

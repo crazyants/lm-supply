@@ -8,6 +8,7 @@ export function Segment() {
   const [result, setResult] = useState<SegmentResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,9 +22,12 @@ export function Segment() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.segment(file, modelId);
+      setElapsedMs(Math.round(performance.now() - start));
       setResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -108,6 +112,7 @@ export function Segment() {
             <div className="flex gap-4 text-sm text-muted-foreground">
               <span>Model: {result.model}</span>
               <span>Classes: {result.segments.length}</span>
+              {elapsedMs != null && <span>{elapsedMs.toLocaleString()} ms</span>}
             </div>
           </div>
 

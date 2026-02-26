@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -194,8 +195,9 @@ public sealed class ModelMetadataService : IDisposable
             var json = File.ReadAllText(filePath);
             return JsonSerializer.Deserialize<ModelMetadata>(json, JsonOptions);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[ModelMetadataService] Cache load failed: {ex.Message}");
             return null;
         }
     }
@@ -216,9 +218,9 @@ public sealed class ModelMetadataService : IDisposable
             var json = JsonSerializer.Serialize(metadata, JsonOptions);
             await File.WriteAllTextAsync(filePath, json, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Cache write failure is non-fatal
+            Trace.TraceInformation($"[ModelMetadataService] Cache write failed: {ex.Message}");
         }
     }
 

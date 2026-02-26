@@ -1,5 +1,6 @@
-using LMSupply.Download;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using LMSupply.Download;
 
 namespace LMSupply.Llama.Server;
 
@@ -354,9 +355,9 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
         {
             // Expected when disposing
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore background errors
+            Trace.TraceInformation($"[LlamaServerUpdateService] Background update error: {ex.Message}");
         }
     }
 

@@ -295,9 +295,9 @@ public sealed class RuntimeManager : IAsyncDisposable
                 return $"{version.Major}.{version.Minor}.{version.Build}";
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore
+            Trace.TraceInformation($"[RuntimeManager] Assembly version lookup failed: {ex.Message}");
         }
 
         return null;

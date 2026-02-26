@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -15,8 +16,12 @@ import {
   FileText,
   ExternalLink,
   Wand2,
+  Download,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useSystemStore } from '../stores/systemStore';
 
 // Top navigation items
 const topNavItems = [
@@ -37,6 +42,87 @@ const featureNavItems = [
   { to: '/translate', icon: Languages, label: 'Translate' },
   { to: '/image-generate', icon: Wand2, label: 'Image Gen' },
 ];
+
+function UpdateIndicator() {
+  const {
+    currentVersion,
+    updateCheck,
+    updateStatus,
+    updateProgress,
+    updateError,
+    checkForUpdate,
+    applyUpdate,
+  } = useSystemStore();
+
+  useEffect(() => {
+    checkForUpdate();
+  }, [checkForUpdate]);
+
+  const statusLabel = () => {
+    switch (updateStatus) {
+      case 'updating':
+        if (updateProgress?.status === 'Downloading')
+          return `Downloading ${updateProgress.percent}%`;
+        if (updateProgress?.status === 'Extracting') return 'Extracting...';
+        if (updateProgress?.status === 'Replacing') return 'Replacing...';
+        return 'Updating...';
+      case 'restarting':
+        return 'Restarting...';
+      case 'error':
+        return updateError || 'Update failed';
+      default:
+        return null;
+    }
+  };
+
+  const isWorking = updateStatus === 'updating' || updateStatus === 'restarting';
+  const label = statusLabel();
+
+  return (
+    <div className="px-3 py-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          v{currentVersion ?? '...'}
+        </span>
+        {updateStatus === 'available' && updateCheck && (
+          <button
+            onClick={applyUpdate}
+            className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            title={`Update to v${updateCheck.latestVersion}`}
+          >
+            <Download className="w-3 h-3" />
+            v{updateCheck.latestVersion}
+          </button>
+        )}
+      </div>
+      {isWorking && (
+        <div className="mt-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {updateStatus === 'restarting' ? (
+              <RefreshCw className="w-3 h-3 animate-spin" />
+            ) : (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            )}
+            <span>{label}</span>
+          </div>
+          {updateProgress?.status === 'Downloading' && (
+            <div className="mt-1 h-1 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${updateProgress.percent}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {updateStatus === 'error' && (
+        <p className="mt-1 text-xs text-destructive truncate" title={label ?? undefined}>
+          {label}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function Layout() {
   return (
@@ -117,6 +203,10 @@ export function Layout() {
               API Docs
               <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
             </a>
+            {/* Version & Update */}
+            <div className="border-t border-border mt-1 pt-1">
+              <UpdateIndicator />
+            </div>
           </div>
         </nav>
       </aside>

@@ -9,6 +9,7 @@ export function Synthesize() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -18,6 +19,7 @@ export function Synthesize() {
 
     setIsLoading(true);
     setError(null);
+    setElapsedMs(null);
 
     // Revoke previous URL
     if (audioUrl) {
@@ -25,8 +27,10 @@ export function Synthesize() {
       setAudioUrl(null);
     }
 
+    const start = performance.now();
     try {
       const audioBlob = await api.synthesize({ modelId, text });
+      setElapsedMs(Math.round(performance.now() - start));
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
       setDuration(null); // Duration not available from binary response
@@ -110,6 +114,11 @@ export function Synthesize() {
             {duration && (
               <span className="text-sm text-muted-foreground">
                 Duration: {duration.toFixed(2)}s
+              </span>
+            )}
+            {elapsedMs != null && (
+              <span className="text-sm text-muted-foreground">
+                {elapsedMs.toLocaleString()} ms
               </span>
             )}
           </div>

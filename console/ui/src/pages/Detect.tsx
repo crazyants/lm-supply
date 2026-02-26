@@ -9,6 +9,7 @@ export function Detect() {
   const [result, setResult] = useState<DetectResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -22,9 +23,12 @@ export function Detect() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.detect(file, modelId, confidenceThreshold);
+      setElapsedMs(Math.round(performance.now() - start));
       setResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -122,6 +126,11 @@ export function Detect() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">
               Detected Objects ({result.objects.length})
+              {elapsedMs != null && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  {elapsedMs.toLocaleString()} ms
+                </span>
+              )}
             </h2>
           </div>
 

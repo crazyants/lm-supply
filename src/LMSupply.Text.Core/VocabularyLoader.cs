@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace LMSupply.Text;
 
 /// <summary>
@@ -144,9 +146,9 @@ public static class VocabularyLoader
                 MaskTokenId = maskId
             };
         }
-        catch
+        catch (Exception ex)
         {
-            // Return BERT defaults if parsing fails
+            Trace.TraceInformation($"[VocabularyLoader] Special tokens parsing failed, using BERT defaults: {ex.Message}");
             return SpecialTokens.Bert;
         }
     }
@@ -167,9 +169,9 @@ public static class VocabularyLoader
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback to manual parsing for malformed JSON
+            Trace.TraceInformation($"[VocabularyLoader] vocab.json parse failed, trying manual: {ex.Message}");
             vocab = ParseVocabJsonManual(json);
         }
 
@@ -265,9 +267,9 @@ public static class VocabularyLoader
                 return result;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall through to empty vocab
+            Trace.TraceInformation($"[VocabularyLoader] Vocabulary load failed: {ex.Message}");
         }
 
         return [];

@@ -114,6 +114,11 @@ public static class LocalCaptioner
     /// </summary>
     public static IEnumerable<string> GetAvailableModels() => ModelRegistry.GetAvailableModels();
 
+    /// <summary>
+    /// Gets all registered model information (deduplicated by alias name).
+    /// </summary>
+    public static IEnumerable<ModelInfo> GetAllModels() => ModelRegistry.GetAllModels();
+
     private static async Task<ICaptionerModel> CreateCaptionerAsync(
         string modelDir,
         ModelInfo modelInfo,

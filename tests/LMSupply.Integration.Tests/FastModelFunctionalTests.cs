@@ -33,10 +33,10 @@ public class FastModelFunctionalTests : IAsyncLifetime
         // Print summary
         if (_testResults.Count > 0)
         {
-            Console.WriteLine("\n=== Fast Model Test Summary ===");
+            System.Console.WriteLine("\n=== Fast Model Test Summary ===");
             foreach (var result in _testResults)
             {
-                Console.WriteLine(result);
+                System.Console.WriteLine(result);
             }
         }
         return Task.CompletedTask;
@@ -124,7 +124,7 @@ public class FastModelFunctionalTests : IAsyncLifetime
 
         // Show runtime info from model
         var modelInfo = model.GetModelInfo();
-        Console.WriteLine($"Runtime: {modelInfo.RuntimeVersion}, Backend: {modelInfo.ExecutionProvider}");
+        System.Console.WriteLine($"Runtime: {modelInfo.RuntimeVersion}, Backend: {modelInfo.ExecutionProvider}");
 
         _testResults.Add($"Generator GGUF (fast): Load={loadTime}ms, TTFT={ttft}ms, Tokens={tokenCount}, Tok/s={tokensPerSec:F1}");
     }

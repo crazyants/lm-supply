@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -271,9 +272,9 @@ internal sealed class TranslatorTokenizer : IDisposable
                 using var stream = File.OpenRead(tokenizerPath);
                 return SentencePieceTokenizer.Create(stream);
             }
-            catch
+            catch (Exception ex)
             {
-                // Fall through to alternative tokenizers
+                Trace.TraceInformation($"[TranslatorTokenizer] SentencePiece tokenizer failed: {ex.Message}");
             }
         }
 
@@ -288,9 +289,9 @@ internal sealed class TranslatorTokenizer : IDisposable
                     using var stream = File.OpenRead(tokenizerJsonPath);
                     return LlamaTokenizer.Create(stream);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Continue searching
+                    Trace.TraceInformation($"[TranslatorTokenizer] tokenizer.json load failed: {ex.Message}");
                 }
             }
         }
@@ -317,9 +318,9 @@ internal sealed class TranslatorTokenizer : IDisposable
                     using var mergesStream = File.OpenRead(mergesPath);
                     return CodeGenTokenizer.Create(vocabStream, mergesStream);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Continue searching
+                    Trace.TraceInformation($"[TranslatorTokenizer] BPE tokenizer load failed: {ex.Message}");
                 }
             }
         }

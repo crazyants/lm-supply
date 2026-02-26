@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using LMSupply.Download;
 
 namespace LMSupply.Llama.Server;
@@ -55,9 +56,9 @@ public sealed class LlamaServerPool : IAsyncDisposable
                 pool.DisposeAsync().AsTask().GetAwaiter().GetResult();
             };
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore if console is not available (e.g., Windows Service)
+            Trace.TraceInformation($"[LlamaServerPool] Console handler registration failed: {ex.Message}");
         }
     }
 

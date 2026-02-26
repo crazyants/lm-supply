@@ -342,9 +342,9 @@ public sealed class OnnxNuGetDownloader : IDisposable
                 await process.WaitForExitAsync(cancellationToken);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors - not critical
+            Trace.TraceInformation($"[OnnxNuGetDownloader] dotnet command failed: {ex.Message}");
         }
     }
 
@@ -392,9 +392,9 @@ public sealed class OnnxNuGetDownloader : IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore
+            Trace.TraceInformation($"[OnnxNuGetDownloader] Assembly version lookup failed: {ex.Message}");
         }
 
         return null;
@@ -433,9 +433,9 @@ public sealed class OnnxNuGetDownloader : IDisposable
                 Directory.Delete(tempDir, recursive: true);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cleanup errors
+            Trace.TraceInformation($"[OnnxNuGetDownloader] Temp directory cleanup failed: {ex.Message}");
         }
     }
 

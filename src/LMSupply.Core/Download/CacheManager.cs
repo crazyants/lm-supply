@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace LMSupply.Download;
 
 /// <summary>
@@ -91,8 +93,9 @@ public static class CacheManager
             var content = File.ReadAllText(filePath);
             return content.StartsWith("version https://git-lfs.github.com/spec/v1", StringComparison.Ordinal);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[CacheManager] LFS pointer check failed: {ex.Message}");
             return false;
         }
     }
@@ -239,8 +242,9 @@ public static class CacheManager
                 Metadata = metadata
             };
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[CacheManager] Model info build failed: {ex.Message}");
             return null;
         }
     }
@@ -259,8 +263,9 @@ public static class CacheManager
             var json = File.ReadAllText(metadataPath);
             return System.Text.Json.JsonSerializer.Deserialize<ModelMetadata>(json, s_jsonOptions);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[CacheManager] Metadata load failed: {ex.Message}");
             return null;
         }
     }

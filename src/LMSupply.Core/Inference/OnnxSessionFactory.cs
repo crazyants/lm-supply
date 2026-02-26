@@ -509,8 +509,9 @@ public static class OnnxSessionFactory
             options.AppendExecutionProvider_CoreML();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[OnnxSessionFactory] CoreML provider not available: {ex.Message}");
             return false;
         }
     }
@@ -598,9 +599,9 @@ public static class OnnxSessionFactory
 
             return providers;
         }
-        catch
+        catch (Exception ex)
         {
-            // If we can't determine, assume CPU only
+            Trace.TraceInformation($"[OnnxSessionFactory] Provider detection failed, assuming CPU: {ex.Message}");
             return new[] { "CPUExecutionProvider" };
         }
     }
@@ -620,8 +621,9 @@ public static class OnnxSessionFactory
             // but we need to verify it's actually functional with a real model
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[OnnxSessionFactory] CUDA provider not active: {ex.Message}");
             return false;
         }
     }
@@ -637,8 +639,9 @@ public static class OnnxSessionFactory
             testOptions.AppendExecutionProvider_DML();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[OnnxSessionFactory] DirectML provider not active: {ex.Message}");
             return false;
         }
     }

@@ -24,9 +24,14 @@ import type {
   TranslateLanguage,
   ModelRegistry,
   ModelTypeInfo,
+  ModelLoadRequest,
+  ModelLoadResult,
   ImageGenerationRequest,
   ImageGenerationExtendedResponse,
   ImageModelInfo,
+  VersionInfo,
+  UpdateCheckResult,
+  UpdateProgress,
 } from './types';
 
 const API_BASE = '/api';
@@ -77,11 +82,14 @@ export const api = {
   deleteModel: (repoId: string) =>
     fetch(`${API_BASE}/cache/models/${encodeURIComponent(repoId)}`, { method: 'DELETE' }),
 
-  // Note: Backend doesn't have a dedicated unload endpoint.
-  // Models are unloaded automatically when deleted or when memory pressure occurs.
-  unloadModel: async (_key: string) => {
-    return new Response(null, { status: 501, statusText: 'Not Implemented' });
-  },
+  unloadModel: (key: string) =>
+    fetch(`${API_BASE}/cache/loaded/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+
+  loadModel: (request: ModelLoadRequest) =>
+    fetchJson<ModelLoadResult>(`${API_BASE}/cache/load`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
 
   // ============================================================================
   // Download Management Endpoints
@@ -93,13 +101,13 @@ export const api = {
       body: JSON.stringify({ repoId }),
     }),
 
-  downloadModel: async function* (repoId: string): AsyncGenerator<DownloadProgress> {
+  downloadModel: async function* (repoId: string, fileName?: string): AsyncGenerator<DownloadProgress> {
     // Use direct backend URL for SSE to bypass Vite proxy
     const backendUrl = getBackendUrl();
     const response = await fetch(`${backendUrl}${API_BASE}/download/model`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoId }),
+      body: JSON.stringify({ repoId, fileName }),
     });
 
     if (!response.ok) {
@@ -464,5 +472,52 @@ export const api = {
   getImageModels: async (): Promise<ImageModelInfo[]> => {
     const response = await fetchJson<{ models: ImageModelInfo[] }>(`${V1_BASE}/images/models`);
     return response.models;
+  },
+
+  // ============================================================================
+  // Update Endpoints
+  // ============================================================================
+
+  getVersion: () => fetchJson<VersionInfo>(`${API_BASE}/system/version`),
+
+  checkUpdate: () => fetchJson<UpdateCheckResult>(`${API_BASE}/system/update`),
+
+  applyUpdate: async function* (): AsyncGenerator<UpdateProgress> {
+    const backendUrl = getBackendUrl();
+    const response = await fetch(`${backendUrl}${API_BASE}/system/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error('Update request failed');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (!data || data === '[DONE]') continue;
+          try {
+            yield JSON.parse(data) as UpdateProgress;
+          } catch {
+            // Skip non-JSON lines
+          }
+        }
+      }
+    }
   },
 };

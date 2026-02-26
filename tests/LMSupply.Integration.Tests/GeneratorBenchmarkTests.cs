@@ -17,7 +17,7 @@ public class GeneratorBenchmarkTests
     [Fact]
     public async Task GgufFast_Benchmark_MeasuresPerformance()
     {
-        Console.WriteLine("=== GGUF Generator Benchmark (fast) ===\n");
+        System.Console.WriteLine("=== GGUF Generator Benchmark (fast) ===\n");
 
         // Load model
         var loadSw = Stopwatch.StartNew();
@@ -25,30 +25,30 @@ public class GeneratorBenchmarkTests
         loadSw.Stop();
 
         var info = model.GetModelInfo();
-        Console.WriteLine($"Model: {info.ModelId}");
-        Console.WriteLine($"Context: {info.MaxContextLength}");
-        Console.WriteLine($"Load time: {loadSw.ElapsedMilliseconds}ms");
-        Console.WriteLine();
+        System.Console.WriteLine($"Model: {info.ModelId}");
+        System.Console.WriteLine($"Context: {info.MaxContextLength}");
+        System.Console.WriteLine($"Load time: {loadSw.ElapsedMilliseconds}ms");
+        System.Console.WriteLine();
 
         // Runtime info from model
-        Console.WriteLine("=== Runtime ===");
-        Console.WriteLine($"Runtime: {info.RuntimeVersion ?? "unknown"}");
-        Console.WriteLine($"Provider: {info.ExecutionProvider}");
-        Console.WriteLine($"GPU Active: {model.IsGpuActive}");
-        Console.WriteLine($"Providers: {string.Join(", ", model.ActiveProviders)}");
-        Console.WriteLine();
+        System.Console.WriteLine("=== Runtime ===");
+        System.Console.WriteLine($"Runtime: {info.RuntimeVersion ?? "unknown"}");
+        System.Console.WriteLine($"Provider: {info.ExecutionProvider}");
+        System.Console.WriteLine($"GPU Active: {model.IsGpuActive}");
+        System.Console.WriteLine($"Providers: {string.Join(", ", model.ActiveProviders)}");
+        System.Console.WriteLine();
 
         // Warmup
-        Console.WriteLine("Warming up...");
+        System.Console.WriteLine("Warming up...");
         for (int i = 0; i < 2; i++)
         {
             await foreach (var _ in model.GenerateAsync("Hello", new GenerationOptions { MaxTokens = 20 })) { }
         }
 
         // Benchmark
-        Console.WriteLine("\n=== Benchmark Results ===\n");
-        Console.WriteLine($"{"Test",-25} {"Tokens",-8} {"Gen(ms)",-10} {"Tok/s",-10} {"TTFT(ms)",-10}");
-        Console.WriteLine(new string('=', 70));
+        System.Console.WriteLine("\n=== Benchmark Results ===\n");
+        System.Console.WriteLine($"{"Test",-25} {"Tokens",-8} {"Gen(ms)",-10} {"Tok/s",-10} {"TTFT(ms)",-10}");
+        System.Console.WriteLine(new string('=', 70));
 
         var tests = new (string Name, string Prompt, int MaxTokens)[]
         {
@@ -86,23 +86,23 @@ public class GeneratorBenchmarkTests
             var genTimeMs = avgTotalMs - avgTtft;
             var tokensPerSec = avgTokens / (genTimeMs / 1000.0);
 
-            Console.WriteLine($"{name,-25} {avgTokens,-8:F0} {genTimeMs,-10:F0} {tokensPerSec,-10:F1} {avgTtft,-10:F0}");
+            System.Console.WriteLine($"{name,-25} {avgTokens,-8:F0} {genTimeMs,-10:F0} {tokensPerSec,-10:F1} {avgTtft,-10:F0}");
             allResults.Add((name, (int)avgTokens, tokensPerSec, (long)avgTtft));
         }
 
-        Console.WriteLine();
+        System.Console.WriteLine();
 
         // Assertions
         var avgTokPerSec = allResults.Average(r => r.tokPerSec);
         avgTokPerSec.Should().BeGreaterThan(50, "Should achieve at least 50 tokens/sec on GPU");
 
-        Console.WriteLine($"Average: {avgTokPerSec:F1} tokens/sec");
+        System.Console.WriteLine($"Average: {avgTokPerSec:F1} tokens/sec");
     }
 
     [Fact]
     public async Task GgufFast_ChatCompletion_Benchmark()
     {
-        Console.WriteLine("=== Chat Completion Benchmark ===\n");
+        System.Console.WriteLine("=== Chat Completion Benchmark ===\n");
 
         await using var model = await LocalGenerator.LoadAsync("gguf:fast");
 
@@ -132,8 +132,8 @@ public class GeneratorBenchmarkTests
             }),
         };
 
-        Console.WriteLine($"{"Test",-20} {"Tokens",-8} {"Gen(ms)",-10} {"Tok/s",-10} {"TTFT(ms)",-10}");
-        Console.WriteLine(new string('=', 65));
+        System.Console.WriteLine($"{"Test",-20} {"Tokens",-8} {"Gen(ms)",-10} {"Tok/s",-10} {"TTFT(ms)",-10}");
+        System.Console.WriteLine(new string('=', 65));
 
         foreach (var (name, messages) in tests)
         {
@@ -162,7 +162,7 @@ public class GeneratorBenchmarkTests
             var genTimeMs = avgTotalMs - avgTtft;
             var tokensPerSec = avgTokens / (genTimeMs / 1000.0);
 
-            Console.WriteLine($"{name,-20} {avgTokens,-8:F0} {genTimeMs,-10:F0} {tokensPerSec,-10:F1} {avgTtft,-10:F0}");
+            System.Console.WriteLine($"{name,-20} {avgTokens,-8:F0} {genTimeMs,-10:F0} {tokensPerSec,-10:F1} {avgTtft,-10:F0}");
         }
     }
 }

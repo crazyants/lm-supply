@@ -65,6 +65,12 @@ export interface CachedModelsResponse {
   totalSizeMB: number;
 }
 
+export interface GgufFileInfo {
+  fileName: string;
+  sizeBytes: number;
+  sizeMB: number;
+}
+
 export interface ModelCheckResult {
   exists: boolean;
   repoId: string;
@@ -73,6 +79,7 @@ export interface ModelCheckResult {
   totalSizeBytes: number;
   totalSizeMB: number;
   files: string[];
+  ggufFiles?: GgufFileInfo[];
   error?: string;
 }
 
@@ -398,4 +405,49 @@ export interface ImageModelInfo {
   repo_id: string;
   recommended_steps: number;
   recommended_guidance_scale: number;
+}
+
+// ============================================================================
+// Model Load Types
+// ============================================================================
+
+export interface ModelLoadRequest {
+  type: string;
+  modelId?: string;
+  provider?: string;
+  threadCount?: number;
+  maxContextLength?: number;
+  maxConcurrentRequests?: number;
+  maxSequenceLength?: number;
+}
+
+export interface ModelLoadResult {
+  key: string;
+  model: LoadedModelInfo | null;
+}
+
+// ============================================================================
+// Update Types
+// ============================================================================
+
+export interface VersionInfo {
+  version: string;
+  rid: string;
+}
+
+export interface UpdateCheckResult {
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  releaseUrl?: string;
+  downloadUrl?: string;
+  assetSize: number;
+  releaseNotes?: string;
+  error?: string;
+}
+
+export interface UpdateProgress {
+  status: 'Downloading' | 'Extracting' | 'Replacing' | 'Restarting' | 'Error';
+  percent: number;
+  error?: string;
 }

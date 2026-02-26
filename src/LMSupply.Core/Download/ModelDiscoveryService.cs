@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -209,8 +210,9 @@ public sealed class ModelDiscoveryService : IDisposable
 
             return result;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[ModelDiscoveryService] Directory listing failed: {ex.Message}");
             return [];
         }
     }
@@ -865,8 +867,9 @@ public sealed class ModelDiscoveryService : IDisposable
             await using var stream = File.OpenRead(cachePath);
             return await JsonSerializer.DeserializeAsync<List<RepoFile>>(stream, cancellationToken: cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[ModelDiscoveryService] File list cache load failed: {ex.Message}");
             return null;
         }
     }
@@ -890,9 +893,9 @@ public sealed class ModelDiscoveryService : IDisposable
             await using var stream = File.Create(cachePath);
             await JsonSerializer.SerializeAsync(stream, files, cancellationToken: cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cache write failures
+            Trace.TraceInformation($"[ModelDiscoveryService] File list cache write failed: {ex.Message}");
         }
     }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Runtime;
 
 namespace LMSupply.Hardware;
@@ -141,9 +142,9 @@ public sealed class HardwareProfile
         {
             return (long)GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback: assume 8GB
+            Trace.TraceInformation($"[HardwareProfile] Memory detection failed, assuming 8GB: {ex.Message}");
             return 8L * 1024 * 1024 * 1024;
         }
     }

@@ -15,6 +15,7 @@ export function Embed() {
   const [dimensions, setDimensions] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,10 +23,13 @@ export function Embed() {
 
     setIsLoading(true);
     setError(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const textArray = texts.split('\n').filter((t) => t.trim());
       const response = await api.embed({ modelId, texts: textArray });
+      setElapsedMs(Math.round(performance.now() - start));
       setResult(response.data.map((d) => ({ index: d.index, embedding: d.embedding })));
       setDimensions(response.data[0]?.embedding.length ?? 0);
     } catch (err) {
@@ -82,6 +86,11 @@ export function Embed() {
         <div className="bg-card border border-border rounded-lg p-4">
           <h2 className="text-lg font-semibold mb-2">
             Results ({result.length} embeddings, {dimensions} dimensions)
+            {elapsedMs != null && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                {elapsedMs.toLocaleString()} ms
+              </span>
+            )}
           </h2>
           <div className="space-y-2 max-h-96 overflow-auto">
             {result.map((item) => (

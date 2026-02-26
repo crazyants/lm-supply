@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
 
 namespace LMSupply.Generator.Internal.Llama;
@@ -176,8 +177,9 @@ public static class GgufMetadataReader
             var magic = BinaryPrimitives.ReadUInt32LittleEndian(buffer);
             return magic == GgufMagic;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GgufMetadataReader] GGUF magic check failed: {ex.Message}");
             return false;
         }
     }

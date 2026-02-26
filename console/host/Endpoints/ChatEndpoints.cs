@@ -44,7 +44,7 @@ public static class ChatEndpoints
                     if (!context.Response.HasStarted)
                     {
                         context.Response.StatusCode = 500;
-                        await context.Response.WriteAsJsonAsync(new { error = ex.Message }, ct);
+                        await context.Response.WriteAsJsonAsync(new { error = FormatError(ex) }, ct);
                     }
                 }
                 return;
@@ -95,7 +95,7 @@ public static class ChatEndpoints
             catch (Exception ex)
             {
                 context.Response.StatusCode = 500;
-                await context.Response.WriteAsJsonAsync(new { error = ex.Message }, ct);
+                await context.Response.WriteAsJsonAsync(new { error = FormatError(ex) }, ct);
             }
         })
         .WithName("CreateChatCompletion")
@@ -104,5 +104,18 @@ public static class ChatEndpoints
         .Produces<ChatCompletionResponse>()
         .Produces<ErrorResponse>(400)
         .Produces<ErrorResponse>(500);
+    }
+
+    private static string FormatError(Exception ex)
+    {
+        var msg = ex.Message;
+
+        if (msg.Contains("Could not allocate") && msg.Contains("key-value cache"))
+            return "GPU memory insufficient for this model's context length. Try a smaller model or reduce max_tokens.";
+
+        if (msg.Contains("out of memory", StringComparison.OrdinalIgnoreCase))
+            return $"Out of memory during inference. Try a smaller model. ({msg})";
+
+        return msg;
     }
 }

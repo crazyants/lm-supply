@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -184,8 +185,9 @@ public sealed class ManifestProvider : IDisposable
 
             return manifest;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[ManifestProvider] Manifest fetch failed: {ex.Message}");
             return null;
         }
     }
@@ -201,8 +203,9 @@ public sealed class ManifestProvider : IDisposable
             var content = await File.ReadAllTextAsync(cachePath, cancellationToken);
             return RuntimeManifest.Parse(content);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[ManifestProvider] Disk cache load failed: {ex.Message}");
             return null;
         }
     }
@@ -217,8 +220,9 @@ public sealed class ManifestProvider : IDisposable
 
             return await File.ReadAllTextAsync(etagPath, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[ManifestProvider] ETag cache load failed: {ex.Message}");
             return null;
         }
     }
@@ -235,9 +239,9 @@ public sealed class ManifestProvider : IDisposable
             await File.WriteAllTextAsync(tempPath, content, cancellationToken);
             File.Move(tempPath, cachePath, overwrite: true);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cache write failures
+            Trace.TraceInformation($"[ManifestProvider] Manifest cache write failed: {ex.Message}");
         }
     }
 
@@ -249,9 +253,9 @@ public sealed class ManifestProvider : IDisposable
             var etagPath = Path.Combine(_cacheDirectory, ETagCacheFileName);
             await File.WriteAllTextAsync(etagPath, etag, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cache write failures
+            Trace.TraceInformation($"[ManifestProvider] ETag cache write failed: {ex.Message}");
         }
     }
 

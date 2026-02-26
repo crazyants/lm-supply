@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
@@ -115,13 +116,13 @@ public sealed class BinaryDownloader : IDisposable
                 // Clean up temp download file
                 if (File.Exists(downloadPath))
                 {
-                    try { File.Delete(downloadPath); } catch { }
+                    try { File.Delete(downloadPath); } catch (Exception ex) { Trace.TraceInformation($"[BinaryDownloader] Temp file cleanup failed: {ex.Message}"); }
                 }
             }
         }
         finally
         {
-            try { mutex.ReleaseMutex(); } catch { }
+            try { mutex.ReleaseMutex(); } catch (Exception ex) { Trace.TraceInformation($"[BinaryDownloader] Mutex release failed: {ex.Message}"); }
         }
     }
 
@@ -162,7 +163,7 @@ public sealed class BinaryDownloader : IDisposable
                 // Clean up partial download
                 if (File.Exists(tempPath))
                 {
-                    try { File.Delete(tempPath); } catch { }
+                    try { File.Delete(tempPath); } catch (Exception cleanupEx) { Trace.TraceInformation($"[BinaryDownloader] Partial download cleanup failed: {cleanupEx.Message}"); }
                 }
             }
         }

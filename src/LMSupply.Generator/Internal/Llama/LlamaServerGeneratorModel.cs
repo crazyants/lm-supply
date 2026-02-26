@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using LMSupply.Download;
@@ -89,9 +90,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         {
             ggufMetadata = await GgufMetadataReader.ReadAsync(modelPath, false, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore metadata reading errors
+            Trace.TraceInformation($"[LlamaServerGeneratorModel] GGUF metadata reading failed: {ex.Message}");
         }
 
         // 3. Configure and start llama-server

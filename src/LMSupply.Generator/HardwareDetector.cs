@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Runtime;
 
 namespace LMSupply.Generator;
@@ -131,9 +132,9 @@ public static class HardwareDetector
         {
             return (long)GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback: assume 8GB
+            Trace.TraceInformation($"[HardwareDetector] Memory detection failed, assuming 8GB: {ex.Message}");
             return 8L * 1024 * 1024 * 1024;
         }
     }

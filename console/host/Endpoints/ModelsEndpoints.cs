@@ -1,5 +1,6 @@
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Models.OpenAI;
+using LMSupply.Console.Host.Models.Requests;
 using LMSupply.Console.Host.Services;
 using LMSupply.Download;
 
@@ -109,6 +110,48 @@ public static class ModelsEndpoints
         .WithName("GetLoadedModels")
         .WithSummary("List currently loaded models")
         .WithDescription("Returns models currently loaded in memory and ready for inference.");
+
+        // DELETE /api/cache/loaded/{key} - Unload a specific model from memory
+        cacheGroup.MapDelete("/loaded/{*key}", async (string key, ModelManagerService manager) =>
+        {
+            var decodedKey = Uri.UnescapeDataString(key);
+            var loadedModels = manager.GetLoadedModels();
+            var exists = loadedModels.Any(m => $"{m.ModelType}:{m.ModelId}" == decodedKey);
+
+            if (!exists)
+                return Results.NotFound(new { error = $"Model not loaded: {decodedKey}" });
+
+            await manager.UnloadModelAsync(decodedKey);
+            return Results.Ok(new { message = $"Model unloaded: {decodedKey}" });
+        })
+        .WithName("UnloadModel")
+        .WithSummary("Unload a model from memory")
+        .WithDescription("Unloads a loaded model from memory. Key format: {type}:{modelId} (e.g., 'generator:default').");
+
+        // POST /api/cache/load - Pre-load a model with options
+        cacheGroup.MapPost("/load", async (ModelLoadRequest request, ModelManagerService manager, CancellationToken ct) =>
+        {
+            try
+            {
+                var key = await manager.LoadModelAsync(request, ct);
+                var loadedModels = manager.GetLoadedModels();
+                var info = loadedModels.FirstOrDefault(m => $"{m.ModelType}:{m.ModelId}" == key);
+                return Results.Ok(new { key, model = info });
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiHelper.Error(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = ex.Message },
+                    statusCode: 500);
+            }
+        })
+        .WithName("LoadModel")
+        .WithSummary("Pre-load a model with options")
+        .WithDescription("Pre-loads a model into memory with explicit configuration. Useful for warming up models before use or loading with specific provider/options.");
 
         // DELETE /api/cache/models/{repoId} - Delete cached model
         cacheGroup.MapDelete("/models/{*repoId}", async (string repoId, CacheService cache, ModelManagerService manager) =>
@@ -247,7 +290,8 @@ public static class ModelsEndpoints
                         await context.Response.WriteAsync($"data: {data}\n\n", ct);
                         await context.Response.Body.FlushAsync(ct);
                     },
-                    linkedCts.Token);
+                    fileName: request.FileName,
+                    cancellationToken: linkedCts.Token);
 
                 await context.Response.WriteAsync("data: {\"status\":\"Completed\",\"percentComplete\":100}\n\n", ct);
                 await context.Response.Body.FlushAsync(ct);
@@ -277,4 +321,4 @@ public static class ModelsEndpoints
 }
 
 public record ModelCheckRequest(string RepoId);
-public record ModelDownloadRequest(string RepoId);
+public record ModelDownloadRequest(string RepoId, string? FileName = null);

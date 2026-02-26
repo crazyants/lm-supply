@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using LMSupply.Download;
@@ -193,8 +194,9 @@ public sealed class GgufModelDownloader : IDisposable
 
             return match?.FileName;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[GgufModelDownloader] GGUF file search failed: {ex.Message}");
             return null;
         }
     }

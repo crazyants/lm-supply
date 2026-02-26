@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -58,8 +59,9 @@ public sealed class LlamaServerDownloader : IDisposable
 
             return doc.RootElement.GetProperty("tag_name").GetString();
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[LlamaServerDownloader] Latest release fetch failed: {ex.Message}");
             return null;
         }
     }

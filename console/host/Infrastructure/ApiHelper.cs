@@ -1,4 +1,5 @@
 using LMSupply.Console.Host.Models.OpenAI;
+using LMSupply.Exceptions;
 
 namespace LMSupply.Console.Host.Infrastructure;
 
@@ -30,10 +31,22 @@ public static class ApiHelper
     }
 
     /// <summary>
-    /// Create an internal error response
+    /// Create an internal error response, returning 400 for known user-input errors.
     /// </summary>
     public static IResult InternalError(Exception ex)
     {
+        // ModelNotFoundException is a user-input error (bad model name), not a server error
+        if (ex is ModelNotFoundException mnf)
+        {
+            return Error(mnf.Message, "model_not_found");
+        }
+
+        // ArgumentException variants are also user-input errors
+        if (ex is ArgumentException argEx)
+        {
+            return Error(argEx.Message);
+        }
+
         var error = new ErrorResponse
         {
             Error = new ErrorDetail

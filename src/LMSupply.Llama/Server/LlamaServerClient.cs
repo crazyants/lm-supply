@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -104,8 +105,9 @@ public sealed class LlamaServerClient : IDisposable
             {
                 chunk = JsonSerializer.Deserialize<ChatCompletionChunk>(data, JsonOptions);
             }
-            catch
+            catch (Exception ex)
             {
+                Trace.TraceInformation($"[LlamaServerClient] Chat SSE chunk deserialization failed: {ex.Message}");
                 continue;
             }
 
@@ -196,8 +198,9 @@ public sealed class LlamaServerClient : IDisposable
             {
                 chunk = JsonSerializer.Deserialize<CompletionChunk>(data, JsonOptions);
             }
-            catch
+            catch (Exception ex)
             {
+                Trace.TraceInformation($"[LlamaServerClient] Completion SSE chunk deserialization failed: {ex.Message}");
                 continue;
             }
 
@@ -221,8 +224,9 @@ public sealed class LlamaServerClient : IDisposable
             var response = await _httpClient.GetAsync($"{_baseUrl}/health", cancellationToken);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[LlamaServerClient] Health check failed: {ex.Message}");
             return false;
         }
     }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Download;
 using LMSupply.Exceptions;
 using LMSupply.Ocr.Detection;
@@ -264,9 +265,9 @@ public static class LocalOcr
                         break;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // File not found, try next pattern
+                    Trace.TraceInformation($"[LocalOcr] Model file check failed: {ex.Message}");
                 }
             }
             if (modelPath != null) break;
@@ -355,9 +356,9 @@ public static class LocalOcr
                             break;
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Files not found, try next pattern
+                        Trace.TraceInformation($"[LocalOcr] Recognition file check failed: {ex.Message}");
                     }
                 }
                 if (modelPath != null) break;

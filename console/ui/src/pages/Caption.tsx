@@ -13,6 +13,7 @@ export function Caption() {
   const [vqaResult, setVqaResult] = useState<VqaResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,9 +39,12 @@ export function Caption() {
     setIsLoading(true);
     setError(null);
     setCaptionResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.caption(file, modelId);
+      setElapsedMs(Math.round(performance.now() - start));
       setCaptionResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -55,9 +59,12 @@ export function Caption() {
     setIsLoading(true);
     setError(null);
     setVqaResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.vqa(selectedFile.current, question, modelId);
+      setElapsedMs(Math.round(performance.now() - start));
       setVqaResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -174,7 +181,14 @@ export function Caption() {
 
       {captionResult && (
         <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-          <h2 className="text-lg font-semibold">Caption</h2>
+          <h2 className="text-lg font-semibold">
+            Caption
+            {elapsedMs != null && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                {elapsedMs.toLocaleString()} ms
+              </span>
+            )}
+          </h2>
           <p className="text-lg">{captionResult.caption}</p>
           {captionResult.confidence != null && (
             <p className="text-sm text-muted-foreground">
@@ -196,7 +210,14 @@ export function Caption() {
 
       {vqaResult && (
         <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-          <h2 className="text-lg font-semibold">Answer</h2>
+          <h2 className="text-lg font-semibold">
+            Answer
+            {elapsedMs != null && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                {elapsedMs.toLocaleString()} ms
+              </span>
+            )}
+          </h2>
           <p className="text-sm text-muted-foreground">Q: {vqaResult.question}</p>
           <p className="text-lg">A: {vqaResult.answer}</p>
           {vqaResult.confidence != null && (

@@ -182,6 +182,11 @@ public static class LocalEmbedder
     public static IEnumerable<string> GetAvailableModels() => ModelRegistry.GetAvailableModels();
 
     /// <summary>
+    /// Gets all registered model information (deduplicated by RepoId).
+    /// </summary>
+    public static IEnumerable<ModelInfo> GetAllModels() => ModelRegistry.GetAllModels();
+
+    /// <summary>
     /// Computes cosine similarity between two embedding vectors.
     /// </summary>
     public static float CosineSimilarity(ReadOnlySpan<float> embedding1, ReadOnlySpan<float> embedding2)

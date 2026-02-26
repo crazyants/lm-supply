@@ -10,6 +10,7 @@ export function Translate() {
   const [result, setResult] = useState<TranslateResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   useEffect(() => {
     api.getTranslateLanguages().then(setLanguages).catch(console.error);
@@ -24,9 +25,12 @@ export function Translate() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.translate({ modelId, text });
+      setElapsedMs(Math.round(performance.now() - start));
       setResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -123,6 +127,7 @@ export function Translate() {
             <span>Model: {result.model}</span>
             {result.translations?.[0]?.source_language && <span>Source: {result.translations[0].source_language}</span>}
             {result.translations?.[0]?.target_language && <span>Target: {result.translations[0].target_language}</span>}
+            {elapsedMs != null && <span>{elapsedMs.toLocaleString()} ms</span>}
           </div>
         </div>
       )}

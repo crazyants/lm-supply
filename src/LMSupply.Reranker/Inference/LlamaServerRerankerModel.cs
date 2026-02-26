@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Download;
 using LMSupply.Llama.Server;
 using LMSupply.Reranker.Models;
@@ -152,6 +153,17 @@ internal sealed class LlamaServerRerankerModel : IRerankerModel
             .Select(r => new RankedResult(r.Index, r.RelevanceScore, docList[r.Index]))
             .OrderByDescending(r => r.Score)
             .ToList();
+
+        // Warn if all scores are near-zero — likely model incompatibility with --pooling rank
+        // (e.g., generative rerankers like Qwen3-Reranker require prompt-based scoring, not rank pooling)
+        if (rankedResults.Count > 0 && rankedResults.All(r => MathF.Abs(r.Score) < 1e-4f))
+        {
+            Trace.TraceWarning(
+                $"[LlamaServerReranker] All rerank scores are near-zero (max={rankedResults.Max(r => r.Score):E2}). " +
+                $"Model '{ModelId}' may be incompatible with llama-server's rank pooling mode. " +
+                "Generative rerankers (e.g., Qwen3-Reranker) require prompt-based scoring, not --pooling rank. " +
+                "Consider using a cross-encoder model (e.g., BAAI/bge-reranker-v2-m3-GGUF).");
+        }
 
         if (topK.HasValue && topK.Value < rankedResults.Count)
         {

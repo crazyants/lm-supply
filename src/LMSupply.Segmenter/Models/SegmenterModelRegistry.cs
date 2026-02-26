@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Hardware;
 
 namespace LMSupply.Segmenter.Models;
@@ -117,8 +118,9 @@ public sealed class SegmenterModelRegistry
             modelInfo = Resolve(modelIdOrAlias);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[SegmenterModelRegistry] Model resolve failed for '{modelIdOrAlias}': {ex.Message}");
             modelInfo = null;
             return false;
         }

@@ -9,6 +9,7 @@ export function Transcribe() {
   const [result, setResult] = useState<TranscribeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -20,9 +21,12 @@ export function Transcribe() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setElapsedMs(null);
 
+    const start = performance.now();
     try {
       const response = await api.transcribe(file, modelId);
+      setElapsedMs(Math.round(performance.now() - start));
       setResult(response);
     } catch (err) {
       setError((err as Error).message);
@@ -106,6 +110,7 @@ export function Transcribe() {
             {result.duration && (
               <span>Duration: {result.duration.toFixed(2)}s</span>
             )}
+            {elapsedMs != null && <span>{elapsedMs.toLocaleString()} ms</span>}
           </div>
 
           {result.segments && result.segments.length > 0 && (

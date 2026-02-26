@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SystemStatus, CachedModelInfo, LoadedModelInfo, DownloadProgress, ModelTypeInfo } from '../api/types';
+import type { SystemStatus, CachedModelInfo, LoadedModelInfo, DownloadProgress, ModelTypeInfo, ModelLoadRequest, UpdateCheckResult, UpdateProgress } from '../api/types';
 import { api } from '../api/client';
 
 export interface DownloadingModel {
@@ -7,6 +7,8 @@ export interface DownloadingModel {
   progress: DownloadProgress | null;
   error: string | null;
 }
+
+export type UpdateStatus = 'idle' | 'checking' | 'available' | 'updating' | 'restarting' | 'error';
 
 interface SystemState {
   status: SystemStatus | null;
@@ -17,15 +19,25 @@ interface SystemState {
   isLoading: boolean;
   error: string | null;
 
+  // Update state
+  currentVersion: string | null;
+  updateCheck: UpdateCheckResult | null;
+  updateStatus: UpdateStatus;
+  updateProgress: UpdateProgress | null;
+  updateError: string | null;
+
   fetchStatus: () => Promise<void>;
   fetchModels: () => Promise<void>;
   fetchLoadedModels: () => Promise<void>;
   fetchModelRegistry: () => Promise<void>;
   deleteModel: (repoId: string) => Promise<boolean>;
   unloadModel: (key: string) => Promise<boolean>;
-  startDownload: (repoId: string) => Promise<void>;
+  startDownload: (repoId: string, fileName?: string) => Promise<void>;
   isDownloading: (repoId: string) => boolean;
   getDownloadProgress: (repoId: string) => DownloadingModel | undefined;
+  loadModel: (request: ModelLoadRequest) => Promise<boolean>;
+  checkForUpdate: () => Promise<void>;
+  applyUpdate: () => Promise<void>;
 }
 
 export const useSystemStore = create<SystemState>((set, get) => ({
@@ -36,6 +48,13 @@ export const useSystemStore = create<SystemState>((set, get) => ({
   modelRegistry: [],
   isLoading: false,
   error: null,
+
+  // Update state
+  currentVersion: null,
+  updateCheck: null,
+  updateStatus: 'idle' as UpdateStatus,
+  updateProgress: null,
+  updateError: null,
 
   fetchStatus: async () => {
     try {
@@ -100,13 +119,23 @@ export const useSystemStore = create<SystemState>((set, get) => ({
     }
   },
 
-  startDownload: async (repoId: string) => {
+  loadModel: async (request: ModelLoadRequest) => {
+    try {
+      await api.loadModel(request);
+      await get().fetchLoadedModels();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  startDownload: async (repoId: string, fileName?: string) => {
     const downloading = new Map(get().downloadingModels);
     downloading.set(repoId, { repoId, progress: null, error: null });
     set({ downloadingModels: downloading });
 
     try {
-      for await (const progress of api.downloadModel(repoId)) {
+      for await (const progress of api.downloadModel(repoId, fileName)) {
         const updated = new Map(get().downloadingModels);
         const current = updated.get(repoId);
         if (current) {
@@ -153,5 +182,82 @@ export const useSystemStore = create<SystemState>((set, get) => ({
 
   getDownloadProgress: (repoId: string) => {
     return get().downloadingModels.get(repoId);
+  },
+
+  checkForUpdate: async () => {
+    set({ updateStatus: 'checking' });
+    try {
+      const [versionInfo, checkResult] = await Promise.all([
+        api.getVersion(),
+        api.checkUpdate(),
+      ]);
+      set({
+        currentVersion: versionInfo.version,
+        updateCheck: checkResult,
+        updateStatus: checkResult.updateAvailable ? 'available' : 'idle',
+        updateError: checkResult.error || null,
+      });
+    } catch (e) {
+      set({
+        updateStatus: 'error',
+        updateError: (e as Error).message,
+      });
+    }
+  },
+
+  applyUpdate: async () => {
+    set({ updateStatus: 'updating', updateProgress: null, updateError: null });
+
+    try {
+      for await (const progress of api.applyUpdate()) {
+        set({ updateProgress: progress });
+
+        if (progress.status === 'Error') {
+          set({ updateStatus: 'error', updateError: progress.error || 'Update failed' });
+          return;
+        }
+
+        if (progress.status === 'Restarting') {
+          set({ updateStatus: 'restarting' });
+
+          // Poll until server comes back, then reload
+          const poll = async () => {
+            for (let i = 0; i < 30; i++) {
+              await new Promise(r => setTimeout(r, 2000));
+              try {
+                await api.getVersion();
+                window.location.reload();
+                return;
+              } catch {
+                // Server not ready yet
+              }
+            }
+            set({ updateStatus: 'error', updateError: 'Server did not restart in time' });
+          };
+          poll();
+          return;
+        }
+      }
+    } catch {
+      // Connection dropped during restart - expected
+      if (get().updateStatus === 'restarting') return;
+
+      set({ updateStatus: 'restarting' });
+      // Poll until server comes back
+      const poll = async () => {
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            await api.getVersion();
+            window.location.reload();
+            return;
+          } catch {
+            // Server not ready yet
+          }
+        }
+        set({ updateStatus: 'error', updateError: 'Server did not restart in time' });
+      };
+      poll();
+    }
   },
 }));

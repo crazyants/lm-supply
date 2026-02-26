@@ -40,6 +40,13 @@ public static class LocalReranker
     /// a HuggingFace model ID (e.g., "cross-encoder/ms-marco-MiniLM-L-6-v2"),
     /// a local path to an ONNX model file,
     /// or a GGUF model (prefix with "gguf:" or use repo ending in "-GGUF").
+    /// <para>
+    /// <b>GGUF compatibility:</b> Only traditional cross-encoder models are supported
+    /// (e.g., BAAI/bge-reranker-v2-m3-GGUF, jinaai/jina-reranker-v1-turbo-en-GGUF).
+    /// Generative rerankers (e.g., Qwen3-Reranker) that require prompt-based "yes/no"
+    /// scoring are NOT compatible with llama-server's --pooling rank mode and will
+    /// produce near-zero garbage scores.
+    /// </para>
     /// </param>
     /// <param name="options">Optional configuration options.</param>
     /// <param name="progress">Optional progress reporting for downloads.</param>

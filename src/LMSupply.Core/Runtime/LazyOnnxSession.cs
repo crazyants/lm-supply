@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Download;
 using LMSupply.Inference;
 using Microsoft.ML.OnnxRuntime;
@@ -219,8 +220,9 @@ public sealed class LazyOnnxSession : IDisposable, IAsyncDisposable
             options.AppendExecutionProvider_CUDA();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[LazyOnnxSession] CUDA provider not available: {ex.Message}");
             return false;
         }
     }
@@ -236,8 +238,9 @@ public sealed class LazyOnnxSession : IDisposable, IAsyncDisposable
             options.AppendExecutionProvider_DML();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[LazyOnnxSession] DirectML provider not available: {ex.Message}");
             return false;
         }
     }
@@ -249,8 +252,9 @@ public sealed class LazyOnnxSession : IDisposable, IAsyncDisposable
             options.AppendExecutionProvider_CoreML();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[LazyOnnxSession] CoreML provider not available: {ex.Message}");
             return false;
         }
     }

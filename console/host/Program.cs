@@ -70,13 +70,16 @@ app.UseCors();
 
 // 임베디드 리소스에서 정적 파일 제공 (wwwroot가 빌드 시 없으면 매니페스트도 없음)
 var assembly = Assembly.GetExecutingAssembly();
-var manifestName = $"{assembly.GetName().Name}.Microsoft.Extensions.FileProviders.Embedded.Manifest.xml";
 ManifestEmbeddedFileProvider? embeddedProvider = null;
-if (assembly.GetManifestResourceInfo(manifestName) is not null)
+try
 {
     embeddedProvider = new ManifestEmbeddedFileProvider(assembly, "wwwroot");
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = embeddedProvider });
     app.UseStaticFiles(new StaticFileOptions { FileProvider = embeddedProvider });
+}
+catch (InvalidOperationException)
+{
+    // 매니페스트가 없는 경우 (wwwroot 없이 빌드됨) — swagger만 제공
 }
 
 // API 엔드포인트 매핑

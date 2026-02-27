@@ -48,10 +48,11 @@ public sealed partial class UpdateService
                 return new UpdateCheckResult { CurrentVersion = CurrentVersion };
 
             var latestVersion = release.TagName.TrimStart('v');
-            var updateAvailable = CompareVersions(CurrentVersion, latestVersion) < 0;
+            var hasNewerVersion = CompareVersions(CurrentVersion, latestVersion) < 0;
 
             var assetName = GetAssetName(CurrentRid);
             var asset = release.Assets?.FirstOrDefault(a => a.Name == assetName);
+            var updateAvailable = hasNewerVersion && asset?.BrowserDownloadUrl is not null;
 
             var result = new UpdateCheckResult
             {

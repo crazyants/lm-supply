@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { RerankResult } from '../api/types';
 import { ModelSelector } from '../components/ModelSelector';
 import { Loader2 } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Rerank() {
   const [modelId, setModelId] = useState('');
@@ -100,6 +101,10 @@ export function Rerank() {
           Rerank Documents
         </button>
       </form>
+
+      <CurlExample commands={[
+        { label: 'Rerank', command: `curl -X POST http://localhost:5000/v1/rerank \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${modelId || 'default'}","query":"search query","documents":["doc one","doc two","doc three"],"top_n":${topK}}'` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

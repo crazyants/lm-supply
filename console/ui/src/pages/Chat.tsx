@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { ChatMessage } from '../api/types';
 import { ModelSelector } from '../components/ModelSelector';
 import { Send, Bot, User, Square } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Chat() {
   const [modelId, setModelId] = useState('');
@@ -170,6 +171,14 @@ export function Chat() {
           {lastElapsedMs.toLocaleString()} ms
         </div>
       )}
+
+      {/* cURL */}
+      <div className="px-4 pt-2">
+        <CurlExample commands={[
+          { label: 'Streaming', command: `curl -N -X POST http://localhost:5000/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${modelId || 'default'}","messages":[{"role":"user","content":"Hello"}],"stream":true}'` },
+          { label: 'Non-streaming', command: `curl -X POST http://localhost:5000/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${modelId || 'default'}","messages":[{"role":"user","content":"Hello"}],"stream":false}'` },
+        ]} />
+      </div>
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-border">

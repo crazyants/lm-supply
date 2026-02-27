@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 import type { OcrResponse } from '../api/types';
 import { Loader2, Upload } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Ocr() {
   const [language, setLanguage] = useState('en');
@@ -108,6 +109,11 @@ export function Ocr() {
           )}
         </div>
       </div>
+
+      <CurlExample commands={[
+        { label: 'OCR', command: `curl -X POST http://localhost:5000/v1/images/ocr \\\n  -F file=@image.jpg \\\n  -F language=${language}` },
+        { label: 'List Languages', command: `curl http://localhost:5000/v1/images/ocr/languages` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

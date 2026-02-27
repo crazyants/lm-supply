@@ -180,6 +180,7 @@ test.describe('Chat — multi-turn', () => {
 
     await page.goto('/chat');
     await expect(page.locator('main').getByRole('heading', { name: 'Chat' })).toBeVisible();
+    await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
 
     const input = page.locator('input[type="text"]').first();
 

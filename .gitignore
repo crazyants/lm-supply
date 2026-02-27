@@ -51,3 +51,4 @@ samples/Gemma3Test/
 
 # Console Host - Vite build output (embedded at build time)
 console/host/wwwroot/
+.playwright-mcp/

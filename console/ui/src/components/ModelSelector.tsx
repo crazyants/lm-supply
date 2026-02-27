@@ -94,7 +94,7 @@ export function ModelSelector({ modelType, value, onChange, disabled }: ModelSel
   useEffect(() => {
     if (models.length > 0 && !value) {
       const cached = models.find(m => m.isCached);
-      onChange((cached ?? models[0]).repoId);
+      onChange((cached ?? models[0]).alias);
     }
   }, [models, value, onChange]);
 
@@ -125,7 +125,7 @@ export function ModelSelector({ modelType, value, onChange, disabled }: ModelSel
     );
   }
 
-  const selectedModel = models.find(m => m.repoId === value);
+  const selectedModel = models.find(m => m.alias === value);
 
   return (
     <div className="space-y-1">
@@ -137,7 +137,7 @@ export function ModelSelector({ modelType, value, onChange, disabled }: ModelSel
           className="appearance-none px-3 py-1.5 pr-8 bg-muted border border-border rounded text-sm cursor-pointer min-w-[280px] disabled:opacity-50"
         >
           {models.map((model) => (
-            <option key={model.repoId} value={model.repoId}>
+            <option key={model.alias} value={model.alias}>
               {model.alias !== model.repoId ? `${model.alias} — ` : ''}
               {model.repoId}
               {model.isCached && model.sizeMB != null ? ` (${model.sizeMB.toFixed(0)} MB)` : ''}

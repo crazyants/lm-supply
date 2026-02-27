@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { api } from '../api/client';
 import { ModelSelector } from '../components/ModelSelector';
 import { Loader2, Play, Download } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Synthesize() {
   const [modelId, setModelId] = useState('');
@@ -83,6 +84,10 @@ export function Synthesize() {
           Generate Speech
         </button>
       </form>
+
+      <CurlExample commands={[
+        { label: 'Text to Speech', command: `curl -X POST http://localhost:5000/v1/audio/speech \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${modelId || 'default'}","input":"Hello world"}' \\\n  --output speech.wav` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

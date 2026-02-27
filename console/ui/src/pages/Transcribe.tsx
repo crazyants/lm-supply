@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { TranscribeResponse } from '../api/types';
 import { ModelSelector } from '../components/ModelSelector';
 import { Loader2, Upload } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Transcribe() {
   const [modelId, setModelId] = useState('');
@@ -89,6 +90,11 @@ export function Transcribe() {
           )}
         </div>
       </div>
+
+      <CurlExample commands={[
+        { label: 'Transcribe', command: `curl -X POST http://localhost:5000/v1/audio/transcriptions \\\n  -F file=@audio.wav \\\n  -F model=${modelId || 'default'}` },
+        { label: 'Verbose JSON', command: `curl -X POST http://localhost:5000/v1/audio/transcriptions \\\n  -F file=@audio.wav \\\n  -F model=${modelId || 'default'} \\\n  -F response_format=verbose_json` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

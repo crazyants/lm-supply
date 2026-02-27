@@ -148,7 +148,7 @@ export function Dashboard() {
             ) : (
               loadedModels.map((model) => (
                 <div
-                  key={model.modelId}
+                  key={`${model.modelType}:${model.modelId}`}
                   className="flex items-center justify-between p-2 bg-muted rounded"
                 >
                   <div>

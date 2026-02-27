@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { TranslateResponse, TranslateLanguage } from '../api/types';
 import { Loader2, ArrowRight } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Translate() {
   const [languages, setLanguages] = useState<TranslateLanguage[]>([]);
@@ -114,6 +115,11 @@ export function Translate() {
           Translate
         </button>
       </form>
+
+      <CurlExample commands={[
+        { label: 'Translate', command: `curl -X POST http://localhost:5000/v1/translate \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${modelId || 'default'}","input":"Hello world"}'` },
+        { label: 'List Languages', command: `curl http://localhost:5000/v1/translate/languages` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

@@ -11,7 +11,9 @@ public class LocalEmbedderApiTests
         var models = LocalEmbedder.GetAvailableModels().ToList();
 
         models.Should().NotBeEmpty();
-        models.Should().Contain("all-MiniLM-L6-v2");
+        models.Should().Contain("default");
+        models.Should().Contain("fast");
+        models.Should().Contain("auto");
     }
 
     [Fact]
@@ -123,12 +125,14 @@ public class LocalEmbedderApiTests
     }
 
     [Theory]
-    [InlineData("all-MiniLM-L6-v2")]
-    [InlineData("all-mpnet-base-v2")]
-    [InlineData("bge-small-en-v1.5")]
-    public void GetAvailableModels_ContainsExpectedModels(string expectedModel)
+    [InlineData("default")]
+    [InlineData("fast")]
+    [InlineData("quality")]
+    [InlineData("large")]
+    [InlineData("multilingual")]
+    public void GetAvailableModels_ContainsExpectedAliases(string expectedAlias)
     {
         var models = LocalEmbedder.GetAvailableModels().ToList();
-        models.Should().Contain(expectedModel);
+        models.Should().Contain(expectedAlias);
     }
 }

@@ -1,14 +1,17 @@
 using FluentAssertions;
 using LMSupply.Embedder.Utils;
+using LMSupply.Exceptions;
 
 namespace LMSupply.Embedder.Tests;
 
 public class ModelRegistryTests
 {
+    private readonly EmbedderModelRegistry _registry = EmbedderModelRegistry.Default;
+
     [Fact]
-    public void TryGetModel_ReturnsTrue_ForKnownModel()
+    public void TryResolve_ReturnsTrue_ForKnownShortName()
     {
-        var result = ModelRegistry.TryGetModel("all-MiniLM-L6-v2", out var info);
+        var result = _registry.TryResolve("all-MiniLM-L6-v2", out var info);
 
         result.Should().BeTrue();
         info.Should().NotBeNull();
@@ -17,31 +20,32 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void TryGetModel_ReturnsFalse_ForUnknownModel()
+    public void TryResolve_ReturnsFalse_ForUnknownModel()
     {
-        var result = ModelRegistry.TryGetModel("unknown-model", out var info);
+        var result = _registry.TryResolve("unknown-model", out var info);
 
         result.Should().BeFalse();
         info.Should().BeNull();
     }
 
     [Fact]
-    public void TryGetModel_IsCaseInsensitive()
+    public void TryResolve_IsCaseInsensitive()
     {
-        var result = ModelRegistry.TryGetModel("ALL-MINILM-L6-V2", out var info);
+        var result = _registry.TryResolve("ALL-MINILM-L6-V2", out var info);
 
         result.Should().BeTrue();
         info.Should().NotBeNull();
     }
 
     [Fact]
-    public void GetAvailableModels_ReturnsNonEmptyList()
+    public void GetAliases_ReturnsNonEmptyList()
     {
-        var models = ModelRegistry.GetAvailableModels().ToList();
+        var aliases = _registry.GetAliases();
 
-        models.Should().NotBeEmpty();
-        models.Should().Contain("all-MiniLM-L6-v2");
-        models.Should().Contain("bge-small-en-v1.5");
+        aliases.Should().NotBeEmpty();
+        aliases.Select(a => a.Name).Should().Contain("default");
+        aliases.Select(a => a.Name).Should().Contain("fast");
+        aliases.Select(a => a.Name).Should().Contain("auto");
     }
 
     [Theory]
@@ -51,7 +55,7 @@ public class ModelRegistryTests
     [InlineData("multilingual-e5-small", 384, PoolingMode.Mean)]
     public void KnownModels_HaveCorrectConfiguration(string modelId, int dimensions, PoolingMode pooling)
     {
-        ModelRegistry.TryGetModel(modelId, out var info);
+        _registry.TryResolve(modelId, out var info);
 
         info.Should().NotBeNull();
         info!.Dimensions.Should().Be(dimensions);
@@ -61,7 +65,7 @@ public class ModelRegistryTests
     [Fact]
     public void DefaultAlias_PointsToBgeSmall()
     {
-        ModelRegistry.TryGetModel("default", out var info);
+        _registry.TryResolve("default", out var info);
 
         info.Should().NotBeNull();
         info!.RepoId.Should().Be("BAAI/bge-small-en-v1.5");
@@ -70,7 +74,7 @@ public class ModelRegistryTests
     [Fact]
     public void FastAlias_PointsToMiniLM()
     {
-        ModelRegistry.TryGetModel("fast", out var info);
+        _registry.TryResolve("fast", out var info);
 
         info.Should().NotBeNull();
         info!.RepoId.Should().Be("sentence-transformers/all-MiniLM-L6-v2");
@@ -79,9 +83,88 @@ public class ModelRegistryTests
     [Fact]
     public void QualityAlias_PointsToGteBase()
     {
-        ModelRegistry.TryGetModel("quality", out var info);
+        _registry.TryResolve("quality", out var info);
 
         info.Should().NotBeNull();
         info!.RepoId.Should().Be("Alibaba-NLP/gte-base-en-v1.5");
+    }
+
+    [Fact]
+    public void AutoAlias_ResolvesToModel()
+    {
+        var result = _registry.TryResolve("auto", out var info);
+
+        result.Should().BeTrue();
+        info.Should().NotBeNull();
+        info!.RepoId.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Resolve_ThrowsForUnknownModel()
+    {
+        var act = () => _registry.Resolve("completely-nonexistent-xyz");
+
+        act.Should().Throw<ModelNotFoundException>();
+    }
+
+    [Fact]
+    public void GetAvailableModels_ReturnsDeduplicatedModels()
+    {
+        var models = _registry.GetAvailableModels();
+
+        models.Should().NotBeEmpty();
+        // All models should have distinct RepoIds
+        models.Select(m => m.RepoId).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void FullRepoId_ResolvesCorrectly()
+    {
+        var result = _registry.TryResolve("BAAI/bge-small-en-v1.5", out var info);
+
+        result.Should().BeTrue();
+        info.Should().NotBeNull();
+        info!.RepoId.Should().Be("BAAI/bge-small-en-v1.5");
+    }
+
+    [Fact]
+    public void RegisterAlias_WorksForUserAlias()
+    {
+        var registry = new EmbedderModelRegistry(DefaultModels.All);
+        registry.RegisterAlias("my-embed", "BAAI/bge-small-en-v1.5");
+
+        var result = registry.TryResolve("my-embed", out var info);
+
+        result.Should().BeTrue();
+        info.Should().NotBeNull();
+        info!.RepoId.Should().Be("BAAI/bge-small-en-v1.5");
+    }
+
+    [Fact]
+    public void RegisterAlias_ThrowsForSystemAlias()
+    {
+        var registry = new EmbedderModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", "some-model");
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void RemoveAlias_WorksForUserAlias()
+    {
+        var registry = new EmbedderModelRegistry(DefaultModels.All);
+        registry.RegisterAlias("my-embed", "BAAI/bge-small-en-v1.5");
+
+        registry.RemoveAlias("my-embed").Should().BeTrue();
+        registry.TryResolve("my-embed", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RemoveAlias_ReturnsFalse_ForSystemAlias()
+    {
+        var registry = new EmbedderModelRegistry(DefaultModels.All);
+
+        registry.RemoveAlias("default").Should().BeFalse();
     }
 }

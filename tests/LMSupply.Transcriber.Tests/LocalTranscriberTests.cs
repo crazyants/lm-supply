@@ -58,7 +58,7 @@ public class LocalTranscriberTests
     [InlineData("quality")]
     public void ResolveAlias_StandardAliases_ShouldResolve(string alias)
     {
-        var result = TranscriberModelRegistry.Default.TryGet(alias, out var model);
+        var result = TranscriberModelRegistry.Default.TryResolve(alias, out var model);
 
         result.Should().BeTrue();
         model.Should().NotBeNull();

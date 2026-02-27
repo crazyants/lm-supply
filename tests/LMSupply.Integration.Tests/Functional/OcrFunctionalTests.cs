@@ -294,7 +294,7 @@ public class OcrFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_GetAllDetectionModels_AllHaveRequiredFields()
     {
-        var models = ModelRegistry.GetAllDetectionModels().ToList();
+        var models = OcrDetectionModelRegistry.Default.GetAvailableModels().ToList();
 
         models.Should().NotBeEmpty("at least one detection model should be registered");
         models.Should().AllSatisfy(m =>
@@ -312,7 +312,7 @@ public class OcrFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_GetAllRecognitionModels_AllHaveRequiredFields()
     {
-        var models = ModelRegistry.GetAllRecognitionModels().ToList();
+        var models = OcrRecognitionModelRegistry.Default.GetAvailableModels().ToList();
 
         models.Should().NotBeEmpty("at least one recognition model should be registered");
         models.Should().AllSatisfy(m =>
@@ -344,9 +344,9 @@ public class OcrFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_DefaultDetectionAlias_ReturnsDbNetV3()
     {
-        var model = ModelRegistry.GetDetectionModel("default");
+        var model = OcrDetectionModelRegistry.Default.Resolve("default");
 
-        model.AliasName.Should().Be("dbnet-v3", "default detection model should be DBNet-v3");
+        model.RepoId.Should().Be("monkt/paddleocr-onnx", "default detection model should come from paddleocr repo");
         model.ModelFile.Should().Be("det.onnx", "detection model file should be det.onnx");
     }
 
@@ -355,7 +355,7 @@ public class OcrFunctionalTests
     public void L_GetRecognitionModelForLanguage_FallsBackToEnglish()
     {
         // Japanese is documented as falling back to English (not available in repository)
-        var model = ModelRegistry.GetRecognitionModelForLanguage("ja");
+        var model = OcrRecognitionModelRegistry.Default.ResolveForLanguage("ja");
 
         model.AliasName.Should().Be("crnn-en-v3",
             "unsupported language should fall back to English recognition");
@@ -368,13 +368,13 @@ public class OcrFunctionalTests
     [InlineData("fr")]
     [InlineData("es")]
     [InlineData("de")]
-    public void L_GetRecognitionModelForLanguage_UnsupportedFallsToEnglish(string language)
+    public void L_GetRecognitionModelForLanguage_LatinLanguagesMapsToLatinModel(string language)
     {
-        var model = ModelRegistry.GetRecognitionModelForLanguage(language);
+        var model = OcrRecognitionModelRegistry.Default.ResolveForLanguage(language);
 
-        model.Should().NotBeNull($"language '{language}' should fall back to a valid model");
-        model.AliasName.Should().Be("crnn-en-v3",
-            $"unsupported language '{language}' should fall back to English");
+        model.Should().NotBeNull($"language '{language}' should resolve to a valid model");
+        model.AliasName.Should().Be("crnn-latin-v3",
+            $"Latin-script language '{language}' should map to the Latin recognition model");
     }
 
     [Fact]

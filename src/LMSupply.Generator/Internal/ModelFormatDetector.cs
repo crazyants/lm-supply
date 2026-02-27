@@ -56,7 +56,7 @@ internal static class ModelFormatDetector
         }
 
         // 5. Check registry for known ONNX models
-        if (ModelRegistry.GetModel(modelIdOrPath) != null)
+        if (GeneratorModelRegistry.Default.TryResolve(modelIdOrPath, out _))
         {
             return ModelFormat.Onnx;
         }

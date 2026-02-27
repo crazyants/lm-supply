@@ -1,4 +1,6 @@
 using FluentAssertions;
+using LMSupply;
+using LMSupply.Exceptions;
 using LMSupply.Synthesizer.Models;
 
 namespace LMSupply.Synthesizer.Tests;
@@ -24,10 +26,10 @@ public class SynthesizerModelRegistryTests
     [InlineData("korean")]
     [InlineData("japanese")]
     [InlineData("chinese")]
-    public void TryGet_ReturnsModelByAlias(string alias)
+    public void TryResolve_ReturnsModelByAlias(string alias)
     {
         // Act
-        var found = SynthesizerModelRegistry.Default.TryGet(alias, out var model);
+        var found = SynthesizerModelRegistry.Default.TryResolve(alias, out var model);
 
         // Assert
         found.Should().BeTrue();
@@ -36,13 +38,13 @@ public class SynthesizerModelRegistryTests
     }
 
     [Fact]
-    public void TryGet_ReturnsModelById()
+    public void TryResolve_ReturnsModelById()
     {
         // Arrange
         var id = "rhasspy/piper-voices";
 
         // Act
-        var found = SynthesizerModelRegistry.Default.TryGet(id, out var model);
+        var found = SynthesizerModelRegistry.Default.TryResolve(id, out var model);
 
         // Assert
         found.Should().BeTrue();
@@ -51,10 +53,10 @@ public class SynthesizerModelRegistryTests
     }
 
     [Fact]
-    public void TryGet_ReturnsFalseForUnknown()
+    public void TryResolve_ReturnsFalseForUnknown()
     {
         // Act
-        var found = SynthesizerModelRegistry.Default.TryGet("unknown-model", out var model);
+        var found = SynthesizerModelRegistry.Default.TryResolve("unknown-model", out var model);
 
         // Assert
         found.Should().BeFalse();
@@ -62,12 +64,12 @@ public class SynthesizerModelRegistryTests
     }
 
     [Fact]
-    public void TryGet_IsCaseInsensitive()
+    public void TryResolve_IsCaseInsensitive()
     {
         // Act
-        var found1 = SynthesizerModelRegistry.Default.TryGet("DEFAULT", out var model1);
-        var found2 = SynthesizerModelRegistry.Default.TryGet("Default", out var model2);
-        var found3 = SynthesizerModelRegistry.Default.TryGet("default", out var model3);
+        var found1 = SynthesizerModelRegistry.Default.TryResolve("DEFAULT", out var model1);
+        var found2 = SynthesizerModelRegistry.Default.TryResolve("Default", out var model2);
+        var found3 = SynthesizerModelRegistry.Default.TryResolve("default", out var model3);
 
         // Assert
         found1.Should().BeTrue();
@@ -81,28 +83,79 @@ public class SynthesizerModelRegistryTests
     public void GetAliases_ReturnsAllRegisteredAliases()
     {
         // Act
-        var aliases = SynthesizerModelRegistry.Default.GetAliases().ToList();
+        var aliases = SynthesizerModelRegistry.Default.GetAliases();
+        var aliasNames = aliases.Select(a => a.Name).ToList();
 
         // Assert
-        aliases.Should().NotBeEmpty();
-        aliases.Should().Contain("default");
-        aliases.Should().Contain("fast");
-        aliases.Should().Contain("quality");
-        aliases.Should().Contain("british");
-        aliases.Should().Contain("korean");
-        aliases.Should().Contain("japanese");
-        aliases.Should().Contain("chinese");
+        aliasNames.Should().NotBeEmpty();
+        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("fast");
+        aliasNames.Should().Contain("quality");
+        aliasNames.Should().Contain("british");
+        aliasNames.Should().Contain("korean");
+        aliasNames.Should().Contain("japanese");
+        aliasNames.Should().Contain("chinese");
     }
 
     [Fact]
-    public void GetAll_ReturnsAllModels()
+    public void GetAvailableModels_ReturnsAllModels()
     {
         // Act
-        var models = SynthesizerModelRegistry.Default.GetAll().ToList();
+        var models = SynthesizerModelRegistry.Default.GetAvailableModels();
 
         // Assert
         models.Should().NotBeEmpty();
-        models.Should().HaveCount(7); // 7 default models
+        // All models share the same ID "rhasspy/piper-voices", so only 1 unique by ID
+        models.Should().HaveCountGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public void Resolve_AutoAlias_ShouldReturnModel()
+    {
+        var model = SynthesizerModelRegistry.Default.Resolve("auto");
+
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void Resolve_UnknownAlias_ShouldThrow()
+    {
+        var act = () => SynthesizerModelRegistry.Default.Resolve("nonexistent");
+
+        act.Should().Throw<ModelNotFoundException>()
+            .Where(e => e.ModelId == "nonexistent");
+    }
+
+    [Fact]
+    public void RegisterAlias_ShouldBeResolvable()
+    {
+        var registry = new SynthesizerModelRegistry(DefaultModels.All);
+
+        registry.RegisterAlias("my-voice", "rhasspy/piper-voices");
+
+        var model = registry.Resolve("my-voice");
+        model.Should().NotBeNull();
+        model.Id.Should().Be("rhasspy/piper-voices");
+    }
+
+    [Fact]
+    public void RegisterAlias_SystemAliasConflict_ShouldThrow()
+    {
+        var registry = new SynthesizerModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", "rhasspy/piper-voices");
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void LocalSynthesizer_Registry_ShouldExpose()
+    {
+        var registry = LocalSynthesizer.Registry;
+
+        registry.Should().NotBeNull();
+        registry.Should().BeAssignableTo<IModelRegistry<SynthesizerModelInfo>>();
     }
 }
 

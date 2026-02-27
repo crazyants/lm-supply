@@ -186,7 +186,7 @@ public sealed class GeneratorPool : IAsyncDisposable
 
     private static long EstimateModelMemory(string modelId, GeneratorOptions? options)
     {
-        var modelInfo = ModelRegistry.GetModel(modelId);
+        GeneratorModelRegistry.Default.TryResolve(modelId, out var modelInfo);
         if (modelInfo != null)
         {
             var config = modelInfo.GetMemoryConfig(options?.MaxContextLength);

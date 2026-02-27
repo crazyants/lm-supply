@@ -1,14 +1,109 @@
 using FluentAssertions;
+using LMSupply.Exceptions;
 
 namespace LMSupply.Generator.Tests;
 
 public class ModelRegistryTests
 {
+    // ===== New GeneratorModelRegistry tests =====
+
     [Fact]
-    public void GetAllModels_ReturnsAllRegisteredModels()
+    public void Resolve_WithDefaultAlias_ReturnsPhi4Mini()
     {
         // Act
-        var models = ModelRegistry.GetAllModels();
+        var model = GeneratorModelRegistry.Default.Resolve("default");
+
+        // Assert
+        model.Should().NotBeNull();
+        model.ModelId.Should().Be("microsoft/Phi-4-mini-instruct-onnx");
+    }
+
+    [Fact]
+    public void Resolve_WithFastAlias_ReturnsLlama1B()
+    {
+        // Act
+        var model = GeneratorModelRegistry.Default.Resolve("fast");
+
+        // Assert
+        model.Should().NotBeNull();
+        model.ModelId.Should().Be("onnx-community/Llama-3.2-1B-Instruct-ONNX");
+    }
+
+    [Fact]
+    public void Resolve_WithQualityAlias_ReturnsPhi4()
+    {
+        // Act
+        var model = GeneratorModelRegistry.Default.Resolve("quality");
+
+        // Assert
+        model.Should().NotBeNull();
+        model.ModelId.Should().Be("microsoft/phi-4-onnx");
+    }
+
+    [Fact]
+    public void TryResolve_WithAutoAlias_ReturnsHardwareAdaptive()
+    {
+        // Act
+        var result = GeneratorModelRegistry.Default.TryResolve("auto", out var model);
+
+        // Assert
+        result.Should().BeTrue();
+        model.Should().NotBeNull();
+        model!.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void TryResolve_WithFullModelId_ReturnsModel()
+    {
+        // Act
+        var result = GeneratorModelRegistry.Default.TryResolve("microsoft/Phi-4-mini-instruct-onnx", out var model);
+
+        // Assert
+        result.Should().BeTrue();
+        model.Should().NotBeNull();
+        model!.DisplayName.Should().Be("Phi-4 Mini");
+    }
+
+    [Fact]
+    public void TryResolve_WithShortName_ReturnsModel()
+    {
+        // Act
+        var result = GeneratorModelRegistry.Default.TryResolve("Phi-4-mini-instruct-onnx", out var model);
+
+        // Assert
+        result.Should().BeTrue();
+        model.Should().NotBeNull();
+        model!.ModelId.Should().Be("microsoft/Phi-4-mini-instruct-onnx");
+    }
+
+    [Fact]
+    public void Resolve_WithUnknownAlias_Throws()
+    {
+        // Act
+        var act = () => GeneratorModelRegistry.Default.Resolve("unknown-alias");
+
+        // Assert
+        act.Should().Throw<ModelNotFoundException>()
+            .WithMessage("*unknown-alias*not found*");
+    }
+
+    [Fact]
+    public void TryResolve_WithUnknownHFRepo_CreatesFallback()
+    {
+        // Act
+        var result = GeneratorModelRegistry.Default.TryResolve("my-org/my-model", out var model);
+
+        // Assert
+        result.Should().BeTrue();
+        model.Should().NotBeNull();
+        model!.ModelId.Should().Be("my-org/my-model");
+    }
+
+    [Fact]
+    public void GetAvailableModels_ReturnsAllRegisteredModels()
+    {
+        // Act
+        var models = GeneratorModelRegistry.Default.GetAvailableModels();
 
         // Assert
         models.Should().NotBeEmpty();
@@ -16,112 +111,128 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void GetUnrestrictedModels_ReturnsMITLicensedOnly()
+    public void GetAliases_ContainsStandardAliases()
     {
         // Act
-        var models = ModelRegistry.GetUnrestrictedModels();
+        var aliases = GeneratorModelRegistry.Default.GetAliases();
+
+        // Assert
+        var aliasNames = aliases.Select(a => a.Name).ToList();
+        aliasNames.Should().Contain("auto");
+        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("fast");
+        aliasNames.Should().Contain("quality");
+    }
+
+    [Fact]
+    public void GetAvailableModels_AllHaveLicenseInfo()
+    {
+        // Act
+        var models = GeneratorModelRegistry.Default.GetAvailableModels();
+
+        // Assert
+        models.Should().AllSatisfy(m =>
+        {
+            m.LicenseName.Should().NotBeNullOrEmpty();
+            m.ChatFormat.Should().NotBeNullOrEmpty();
+        });
+    }
+
+    [Fact]
+    public void MITModels_HaveNoRestrictions()
+    {
+        // Act
+        var models = GeneratorModelRegistry.Default.GetAvailableModels()
+            .Where(m => m.License == LicenseTier.MIT);
 
         // Assert
         models.Should().NotBeEmpty();
         models.Should().AllSatisfy(m =>
         {
-            m.License.Should().Be(LicenseTier.MIT);
             m.HasRestrictions.Should().BeFalse();
         });
     }
 
     [Fact]
-    public void GetModelsByLicense_Conditional_ReturnsRestrictedModels()
+    public void ConditionalModels_HaveRestrictions()
     {
         // Act
-        var models = ModelRegistry.GetModelsByLicense(LicenseTier.Conditional);
+        var models = GeneratorModelRegistry.Default.GetAvailableModels()
+            .Where(m => m.License == LicenseTier.Conditional);
 
         // Assert
         models.Should().NotBeEmpty();
         models.Should().AllSatisfy(m =>
         {
-            m.License.Should().Be(LicenseTier.Conditional);
             m.HasRestrictions.Should().BeTrue();
             m.LicenseRestrictions.Should().NotBeNullOrEmpty();
         });
     }
 
-    [Theory]
-    [InlineData("microsoft/Phi-3.5-mini-instruct-onnx", LicenseTier.MIT)]
-    [InlineData("microsoft/phi-4-onnx", LicenseTier.MIT)]
-    [InlineData("onnx-community/Llama-3.2-1B-Instruct-ONNX", LicenseTier.Conditional)]
-    [InlineData("onnx-community/Llama-3.2-3B-Instruct-ONNX", LicenseTier.Conditional)]
-    public void GetModel_ReturnsCorrectLicense(string modelId, LicenseTier expectedLicense)
-    {
-        // Act
-        var model = ModelRegistry.GetModel(modelId);
-
-        // Assert
-        model.Should().NotBeNull();
-        model!.License.Should().Be(expectedLicense);
-    }
-
     [Fact]
-    public void GetModel_UnknownModel_ReturnsNull()
-    {
-        // Act
-        var model = ModelRegistry.GetModel("unknown/model");
-
-        // Assert
-        model.Should().BeNull();
-    }
-
-    [Fact]
-    public void IsRegistered_KnownModel_ReturnsTrue()
-    {
-        // Act
-        var isRegistered = ModelRegistry.IsRegistered("microsoft/Phi-3.5-mini-instruct-onnx");
-
-        // Assert
-        isRegistered.Should().BeTrue();
-    }
-
-    [Fact]
-    public void IsRegistered_UnknownModel_ReturnsFalse()
-    {
-        // Act
-        var isRegistered = ModelRegistry.IsRegistered("unknown/model");
-
-        // Assert
-        isRegistered.Should().BeFalse();
-    }
-
-    [Fact]
-    public void GetModelsForMemory_8GB_ReturnsSmallModels()
+    public void RegisterAlias_ShouldCreateNewMapping()
     {
         // Arrange
-        var availableMemory = 8L * 1024 * 1024 * 1024; // 8GB
+        var registry = new GeneratorModelRegistry(DefaultGeneratorModels.All);
 
         // Act
-        var models = ModelRegistry.GetModelsForMemory(availableMemory);
+        registry.RegisterAlias("my-gen", "microsoft/Phi-4-mini-instruct-onnx");
+        var result = registry.TryResolve("my-gen", out var model);
 
         // Assert
-        models.Should().NotBeEmpty();
-        // Should include smaller models
-        models.Should().Contain(m => m.ModelId.Contains("Llama-3.2-1B"));
+        result.Should().BeTrue();
+        model!.ModelId.Should().Be("microsoft/Phi-4-mini-instruct-onnx");
     }
 
     [Fact]
-    public void GetDefaultModel_ReturnsValidModel()
+    public void RegisterAlias_WithSystemAliasName_ShouldThrow()
     {
+        // Arrange
+        var registry = new GeneratorModelRegistry(DefaultGeneratorModels.All);
+
         // Act
-        var model = ModelRegistry.GetDefaultModel();
+        var act = () => registry.RegisterAlias("default", "microsoft/phi-4-onnx");
 
         // Assert
-        model.Should().NotBeNull();
-        model.ModelId.Should().NotBeNullOrEmpty();
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void DefaultGeneratorModels_All_ShouldContainAllModels()
+    {
+        // Assert
+        DefaultGeneratorModels.All.Should().HaveCount(6);
+        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Phi4Mini);
+        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Phi35Mini);
+        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Phi4);
+        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Llama321B);
+        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Llama323B);
+        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Gemma22B);
+    }
+
+    [Fact]
+    public void DefaultGeneratorModels_Default_ShouldBePhi4Mini()
+    {
+        // Assert
+        DefaultGeneratorModels.Default.Should().Be(DefaultGeneratorModels.Phi4Mini);
+    }
+
+    [Fact]
+    public void LocalGenerator_Registry_ShouldExposeRegistry()
+    {
+        // Act
+        var registry = LocalGenerator.Registry;
+
+        // Assert
+        registry.Should().NotBeNull();
+        registry.Should().BeOfType<GeneratorModelRegistry>();
     }
 
     [Fact]
     public void ModelInfo_GetMemoryConfig_ReturnsValidConfig()
     {
         // Arrange
-        var model = ModelRegistry.GetModel("microsoft/Phi-3.5-mini-instruct-onnx")!;
+        var model = GeneratorModelRegistry.Default.Resolve("default");
 
         // Act
         var config = model.GetMemoryConfig();
@@ -137,7 +248,7 @@ public class ModelRegistryTests
     public void AllModels_HaveValidChatFormat()
     {
         // Act
-        var models = ModelRegistry.GetAllModels();
+        var models = GeneratorModelRegistry.Default.GetAvailableModels();
 
         // Assert
         models.Should().AllSatisfy(m =>
@@ -147,28 +258,89 @@ public class ModelRegistryTests
         });
     }
 
+    // ===== Legacy ModelRegistry facade tests =====
+
+#pragma warning disable CS0618 // Obsolete
     [Fact]
-    public void Phi35Mini_IsMITLicensed()
+    public void Legacy_GetAllModels_ReturnsAllRegisteredModels()
     {
         // Act
-        var model = ModelRegistry.GetModel("microsoft/Phi-3.5-mini-instruct-onnx");
+        var models = ModelRegistry.GetAllModels();
 
         // Assert
-        model.Should().NotBeNull();
-        model!.License.Should().Be(LicenseTier.MIT);
-        model.LicenseName.Should().Be("MIT");
-        model.HasRestrictions.Should().BeFalse();
+        models.Should().NotBeEmpty();
+        models.Should().HaveCountGreaterThanOrEqualTo(5);
     }
 
     [Fact]
-    public void LlamaModels_HaveMAURestriction()
+    public void Legacy_GetUnrestrictedModels_ReturnsMITLicensedOnly()
     {
         // Act
-        var model = ModelRegistry.GetModel("onnx-community/Llama-3.2-1B-Instruct-ONNX");
+        var models = ModelRegistry.GetUnrestrictedModels();
+
+        // Assert
+        models.Should().NotBeEmpty();
+        models.Should().AllSatisfy(m =>
+        {
+            m.License.Should().Be(LicenseTier.MIT);
+            m.HasRestrictions.Should().BeFalse();
+        });
+    }
+
+    [Theory]
+    [InlineData("microsoft/Phi-3.5-mini-instruct-onnx", LicenseTier.MIT)]
+    [InlineData("microsoft/phi-4-onnx", LicenseTier.MIT)]
+    [InlineData("onnx-community/Llama-3.2-1B-Instruct-ONNX", LicenseTier.Conditional)]
+    [InlineData("onnx-community/Llama-3.2-3B-Instruct-ONNX", LicenseTier.Conditional)]
+    public void Legacy_GetModel_ReturnsCorrectLicense(string modelId, LicenseTier expectedLicense)
+    {
+        // Act
+        var model = ModelRegistry.GetModel(modelId);
 
         // Assert
         model.Should().NotBeNull();
-        model!.License.Should().Be(LicenseTier.Conditional);
-        model.LicenseRestrictions.Should().Contain("MAU");
+        model!.License.Should().Be(expectedLicense);
     }
+
+    [Fact]
+    public void Legacy_GetModel_UnknownModel_ReturnsNull()
+    {
+        // Act
+        var model = ModelRegistry.GetModel("unknown/model");
+
+        // Assert
+        model.Should().BeNull();
+    }
+
+    [Fact]
+    public void Legacy_IsRegistered_KnownModel_ReturnsTrue()
+    {
+        // Act
+        var isRegistered = ModelRegistry.IsRegistered("microsoft/Phi-3.5-mini-instruct-onnx");
+
+        // Assert
+        isRegistered.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Legacy_IsRegistered_UnknownModel_ReturnsFalse()
+    {
+        // Act
+        var isRegistered = ModelRegistry.IsRegistered("unknown/model");
+
+        // Assert
+        isRegistered.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Legacy_GetDefaultModel_ReturnsValidModel()
+    {
+        // Act
+        var model = ModelRegistry.GetDefaultModel();
+
+        // Assert
+        model.Should().NotBeNull();
+        model.ModelId.Should().NotBeNullOrEmpty();
+    }
+#pragma warning restore CS0618
 }

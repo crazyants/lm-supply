@@ -14,6 +14,12 @@ public static class LocalGenerator
     public const string DefaultModel = "microsoft/Phi-4-mini-instruct-onnx";
 
     /// <summary>
+    /// Gets the model registry for the Generator domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<ModelInfo> Registry => GeneratorModelRegistry.Default;
+
+    /// <summary>
     /// Loads a text generator from a HuggingFace model repository.
     /// Supports "auto" alias which selects optimal model based on hardware.
     /// </summary>
@@ -38,11 +44,10 @@ public static class LocalGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         options ??= new GeneratorOptions();
 
-        // Handle "auto" alias - select optimal model based on hardware
-        if (modelId.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        // Handle "auto" and standard aliases via the registry
+        if (GeneratorModelRegistry.Default.TryResolve(modelId, out var resolvedModel))
         {
-            var autoModel = ModelRegistry.GetDefaultModel();
-            modelId = autoModel.ModelId;
+            modelId = resolvedModel!.ModelId;
         }
 
         // Check if it's a local file path (e.g., C:\models\model.gguf or /path/to/model.gguf)

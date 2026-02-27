@@ -458,7 +458,7 @@ public class ImageGeneratorFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_WellKnownImageModels_HasExpectedAliases()
     {
-        var aliases = WellKnownImageModels.GetAliases();
+        var aliases = ImageGeneratorModelRegistry.Default.GetAliases().Select(a => a.Name).ToList();
 
         aliases.Should().Contain("default");
         aliases.Should().Contain("fast");
@@ -470,30 +470,31 @@ public class ImageGeneratorFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_WellKnownImageModels_IsAlias_WorksCorrectly()
     {
-        WellKnownImageModels.IsAlias("default").Should().BeTrue();
-        WellKnownImageModels.IsAlias("fast").Should().BeTrue();
-        WellKnownImageModels.IsAlias("quality").Should().BeTrue();
-        WellKnownImageModels.IsAlias("nonexistent").Should().BeFalse();
+        var aliasNames = ImageGeneratorModelRegistry.Default.GetAliases().Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("fast");
+        aliasNames.Should().Contain("quality");
+        aliasNames.Should().NotContain("nonexistent");
     }
 
     [Fact]
     [Trait("Axis", "Loading")]
     public void L_WellKnownImageModels_Resolve_ReturnsValidDefinition()
     {
-        var def = WellKnownImageModels.Resolve("default");
+        var info = ImageGeneratorModelRegistry.Default.Resolve("default");
 
-        def.RepoId.Should().NotBeNullOrEmpty();
-        def.FriendlyName.Should().NotBeNullOrEmpty();
-        def.RecommendedSteps.Should().BeGreaterThan(0);
-        def.RecommendedGuidanceScale.Should().BeGreaterThan(0);
+        info.ModelId.Should().NotBeNullOrEmpty();
+        info.ModelName.Should().NotBeNullOrEmpty();
+        info.RecommendedSteps.Should().BeGreaterThan(0);
+        info.RecommendedGuidanceScale.Should().BeGreaterThan(0);
     }
 
     [Fact]
     [Trait("Axis", "Loading")]
     public void L_WellKnownImageModels_FastHasFewerSteps()
     {
-        var fast = WellKnownImageModels.Resolve("fast");
-        var quality = WellKnownImageModels.Resolve("quality");
+        var fast = ImageGeneratorModelRegistry.Default.Resolve("fast");
+        var quality = ImageGeneratorModelRegistry.Default.Resolve("quality");
 
         fast.RecommendedSteps.Should().BeLessThan(quality.RecommendedSteps,
             "fast should use fewer steps than quality");

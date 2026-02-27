@@ -9,6 +9,12 @@ namespace LMSupply.Synthesizer;
 public static class LocalSynthesizer
 {
     /// <summary>
+    /// Gets the model registry for the Synthesizer domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<SynthesizerModelInfo> Registry => SynthesizerModelRegistry.Default;
+
+    /// <summary>
     /// Loads a TTS model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -57,7 +63,7 @@ public static class LocalSynthesizer
     /// <returns>Available model aliases.</returns>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return SynthesizerModelRegistry.Default.GetAliases();
+        return SynthesizerModelRegistry.Default.GetAliases().Select(a => a.Name);
     }
 
     /// <summary>
@@ -66,6 +72,6 @@ public static class LocalSynthesizer
     /// <returns>Collection of model information.</returns>
     public static IEnumerable<SynthesizerModelInfo> GetAllModels()
     {
-        return SynthesizerModelRegistry.Default.GetAll();
+        return SynthesizerModelRegistry.Default.GetAvailableModels();
     }
 }

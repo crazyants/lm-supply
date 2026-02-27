@@ -137,8 +137,8 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
     /// </summary>
     private string? GetVariantSubfolder(string modelId)
     {
-        // First, check ModelRegistry for explicit subfolder configuration
-        var modelInfo = ModelRegistry.GetModel(modelId);
+        // First, check registry for explicit subfolder configuration
+        GeneratorModelRegistry.Default.TryResolve(modelId, out var modelInfo);
         if (modelInfo?.Subfolder != null)
         {
             // Registry may have provider-neutral subfolder (e.g., "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4")
@@ -288,9 +288,9 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
             return ChatFormatterFactory.Create(explicitFormat);
 
         // Try to get from registry
-        var modelInfo = ModelRegistry.GetModel(modelId);
-        if (modelInfo != null)
-            return ChatFormatterFactory.Create(modelInfo.ChatFormat);
+        if (GeneratorModelRegistry.Default.TryResolve(modelId, out var chatModelInfo) &&
+            chatModelInfo?.ChatFormat != null)
+            return ChatFormatterFactory.Create(chatModelInfo.ChatFormat);
 
         // Fall back to auto-detection from model name
         return ChatFormatterFactory.Create(modelId);

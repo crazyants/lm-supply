@@ -9,6 +9,12 @@ namespace LMSupply.Segmenter;
 public static class LocalSegmenter
 {
     /// <summary>
+    /// Gets the model registry for the Segmenter domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<SegmenterModelInfo> Registry => SegmenterModelRegistry.Default;
+
+    /// <summary>
     /// Loads an image segmentation model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -58,7 +64,7 @@ public static class LocalSegmenter
     /// <returns>Available model aliases.</returns>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return SegmenterModelRegistry.Default.GetAliases();
+        return SegmenterModelRegistry.Default.GetAliases().Select(a => a.Name);
     }
 
     /// <summary>
@@ -67,7 +73,7 @@ public static class LocalSegmenter
     /// <returns>Collection of model information.</returns>
     public static IEnumerable<SegmenterModelInfo> GetAllModels()
     {
-        return SegmenterModelRegistry.Default.GetAll();
+        return SegmenterModelRegistry.Default.GetAvailableModels();
     }
 
     /// <summary>

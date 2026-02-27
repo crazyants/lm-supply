@@ -1,177 +1,17 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace LMSupply.Ocr.Models;
 
 /// <summary>
-/// Registry of known OCR detection and recognition models.
+/// Legacy static facade for backward compatibility.
+/// Delegates to <see cref="OcrDetectionModelRegistry.Default"/> and
+/// <see cref="OcrRecognitionModelRegistry.Default"/>.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+[Obsolete("Use OcrDetectionModelRegistry.Default and OcrRecognitionModelRegistry.Default instead.")]
 public static class ModelRegistry
 {
-    private static readonly Dictionary<string, DetectionModelInfo> DetectionModels = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, RecognitionModelInfo> RecognitionModels = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, string> LanguageToRecognitionModel = new(StringComparer.OrdinalIgnoreCase);
-
-    private const string DefaultRepoId = "monkt/paddleocr-onnx";
-
-    static ModelRegistry()
-    {
-        // Register default PaddleOCR v3 detection model
-        // Repository structure: detection/v3/det.onnx
-        RegisterDetectionModel(new DetectionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "dbnet-v3",
-            DisplayName: "PaddleOCR v3 Detection (DBNet)",
-            ModelFile: "det.onnx",
-            InputWidth: 960,
-            InputHeight: 960)
-        {
-            Subfolder = "detection/v3"
-        });
-
-        // Register default detection alias
-        RegisterDetectionAlias("default", "dbnet-v3");
-
-        // Register PaddleOCR recognition models by language
-        // Repository structure: languages/{lang}/rec.onnx, dict.txt
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-en-v3",
-            DisplayName: "PaddleOCR English Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["en"])
-        {
-            Subfolder = "languages/english"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-korean-v3",
-            DisplayName: "PaddleOCR Korean Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["ko"])
-        {
-            Subfolder = "languages/korean"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-chinese-v3",
-            DisplayName: "PaddleOCR Chinese Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["zh", "zh-cn", "zh-tw"])
-        {
-            Subfolder = "languages/chinese"
-        });
-
-        // Note: Japanese is not available in monkt/paddleocr-onnx repository
-        // Japanese language code will fall back to English recognition
-        // TODO: Find alternative Japanese OCR model or add to repository
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-latin-v3",
-            DisplayName: "PaddleOCR Latin Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["la", "es", "fr", "de", "it", "pt", "nl", "pl", "ro", "cs", "sv", "da", "no", "fi"])
-        {
-            Subfolder = "languages/latin"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-arabic-v3",
-            DisplayName: "PaddleOCR Arabic Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["ar", "ur", "fa"])
-        {
-            Subfolder = "languages/arabic"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-cyrillic-v3",
-            DisplayName: "PaddleOCR Cyrillic/Slavic Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["ru", "uk", "bg", "be", "sr", "mk"])
-        {
-            Subfolder = "languages/eslav"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-devanagari-v3",
-            DisplayName: "PaddleOCR Devanagari Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["hi", "mr", "ne", "sa"])
-        {
-            Subfolder = "languages/hindi"
-        });
-
-        // Additional language models available in monkt/paddleocr-onnx
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-greek-v3",
-            DisplayName: "PaddleOCR Greek Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["el"])
-        {
-            Subfolder = "languages/greek"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-thai-v3",
-            DisplayName: "PaddleOCR Thai Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["th"])
-        {
-            Subfolder = "languages/thai"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-tamil-v3",
-            DisplayName: "PaddleOCR Tamil Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["ta"])
-        {
-            Subfolder = "languages/tamil"
-        });
-
-        RegisterRecognitionModel(new RecognitionModelInfo(
-            RepoId: DefaultRepoId,
-            AliasName: "crnn-telugu-v3",
-            DisplayName: "PaddleOCR Telugu Recognition",
-            ModelFile: "rec.onnx",
-            DictFile: "dict.txt",
-            LanguageCodes: ["te"])
-        {
-            Subfolder = "languages/telugu"
-        });
-
-        // Register language to recognition model mappings
-        foreach (var model in RecognitionModels.Values.DistinctBy(m => m.AliasName))
-        {
-            foreach (var lang in model.LanguageCodes)
-            {
-                LanguageToRecognitionModel[lang] = model.AliasName;
-            }
-        }
-
-        // Set default recognition alias to English
-        RegisterRecognitionAlias("default", "crnn-en-v3");
-    }
-
     #region Detection Models
 
     /// <summary>
@@ -180,8 +20,8 @@ public static class ModelRegistry
     public static void RegisterDetectionModel(DetectionModelInfo model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        DetectionModels[model.AliasName] = model;
-        DetectionModels[model.RepoId + "/" + model.ModelFile] = model;
+        // User-level registration: register as an alias pointing to model ID
+        OcrDetectionModelRegistry.Default.RegisterAlias(model.AliasName, model.RepoId);
     }
 
     /// <summary>
@@ -189,11 +29,7 @@ public static class ModelRegistry
     /// </summary>
     public static void RegisterDetectionAlias(string alias, string existingAlias)
     {
-        if (!DetectionModels.TryGetValue(existingAlias, out var model))
-        {
-            throw new ArgumentException($"Detection model '{existingAlias}' not found in registry", nameof(existingAlias));
-        }
-        DetectionModels[alias] = model;
+        OcrDetectionModelRegistry.Default.RegisterAlias(alias, existingAlias);
     }
 
     /// <summary>
@@ -201,7 +37,7 @@ public static class ModelRegistry
     /// </summary>
     public static bool TryGetDetectionModel(string aliasOrId, [NotNullWhen(true)] out DetectionModelInfo? modelInfo)
     {
-        return DetectionModels.TryGetValue(aliasOrId, out modelInfo);
+        return OcrDetectionModelRegistry.Default.TryResolve(aliasOrId, out modelInfo);
     }
 
     /// <summary>
@@ -209,11 +45,7 @@ public static class ModelRegistry
     /// </summary>
     public static DetectionModelInfo GetDetectionModel(string aliasOrId)
     {
-        if (!TryGetDetectionModel(aliasOrId, out var model))
-        {
-            throw new KeyNotFoundException($"Detection model '{aliasOrId}' not found. Use GetAvailableDetectionModels() to list available models.");
-        }
-        return model;
+        return OcrDetectionModelRegistry.Default.Resolve(aliasOrId);
     }
 
     /// <summary>
@@ -221,10 +53,18 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<string> GetAvailableDetectionModels()
     {
-        return DetectionModels.Values
+        return OcrDetectionModelRegistry.Default.GetAvailableModels()
             .Select(m => m.AliasName)
             .Distinct()
             .Order();
+    }
+
+    /// <summary>
+    /// Gets all registered detection models.
+    /// </summary>
+    public static IEnumerable<DetectionModelInfo> GetAllDetectionModels()
+    {
+        return OcrDetectionModelRegistry.Default.GetAvailableModels();
     }
 
     #endregion
@@ -237,14 +77,8 @@ public static class ModelRegistry
     public static void RegisterRecognitionModel(RecognitionModelInfo model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        RecognitionModels[model.AliasName] = model;
-        RecognitionModels[model.RepoId + "/" + model.ModelFile] = model;
-
-        // Update language mappings
-        foreach (var lang in model.LanguageCodes)
-        {
-            LanguageToRecognitionModel[lang] = model.AliasName;
-        }
+        // User-level registration: register as an alias pointing to model ID
+        OcrRecognitionModelRegistry.Default.RegisterAlias(model.AliasName, model.RepoId);
     }
 
     /// <summary>
@@ -252,11 +86,7 @@ public static class ModelRegistry
     /// </summary>
     public static void RegisterRecognitionAlias(string alias, string existingAlias)
     {
-        if (!RecognitionModels.TryGetValue(existingAlias, out var model))
-        {
-            throw new ArgumentException($"Recognition model '{existingAlias}' not found in registry", nameof(existingAlias));
-        }
-        RecognitionModels[alias] = model;
+        OcrRecognitionModelRegistry.Default.RegisterAlias(alias, existingAlias);
     }
 
     /// <summary>
@@ -264,7 +94,7 @@ public static class ModelRegistry
     /// </summary>
     public static bool TryGetRecognitionModel(string aliasOrId, [NotNullWhen(true)] out RecognitionModelInfo? modelInfo)
     {
-        return RecognitionModels.TryGetValue(aliasOrId, out modelInfo);
+        return OcrRecognitionModelRegistry.Default.TryResolve(aliasOrId, out modelInfo);
     }
 
     /// <summary>
@@ -272,11 +102,7 @@ public static class ModelRegistry
     /// </summary>
     public static RecognitionModelInfo GetRecognitionModel(string aliasOrId)
     {
-        if (!TryGetRecognitionModel(aliasOrId, out var model))
-        {
-            throw new KeyNotFoundException($"Recognition model '{aliasOrId}' not found. Use GetAvailableRecognitionModels() to list available models.");
-        }
-        return model;
+        return OcrRecognitionModelRegistry.Default.Resolve(aliasOrId);
     }
 
     /// <summary>
@@ -285,20 +111,7 @@ public static class ModelRegistry
     /// </summary>
     public static RecognitionModelInfo GetRecognitionModelForLanguage(string languageCode)
     {
-        if (LanguageToRecognitionModel.TryGetValue(languageCode, out var alias))
-        {
-            return GetRecognitionModel(alias);
-        }
-
-        // Try just the language part (e.g., "en" from "en-US")
-        var langPart = languageCode.Split('-')[0];
-        if (LanguageToRecognitionModel.TryGetValue(langPart, out alias))
-        {
-            return GetRecognitionModel(alias);
-        }
-
-        // Fall back to English
-        return GetRecognitionModel("crnn-en-v3");
+        return OcrRecognitionModelRegistry.Default.ResolveForLanguage(languageCode);
     }
 
     /// <summary>
@@ -306,7 +119,7 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<string> GetAvailableRecognitionModels()
     {
-        return RecognitionModels.Values
+        return OcrRecognitionModelRegistry.Default.GetAvailableModels()
             .Select(m => m.AliasName)
             .Distinct()
             .Order();
@@ -317,17 +130,7 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<string> GetSupportedLanguages()
     {
-        return LanguageToRecognitionModel.Keys.Order();
-    }
-
-    #endregion
-
-    /// <summary>
-    /// Gets all registered detection models.
-    /// </summary>
-    public static IEnumerable<DetectionModelInfo> GetAllDetectionModels()
-    {
-        return DetectionModels.Values.DistinctBy(m => m.AliasName);
+        return OcrRecognitionModelRegistry.Default.GetSupportedLanguages();
     }
 
     /// <summary>
@@ -335,6 +138,8 @@ public static class ModelRegistry
     /// </summary>
     public static IEnumerable<RecognitionModelInfo> GetAllRecognitionModels()
     {
-        return RecognitionModels.Values.DistinctBy(m => m.AliasName);
+        return OcrRecognitionModelRegistry.Default.GetAvailableModels();
     }
+
+    #endregion
 }

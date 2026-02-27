@@ -32,9 +32,10 @@ public record ModelInfo(
     int PadTokenId) : IModelInfoBase
 {
     /// <summary>
-    /// Gets the model description (derived from DisplayName).
+    /// Gets the model description.
+    /// Defaults to DisplayName if not explicitly set.
     /// </summary>
-    public string? Description => DisplayName;
+    public string? Description { get; init; }
 
     // IModelInfoBase explicit implementation
     string IModelInfoBase.Id => RepoId;

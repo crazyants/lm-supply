@@ -25,7 +25,7 @@ namespace LMSupply.Reranker;
 public sealed class Reranker : IRerankerModel
 {
     private readonly RerankerOptions _options;
-    private readonly ModelRegistry _registry;
+    private readonly RerankerModelRegistry _registry;
     private readonly Lazy<Task<RerankerState>> _stateLazy;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private bool _disposed;
@@ -65,7 +65,7 @@ public sealed class Reranker : IRerankerModel
     public Reranker(RerankerOptions options)
     {
         _options = options?.Clone() ?? throw new ArgumentNullException(nameof(options));
-        _registry = ModelRegistry.Default;
+        _registry = RerankerModelRegistry.Default;
         _stateLazy = new Lazy<Task<RerankerState>>(InitializeAsync);
     }
 

@@ -9,6 +9,12 @@ namespace LMSupply.Detector;
 public static class LocalDetector
 {
     /// <summary>
+    /// Gets the model registry for the Detector domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<DetectorModelInfo> Registry => DetectorModelRegistry.Default;
+
+    /// <summary>
     /// Loads an object detection model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -58,7 +64,7 @@ public static class LocalDetector
     /// <returns>Available model aliases.</returns>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return DetectorModelRegistry.Default.GetAliases();
+        return DetectorModelRegistry.Default.GetAliases().Select(a => a.Name);
     }
 
     /// <summary>
@@ -67,7 +73,7 @@ public static class LocalDetector
     /// <returns>Collection of model information.</returns>
     public static IEnumerable<DetectorModelInfo> GetAllModels()
     {
-        return DetectorModelRegistry.Default.GetAll();
+        return DetectorModelRegistry.Default.GetAvailableModels();
     }
 
     /// <summary>

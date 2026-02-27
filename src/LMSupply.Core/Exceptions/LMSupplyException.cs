@@ -175,3 +175,33 @@ public class TokenizationException : LMSupplyException
     {
     }
 }
+
+/// <summary>
+/// Exception thrown when a user alias conflicts with a system alias name.
+/// </summary>
+public class AliasConflictException : LMSupplyException
+{
+    public string AliasName { get; }
+
+    public AliasConflictException(string aliasName)
+        : base($"Cannot register alias '{aliasName}': conflicts with a system alias.")
+    {
+        AliasName = aliasName;
+    }
+}
+
+/// <summary>
+/// Exception thrown when a user alias targets another user alias (chaining not allowed).
+/// </summary>
+public class AliasChainException : LMSupplyException
+{
+    public string AliasName { get; }
+    public string TargetAlias { get; }
+
+    public AliasChainException(string aliasName, string targetAlias)
+        : base($"Cannot register alias '{aliasName}' targeting '{targetAlias}': user alias chaining is not allowed.")
+    {
+        AliasName = aliasName;
+        TargetAlias = targetAlias;
+    }
+}

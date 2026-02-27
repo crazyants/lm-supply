@@ -10,6 +10,12 @@ namespace LMSupply.ImageGenerator;
 public static class LocalImageGenerator
 {
     /// <summary>
+    /// Gets the model registry for the ImageGenerator domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<ImageGeneratorModelInfo> Registry => ImageGeneratorModelRegistry.Default;
+
+    /// <summary>
     /// Loads an image generator model.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -42,8 +48,9 @@ public static class LocalImageGenerator
 
         options ??= new ImageGeneratorOptions();
 
-        // Resolve model alias to actual repo ID
-        var modelDefinition = WellKnownImageModels.Resolve(modelIdOrPath);
+        // Resolve model to ImageGeneratorModelInfo via registry
+        var modelInfo = ImageGeneratorModelRegistry.Default.Resolve(modelIdOrPath);
+        var modelDefinition = ImageGeneratorModelRegistry.ToModelDefinition(modelInfo);
 
         // Determine if this is a local path or needs download
         string modelPath;
@@ -61,7 +68,7 @@ public static class LocalImageGenerator
         {
             // Download from HuggingFace
             modelPath = await DownloadModelAsync(
-                modelDefinition.RepoId,
+                modelInfo.ModelId,
                 options,
                 progress,
                 cancellationToken);
@@ -80,7 +87,10 @@ public static class LocalImageGenerator
     /// </summary>
     /// <returns>Collection of valid model aliases.</returns>
     public static IReadOnlyCollection<string> GetAvailableAliases() =>
-        WellKnownImageModels.GetAliases();
+        ImageGeneratorModelRegistry.Default.GetAliases()
+            .Select(a => a.Name)
+            .ToList()
+            .AsReadOnly();
 
     /// <summary>
     /// Checks if the given identifier is a local file path.

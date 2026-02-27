@@ -19,6 +19,12 @@ public static class LocalEmbedder
     public const string DefaultModel = "default";
 
     /// <summary>
+    /// Gets the model registry for embedding models.
+    /// Supports system aliases, user aliases, and model resolution.
+    /// </summary>
+    public static IModelRegistry<ModelInfo> Registry => EmbedderModelRegistry.Default;
+
+    /// <summary>
     /// Loads the default embedding model.
     /// </summary>
     /// <param name="options">Optional configuration options.</param>
@@ -82,7 +88,7 @@ public static class LocalEmbedder
             }
         }
         // Check if it's a known model ID
-        else if (ModelRegistry.TryGetModel(modelIdOrPath, out var modelInfo))
+        else if (EmbedderModelRegistry.Default.TryResolve(modelIdOrPath, out var modelInfo))
         {
             loadedModelInfo = modelInfo;
 
@@ -179,12 +185,14 @@ public static class LocalEmbedder
     /// <summary>
     /// Gets a list of pre-configured model IDs available for download.
     /// </summary>
-    public static IEnumerable<string> GetAvailableModels() => ModelRegistry.GetAvailableModels();
+    public static IEnumerable<string> GetAvailableModels()
+        => EmbedderModelRegistry.Default.GetAliases().Select(a => a.Name);
 
     /// <summary>
     /// Gets all registered model information (deduplicated by RepoId).
     /// </summary>
-    public static IEnumerable<ModelInfo> GetAllModels() => ModelRegistry.GetAllModels();
+    public static IEnumerable<ModelInfo> GetAllModels()
+        => EmbedderModelRegistry.Default.GetAvailableModels();
 
     /// <summary>
     /// Computes cosine similarity between two embedding vectors.

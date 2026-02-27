@@ -9,6 +9,12 @@ namespace LMSupply.Transcriber;
 public static class LocalTranscriber
 {
     /// <summary>
+    /// Gets the model registry for the Transcriber domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<TranscriberModelInfo> Registry => TranscriberModelRegistry.Default;
+
+    /// <summary>
     /// Loads a transcription model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -58,7 +64,7 @@ public static class LocalTranscriber
     /// <returns>Available model aliases.</returns>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return TranscriberModelRegistry.Default.GetAliases();
+        return TranscriberModelRegistry.Default.GetAliases().Select(a => a.Name);
     }
 
     /// <summary>
@@ -67,6 +73,6 @@ public static class LocalTranscriber
     /// <returns>Collection of model information.</returns>
     public static IEnumerable<TranscriberModelInfo> GetAllModels()
     {
-        return TranscriberModelRegistry.Default.GetAll();
+        return TranscriberModelRegistry.Default.GetAvailableModels();
     }
 }

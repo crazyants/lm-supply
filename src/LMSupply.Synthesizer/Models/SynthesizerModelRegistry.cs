@@ -1,67 +1,24 @@
+using System.Diagnostics;
 using LMSupply.Hardware;
 
 namespace LMSupply.Synthesizer.Models;
 
 /// <summary>
-/// Registry for managing synthesizer model configurations.
+/// Model registry for the Synthesizer domain.
 /// </summary>
-public sealed class SynthesizerModelRegistry
+public sealed class SynthesizerModelRegistry : ModelRegistryBase<SynthesizerModelInfo>
 {
-    private readonly Dictionary<string, SynthesizerModelInfo> _models = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, SynthesizerModelInfo> _byId = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Gets the default registry instance with built-in models.
+    /// </summary>
+    public static SynthesizerModelRegistry Default { get; } = new(DefaultModels.All);
 
     /// <summary>
-    /// Gets the default registry instance with pre-configured models.
+    /// Initializes a new registry with the specified system models.
     /// </summary>
-    public static SynthesizerModelRegistry Default { get; } = CreateDefault();
-
-    private SynthesizerModelRegistry() { }
-
-    private static SynthesizerModelRegistry CreateDefault()
-    {
-        var registry = new SynthesizerModelRegistry();
-        foreach (var model in DefaultModels.All)
-        {
-            registry.Register(model);
-        }
-        return registry;
-    }
-
-    /// <summary>
-    /// Registers a model configuration.
-    /// </summary>
-    /// <param name="info">The model information to register.</param>
-    public void Register(SynthesizerModelInfo info)
-    {
-        _models[info.AliasName] = info;
-        _byId[info.Id] = info;
-    }
-
-    /// <summary>
-    /// Tries to get model info by alias or ID.
-    /// Supports "auto" alias which selects the default high-quality model.
-    /// </summary>
-    /// <param name="aliasOrId">The alias, HuggingFace model ID, or "auto".</param>
-    /// <param name="info">The model information if found.</param>
-    /// <returns>True if found, false otherwise.</returns>
-    public bool TryGet(string aliasOrId, out SynthesizerModelInfo? info)
-    {
-        // Handle "auto" alias - select optimal model based on hardware
-        if (aliasOrId.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            info = GetAutoModel();
-            return true;
-        }
-
-        if (_models.TryGetValue(aliasOrId, out info))
-            return true;
-
-        if (_byId.TryGetValue(aliasOrId, out info))
-            return true;
-
-        info = null;
-        return false;
-    }
+    /// <param name="systemModels">Models to register as system defaults.</param>
+    public SynthesizerModelRegistry(IEnumerable<SynthesizerModelInfo> systemModels)
+        : base(systemModels) { }
 
     /// <summary>
     /// Gets the optimal model based on current hardware profile.
@@ -74,34 +31,37 @@ public sealed class SynthesizerModelRegistry
     /// - High:   Amy (quality, high quality) - 64MB
     /// - Ultra:  Amy (quality, high quality) - 64MB
     /// </remarks>
-    public static SynthesizerModelInfo GetAutoModel()
+    protected override SynthesizerModelInfo GetAutoModel()
     {
         var tier = HardwareProfile.Current.Tier;
+        Trace.TraceInformation($"[SynthesizerModelRegistry] Auto-selecting model for tier: {tier}");
 
-        return tier switch
+        var model = tier switch
         {
             PerformanceTier.Ultra or PerformanceTier.High => DefaultModels.EnUsAmy,
             PerformanceTier.Medium => DefaultModels.EnUsLessac,
             _ => DefaultModels.EnUsRyan
         };
+
+        return model with { AliasName = "auto" };
     }
 
     /// <summary>
-    /// Gets all registered aliases including "auto".
+    /// Creates a fallback model info for unknown model IDs (HuggingFace repos or local paths).
     /// </summary>
-    /// <returns>Collection of model aliases.</returns>
-    public IEnumerable<string> GetAliases()
+    protected override SynthesizerModelInfo CreateFallbackModelInfo(string modelId)
     {
-        yield return "auto";
-        foreach (var alias in _models.Keys)
-        {
-            yield return alias;
-        }
-    }
+        Trace.TraceInformation($"[SynthesizerModelRegistry] Creating fallback model info for: {modelId}");
 
-    /// <summary>
-    /// Gets all registered model information.
-    /// </summary>
-    /// <returns>Collection of model information.</returns>
-    public IEnumerable<SynthesizerModelInfo> GetAll() => _models.Values;
+        var parts = modelId.Split('/');
+        var name = parts.Length > 1 ? parts[1] : modelId;
+
+        return new SynthesizerModelInfo
+        {
+            Id = modelId,
+            AliasName = modelId,
+            DisplayName = name,
+            Architecture = "VITS"
+        };
+    }
 }

@@ -87,7 +87,9 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
         return new ImageGeneratorModelInfo
         {
             ModelId = _modelDefinition.RepoId,
+            AliasName = _modelDefinition.FriendlyName ?? _modelDefinition.RepoId,
             ModelName = _modelDefinition.FriendlyName,
+            Description = $"LCM image generator ({_modelDefinition.RecommendedSteps} steps)",
             Architecture = "LCM",
             Provider = _options.Provider,
             IsFp16 = _options.UseFp16,

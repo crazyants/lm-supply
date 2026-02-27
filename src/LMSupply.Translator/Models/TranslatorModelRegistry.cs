@@ -3,118 +3,75 @@ using System.Diagnostics;
 namespace LMSupply.Translator.Models;
 
 /// <summary>
-/// Registry for looking up translator model information by ID or alias.
+/// Model registry for the Translator domain.
 /// </summary>
-public sealed class TranslatorModelRegistry
+public sealed class TranslatorModelRegistry : ModelRegistryBase<TranslatorModelInfo>
 {
-    private readonly Dictionary<string, TranslatorModelInfo> _modelsByAlias;
-    private readonly Dictionary<string, TranslatorModelInfo> _modelsById;
-
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static TranslatorModelRegistry Default { get; } = new(DefaultModels.All);
 
     /// <summary>
-    /// Initializes a new registry with the specified models.
+    /// Initializes a new registry with the specified system models.
     /// </summary>
-    /// <param name="models">Models to register.</param>
-    public TranslatorModelRegistry(IEnumerable<TranslatorModelInfo> models)
+    /// <param name="systemModels">Models to register as system defaults.</param>
+    public TranslatorModelRegistry(IEnumerable<TranslatorModelInfo> systemModels)
+        : base(systemModels) { }
+
+    /// <summary>
+    /// Gets the auto-selected model.
+    /// Translation models are language-pair specific so auto returns the default (ko-en).
+    /// </summary>
+    protected override TranslatorModelInfo GetAutoModel()
     {
-        ArgumentNullException.ThrowIfNull(models);
+        Trace.TraceInformation("[TranslatorModelRegistry] Auto-selecting default translation model");
 
-        var modelList = models.ToList();
-        _modelsByAlias = new Dictionary<string, TranslatorModelInfo>(StringComparer.OrdinalIgnoreCase);
-        _modelsById = new Dictionary<string, TranslatorModelInfo>(StringComparer.OrdinalIgnoreCase);
+        var model = DefaultModels.OpusMtKoEn;
 
-        foreach (var model in modelList)
+        return new TranslatorModelInfo
         {
-            _modelsByAlias[model.AliasName] = model;
-            if (!_modelsById.ContainsKey(model.Id))
-            {
-                _modelsById[model.Id] = model;
-            }
-        }
+            Id = model.Id,
+            AliasName = "auto",
+            DisplayName = model.DisplayName,
+            Architecture = model.Architecture,
+            SourceLanguage = model.SourceLanguage,
+            TargetLanguage = model.TargetLanguage,
+            ParametersM = model.ParametersM,
+            SizeBytes = model.SizeBytes,
+            BleuScore = model.BleuScore,
+            MaxLength = model.MaxLength,
+            VocabSize = model.VocabSize,
+            Subfolder = model.Subfolder,
+            UseAutoDiscovery = model.UseAutoDiscovery,
+            PreferredDecoderVariant = model.PreferredDecoderVariant,
+            EncoderFile = model.EncoderFile,
+            DecoderFile = model.DecoderFile,
+            TokenizerFile = model.TokenizerFile,
+            Description = model.Description,
+            License = model.License
+        };
     }
 
     /// <summary>
-    /// Resolves a model identifier to its full information.
+    /// Creates a fallback model info for unknown model IDs (HuggingFace repos or local paths).
     /// </summary>
-    /// <param name="modelIdOrAlias">Model ID, alias, or local path.</param>
-    /// <returns>The model information.</returns>
-    public TranslatorModelInfo Resolve(string modelIdOrAlias)
+    protected override TranslatorModelInfo CreateFallbackModelInfo(string modelId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelIdOrAlias);
+        Trace.TraceInformation($"[TranslatorModelRegistry] Creating fallback model info for: {modelId}");
 
-        // Check if it's a local path
-        if (IsLocalPath(modelIdOrAlias))
+        // Check if it's a local path with an ONNX file
+        if (modelId.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
+            Path.IsPathRooted(modelId) ||
+            modelId.StartsWith("./", StringComparison.Ordinal) ||
+            modelId.StartsWith("../", StringComparison.Ordinal) ||
+            modelId.StartsWith(".\\", StringComparison.Ordinal) ||
+            modelId.StartsWith("..\\", StringComparison.Ordinal))
         {
-            return CreateLocalModelInfo(modelIdOrAlias);
+            return CreateLocalModelInfo(modelId);
         }
 
-        // Try alias first
-        if (_modelsByAlias.TryGetValue(modelIdOrAlias, out var modelByAlias))
-        {
-            return modelByAlias;
-        }
-
-        // Try full ID
-        if (_modelsById.TryGetValue(modelIdOrAlias, out var modelById))
-        {
-            return modelById;
-        }
-
-        // Assume it's a HuggingFace ID not in our registry
-        if (modelIdOrAlias.Contains('/'))
-        {
-            return CreateHuggingFaceModelInfo(modelIdOrAlias);
-        }
-
-        throw new ModelNotFoundException(
-            $"Model '{modelIdOrAlias}' not found. Use a built-in alias (default, ko-en, en-ko), " +
-            "a HuggingFace model ID (org/model), or a local file path.",
-            modelIdOrAlias);
-    }
-
-    /// <summary>
-    /// Tries to resolve a model identifier.
-    /// </summary>
-    /// <param name="modelIdOrAlias">Model ID, alias, or local path.</param>
-    /// <param name="modelInfo">The resolved model information.</param>
-    /// <returns>True if resolved successfully.</returns>
-    public bool TryResolve(string modelIdOrAlias, out TranslatorModelInfo? modelInfo)
-    {
-        try
-        {
-            modelInfo = Resolve(modelIdOrAlias);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[TranslatorModelRegistry] Model resolve failed for '{modelIdOrAlias}': {ex.Message}");
-            modelInfo = null;
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Gets all registered models.
-    /// </summary>
-    public IEnumerable<TranslatorModelInfo> GetAll() => _modelsById.Values;
-
-    /// <summary>
-    /// Gets all available aliases.
-    /// </summary>
-    public IEnumerable<string> GetAliases() => _modelsByAlias.Keys;
-
-    private static bool IsLocalPath(string path)
-    {
-        return path.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
-               Path.IsPathRooted(path) ||
-               path.StartsWith("./", StringComparison.Ordinal) ||
-               path.StartsWith("../", StringComparison.Ordinal) ||
-               path.StartsWith(".\\", StringComparison.Ordinal) ||
-               path.StartsWith("..\\", StringComparison.Ordinal);
+        return CreateHuggingFaceModelInfo(modelId);
     }
 
     private static TranslatorModelInfo CreateLocalModelInfo(string path)
@@ -196,24 +153,5 @@ public sealed class TranslatorModelRegistry
         }
 
         return ("auto", "auto");
-    }
-}
-
-/// <summary>
-/// Exception thrown when a model cannot be found.
-/// </summary>
-public class ModelNotFoundException : Exception
-{
-    /// <summary>
-    /// The model identifier that was not found.
-    /// </summary>
-    public string ModelId { get; }
-
-    /// <summary>
-    /// Initializes a new instance.
-    /// </summary>
-    public ModelNotFoundException(string message, string modelId) : base(message)
-    {
-        ModelId = modelId;
     }
 }

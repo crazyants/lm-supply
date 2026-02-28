@@ -19,7 +19,7 @@
     <PackageVersion Include="NAudio" Version="2.2.1" />
 
     <!-- ONNX Runtime GenAI for LLM Inference -->
-    <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI" Version="0.12.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI" Version="0.12.1" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="0.11.3" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.DirectML" Version="0.11.3" />
 
@@ -31,7 +31,7 @@
     <PackageVersion Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.23.2" />
 
     <!-- Testing -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.61" />
@@ -42,6 +42,9 @@
 
     <!-- Benchmarking -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+
+    <!-- Build Tooling -->
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.103" />
 
     <!-- Console Host -->
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.4" />

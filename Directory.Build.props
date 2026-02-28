@@ -49,11 +49,15 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <DebugType>embedded</DebugType>
-    <DebugSymbols>true</DebugSymbols>
-    <!-- Symbols are embedded in DLLs, no need for separate snupkg -->
-    <IncludeSymbols>false</IncludeSymbols>
+  <!-- Source Link + Symbol Package -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
 
 </Project>

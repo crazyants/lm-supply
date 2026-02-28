@@ -12,9 +12,14 @@ public sealed class ImageGeneratorModelInfo : IModelInfoBase
     /// </summary>
     public required string ModelId { get; init; }
 
-    // IModelInfoBase explicit implementation
+    // IModelInfoBase implementation
     string IModelInfoBase.Id => ModelId;
-    string IModelInfoBase.AliasName => ModelName ?? ModelId;
+
+    /// <summary>
+    /// Gets the alias name for this model.
+    /// Defaults to ModelName or ModelId if not explicitly set.
+    /// </summary>
+    public string AliasName { get; init; } = null!;
 
     /// <summary>
     /// Friendly name of the model.
@@ -24,7 +29,7 @@ public sealed class ImageGeneratorModelInfo : IModelInfoBase
     /// <summary>
     /// Gets the model description.
     /// </summary>
-    public string? Description => $"{Architecture} image generator";
+    public string? Description { get; init; }
 
     /// <summary>
     /// Model architecture type.

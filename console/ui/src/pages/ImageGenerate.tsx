@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { ImageGenerationExtendedResponse, ImageModelInfo } from '../api/types';
 import { Loader2, Wand2, Download, RefreshCw, Settings2 } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 const SIZE_PRESETS = [
   { label: '256x256', value: '256x256' },
@@ -238,6 +239,12 @@ export function ImageGenerate() {
               </div>
             </div>
           )}
+
+          {/* cURL */}
+          <CurlExample commands={[
+            { label: 'Generate (Extended)', command: `curl -X POST http://localhost:5000/v1/images/generate \\\n  -H "Content-Type: application/json" \\\n  -d '{"prompt":"A sunset over mountains","model":"${modelId}","size":"${size}","steps":${steps},"guidance_scale":${guidanceScale}}'` },
+            { label: 'Generate (OpenAI compat)', command: `curl -X POST http://localhost:5000/v1/images/generations \\\n  -H "Content-Type: application/json" \\\n  -d '{"prompt":"A sunset over mountains","model":"${modelId}","size":"${size}"}'` },
+          ]} />
 
           {/* Generate Button */}
           <button

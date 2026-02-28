@@ -252,17 +252,7 @@ internal sealed class OnnxSynthesizerModel : ISynthesizerModel
             if (_isInitialized) return;
 
             // Resolve model info
-            if (!SynthesizerModelRegistry.Default.TryGet(_options.ModelId, out _modelInfo))
-            {
-                // Treat as HuggingFace model ID
-                _modelInfo = new SynthesizerModelInfo
-                {
-                    Id = _options.ModelId,
-                    AliasName = _options.ModelId,
-                    DisplayName = _options.ModelId,
-                    Architecture = "VITS"
-                };
-            }
+            _modelInfo = SynthesizerModelRegistry.Default.Resolve(_options.ModelId);
 
             // Download model if needed
             var modelPath = await ResolveModelPathAsync(cancellationToken);

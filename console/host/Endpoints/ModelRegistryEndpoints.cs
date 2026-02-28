@@ -222,16 +222,15 @@ public static class ModelRegistryEndpoints
 
     private static ModelTypeInfo CreateImageGeneratorModels(HashSet<string> cachedRepoIds)
     {
-        var aliases = WellKnownImageModels.GetAliases();
-        var models = aliases.Select(alias =>
+        var registry = ImageGeneratorModelRegistry.Default;
+        var models = registry.GetAvailableModels().Select(info =>
         {
-            var def = WellKnownImageModels.Resolve(alias);
             return new ModelAliasInfo
             {
-                AliasName = alias,
-                RepoId = def.RepoId,
-                Description = $"LCM ({def.RecommendedSteps} steps, {def.RecommendedGuidanceScale:F1} guidance)",
-                IsCached = cachedRepoIds.Contains(def.RepoId)
+                AliasName = info.AliasName,
+                RepoId = info.ModelId,
+                Description = $"LCM ({info.RecommendedSteps} steps, {info.RecommendedGuidanceScale:F1} guidance)",
+                IsCached = cachedRepoIds.Contains(info.ModelId)
             };
         }).ToList();
 

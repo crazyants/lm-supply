@@ -32,7 +32,7 @@ public sealed partial class UpdateService
         _logger = logger;
         CurrentVersion = GetCurrentVersion();
         CurrentRid = DetectRid();
-        CleanupOldBackup();
+        CleanupPreviousUpdate();
     }
 
     public async Task<UpdateCheckResult> CheckForUpdateAsync(bool forceCheck = false)
@@ -90,6 +90,7 @@ public sealed partial class UpdateService
     private async Task ExecuteUpdateAsync(ChannelWriter<UpdateProgress> writer, CancellationToken ct)
     {
         var tempDir = (string?)null;
+        var scriptLaunched = false;
 
         try
         {
@@ -146,23 +147,45 @@ public sealed partial class UpdateService
             else
                 await ExtractTarGzAsync(downloadPath, extractDir);
 
-            // 3. Replace
+            // 3. Prepare restart script
+            // 기존 프로세스 종료 후 파일 교체 → 새 프로세스 시작 (포트 충돌/파일 잠금 방지)
             await writer.WriteAsync(new UpdateProgress { Status = "Replacing", Percent = 0 }, ct);
 
             var currentExePath = Environment.ProcessPath
                 ?? throw new InvalidOperationException("Cannot determine current executable path");
             var currentDir = Path.GetDirectoryName(currentExePath)!;
-            var backupPath = currentExePath + ".bak";
+            var currentPid = Environment.ProcessId;
+            var userArgs = string.Join(" ", Environment.GetCommandLineArgs().Skip(1)
+                .Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
 
-            if (File.Exists(backupPath))
-                File.Delete(backupPath);
-
-            // Windows: 실행 중인 exe는 덮어쓸 수 없으므로 이름 변경
             if (OperatingSystem.IsWindows())
-                File.Move(currentExePath, backupPath);
-
-            try
             {
+                var scriptPath = Path.Combine(tempDir, "restart.cmd");
+                var script = string.Join("\r\n",
+                    "@echo off",
+                    // 기존 프로세스 종료 대기
+                    ":wait",
+                    $"tasklist /FI \"PID eq {currentPid}\" /NH 2>NUL | findstr /R \"^[A-Za-z]\" >NUL",
+                    "if not errorlevel 1 (timeout /t 1 /nobreak >NUL & goto wait)",
+                    // 파일 잠금 해제 대기
+                    "timeout /t 1 /nobreak >NUL",
+                    // 새 파일 복사 (프로세스 종료 후이므로 잠금 없음)
+                    $"xcopy \"{extractDir}\\*\" \"{currentDir}\\\" /s /y /q >NUL",
+                    // 새 프로세스 시작
+                    $"start \"\" \"{currentExePath}\" {userArgs}");
+                await File.WriteAllTextAsync(scriptPath, script, ct);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c \"{scriptPath}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+            }
+            else
+            {
+                // Unix: 실행 중인 파일도 덮어쓸 수 있으므로 먼저 복사
                 foreach (var file in Directory.GetFiles(extractDir, "*", SearchOption.AllDirectories))
                 {
                     var relativePath = Path.GetRelativePath(extractDir, file);
@@ -170,40 +193,35 @@ public sealed partial class UpdateService
                     Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
                     File.Copy(file, destPath, overwrite: true);
                 }
-            }
-            catch
-            {
-                // 실패 시 백업 복원
-                if (OperatingSystem.IsWindows() && File.Exists(backupPath))
-                {
-                    if (File.Exists(currentExePath))
-                        File.Delete(currentExePath);
-                    File.Move(backupPath, currentExePath);
-                }
-                throw;
-            }
 
-            // Unix: 실행 권한 설정
-            if (!OperatingSystem.IsWindows())
-            {
                 var newExe = Path.Combine(currentDir, Path.GetFileName(currentExePath));
                 using var chmod = Process.Start("chmod", ["+x", newExe]);
                 chmod?.WaitForExit(5000);
+
+                // 프로세스 종료 대기 후 새 프로세스 시작
+                var scriptPath = Path.Combine(tempDir, "restart.sh");
+                var script = string.Join("\n",
+                    "#!/bin/bash",
+                    $"while kill -0 {currentPid} 2>/dev/null; do sleep 1; done",
+                    $"\"{currentExePath}\" {userArgs} &");
+                await File.WriteAllTextAsync(scriptPath, script, ct);
+
+                using var chmod2 = Process.Start("chmod", ["+x", scriptPath]);
+                chmod2?.WaitForExit(5000);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = scriptPath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
             }
+
+            scriptLaunched = true;
 
             // 4. Restart
             await writer.WriteAsync(new UpdateProgress { Status = "Restarting", Percent = 100 }, ct);
-
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = currentExePath,
-                UseShellExecute = false,
-                WorkingDirectory = currentDir
-            };
-            foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
-                startInfo.ArgumentList.Add(arg);
-
-            Process.Start(startInfo);
 
             // 응답 전송 후 종료 스케줄
             _ = Task.Run(async () =>
@@ -221,7 +239,8 @@ public sealed partial class UpdateService
         {
             writer.Complete();
 
-            if (tempDir is not null)
+            // 스크립트가 실행된 경우 temp 디렉토리를 유지 (다음 시작 시 정리)
+            if (tempDir is not null && !scriptLaunched)
             {
                 try { Directory.Delete(tempDir, true); }
                 catch (Exception ex)
@@ -275,19 +294,28 @@ public sealed partial class UpdateService
         await TarFile.ExtractToDirectoryAsync(gz, extractDir, overwriteFiles: true);
     }
 
-    private static void CleanupOldBackup()
+    private static void CleanupPreviousUpdate()
     {
         try
         {
             var exePath = Environment.ProcessPath;
             if (exePath is null) return;
+
+            // .bak 파일 정리
             var backupPath = exePath + ".bak";
             if (File.Exists(backupPath))
                 File.Delete(backupPath);
+
+            // 이전 업데이트 temp 디렉토리 정리
+            foreach (var dir in Directory.GetDirectories(Path.GetTempPath(), "lm-supply-update-*"))
+            {
+                try { Directory.Delete(dir, true); }
+                catch { /* 사용 중이면 무시 */ }
+            }
         }
         catch (Exception ex)
         {
-            Trace.TraceInformation($"[UpdateService] cleanup old backup: {ex.Message}");
+            Trace.TraceInformation($"[UpdateService] cleanup previous update: {ex.Message}");
         }
     }
 

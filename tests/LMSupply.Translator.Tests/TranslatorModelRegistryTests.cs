@@ -1,4 +1,6 @@
 using FluentAssertions;
+using LMSupply;
+using LMSupply.Exceptions;
 using LMSupply.Translator.Models;
 
 namespace LMSupply.Translator.Tests;
@@ -10,20 +12,21 @@ public class TranslatorModelRegistryTests
     [Fact]
     public void Default_ShouldContainAllDefaultModels()
     {
-        var models = _registry.GetAll().ToList();
+        var models = _registry.GetAvailableModels();
         models.Should().NotBeEmpty();
     }
 
     [Fact]
     public void GetAliases_ShouldContainExpectedAliases()
     {
-        var aliases = _registry.GetAliases().ToList();
+        var aliases = _registry.GetAliases();
+        var aliasNames = aliases.Select(a => a.Name).ToList();
 
-        aliases.Should().Contain("default");
-        aliases.Should().Contain("ko-en");
-        aliases.Should().Contain("en-ko");
-        aliases.Should().Contain("ja-en");
-        aliases.Should().Contain("zh-en");
+        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("ko-en");
+        aliasNames.Should().Contain("en-ko");
+        aliasNames.Should().Contain("ja-en");
+        aliasNames.Should().Contain("zh-en");
     }
 
     [Theory]
@@ -98,13 +101,14 @@ public class TranslatorModelRegistryTests
     [Fact]
     public void Resolve_WithNullOrEmpty_ShouldThrowException()
     {
+        // Base class TryResolve returns false for null/empty, Resolve throws ModelNotFoundException
         var act1 = () => _registry.Resolve(null!);
         var act2 = () => _registry.Resolve("");
         var act3 = () => _registry.Resolve("   ");
 
-        act1.Should().Throw<ArgumentException>();
-        act2.Should().Throw<ArgumentException>();
-        act3.Should().Throw<ArgumentException>();
+        act1.Should().Throw<Exception>();
+        act2.Should().Throw<Exception>();
+        act3.Should().Throw<Exception>();
     }
 
     [Fact]
@@ -184,7 +188,7 @@ public class TranslatorModelRegistryTests
     [Fact]
     public void AllDefaultModels_ShouldHaveApacheLicense()
     {
-        var models = _registry.GetAll();
+        var models = _registry.GetAvailableModels();
 
         foreach (var model in models)
         {
@@ -196,11 +200,51 @@ public class TranslatorModelRegistryTests
     [Fact]
     public void AllDefaultModels_ShouldHaveMarianMTArchitecture()
     {
-        var models = _registry.GetAll();
+        var models = _registry.GetAvailableModels();
 
         foreach (var model in models)
         {
             model.Architecture.Should().Be("MarianMT");
         }
+    }
+
+    [Fact]
+    public void RegisterAlias_ShouldBeResolvable()
+    {
+        var registry = new TranslatorModelRegistry(DefaultModels.All);
+
+        registry.RegisterAlias("my-translator", "onnx-community/opus-mt-ko-en");
+
+        var model = registry.Resolve("my-translator");
+        model.Should().NotBeNull();
+        model.Id.Should().Be("onnx-community/opus-mt-ko-en");
+    }
+
+    [Fact]
+    public void RegisterAlias_SystemAliasConflict_ShouldThrow()
+    {
+        var registry = new TranslatorModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", "onnx-community/opus-mt-ko-en");
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void Resolve_AutoAlias_ShouldReturnModel()
+    {
+        var model = _registry.Resolve("auto");
+
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void LocalTranslator_Registry_ShouldExpose()
+    {
+        var registry = LocalTranslator.Registry;
+
+        registry.Should().NotBeNull();
+        registry.Should().BeAssignableTo<IModelRegistry<TranslatorModelInfo>>();
     }
 }

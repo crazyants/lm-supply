@@ -177,7 +177,7 @@ public static class WellKnownModels
     /// <returns>License tier classification.</returns>
     public static LicenseTier GetLicenseTier(string modelId)
     {
-        var info = ModelRegistry.GetModel(modelId);
+        GeneratorModelRegistry.Default.TryResolve(modelId, out var info);
         return info?.License ?? LicenseTier.Conditional;
     }
 

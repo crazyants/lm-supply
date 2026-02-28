@@ -4,82 +4,21 @@ using LMSupply.Hardware;
 namespace LMSupply.Detector.Models;
 
 /// <summary>
-/// Registry for looking up detector model information by ID or alias.
+/// Model registry for the Detector domain.
 /// </summary>
-public sealed class DetectorModelRegistry
+public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
 {
-    private readonly Dictionary<string, DetectorModelInfo> _modelsByAlias;
-    private readonly Dictionary<string, DetectorModelInfo> _modelsById;
-
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static DetectorModelRegistry Default { get; } = new(DefaultModels.All);
 
     /// <summary>
-    /// Initializes a new registry with the specified models.
+    /// Initializes a new registry with the specified system models.
     /// </summary>
-    /// <param name="models">Models to register.</param>
-    public DetectorModelRegistry(IEnumerable<DetectorModelInfo> models)
-    {
-        ArgumentNullException.ThrowIfNull(models);
-
-        var modelList = models.ToList();
-        _modelsByAlias = new Dictionary<string, DetectorModelInfo>(StringComparer.OrdinalIgnoreCase);
-        _modelsById = new Dictionary<string, DetectorModelInfo>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var model in modelList)
-        {
-            _modelsByAlias[model.AliasName] = model;
-            _modelsById[model.Id] = model;
-        }
-    }
-
-    /// <summary>
-    /// Resolves a model identifier to its full information.
-    /// Supports "auto" alias which selects optimal model based on hardware.
-    /// </summary>
-    /// <param name="modelIdOrAlias">Model ID, alias, local path, or "auto".</param>
-    /// <returns>The model information.</returns>
-    public DetectorModelInfo Resolve(string modelIdOrAlias)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelIdOrAlias);
-
-        // Handle "auto" alias - select optimal model based on hardware
-        if (modelIdOrAlias.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            return GetAutoModel();
-        }
-
-        // Check if it's a local path
-        if (IsLocalPath(modelIdOrAlias))
-        {
-            return CreateLocalModelInfo(modelIdOrAlias);
-        }
-
-        // Try alias first
-        if (_modelsByAlias.TryGetValue(modelIdOrAlias, out var modelByAlias))
-        {
-            return modelByAlias;
-        }
-
-        // Try full ID
-        if (_modelsById.TryGetValue(modelIdOrAlias, out var modelById))
-        {
-            return modelById;
-        }
-
-        // Assume it's a HuggingFace ID not in our registry
-        if (modelIdOrAlias.Contains('/'))
-        {
-            return CreateHuggingFaceModelInfo(modelIdOrAlias);
-        }
-
-        throw new ModelNotFoundException(
-            $"Model '{modelIdOrAlias}' not found. Use a built-in alias (default, quality, fast, large, auto), " +
-            "a HuggingFace model ID (org/model), or a local file path.",
-            modelIdOrAlias);
-    }
+    /// <param name="systemModels">Models to register as system defaults.</param>
+    public DetectorModelRegistry(IEnumerable<DetectorModelInfo> systemModels)
+        : base(systemModels) { }
 
     /// <summary>
     /// Gets the optimal model based on current hardware profile.
@@ -92,65 +31,56 @@ public sealed class DetectorModelRegistry
     /// - High:   RT-DETR v2 Medium (36M params) - quality
     /// - Ultra:  RT-DETR v2 Large (42M params) - highest accuracy
     /// </remarks>
-    public static DetectorModelInfo GetAutoModel()
+    protected override DetectorModelInfo GetAutoModel()
     {
         var tier = HardwareProfile.Current.Tier;
+        Trace.TraceInformation($"[DetectorModelRegistry] Auto-selecting model for tier: {tier}");
 
-        return tier switch
+        var model = tier switch
         {
             PerformanceTier.Ultra => DefaultModels.RtDetrV2L,
             PerformanceTier.High => DefaultModels.RtDetrV2M,
             PerformanceTier.Medium => DefaultModels.RtDetrV2S,
             _ => DefaultModels.RtDetrV2MS
         };
+
+        return new DetectorModelInfo
+        {
+            Id = model.Id,
+            AliasName = "auto",
+            DisplayName = model.DisplayName,
+            Architecture = model.Architecture,
+            ParametersM = model.ParametersM,
+            SizeBytes = model.SizeBytes,
+            MapCoco = model.MapCoco,
+            InputSize = model.InputSize,
+            NumClasses = model.NumClasses,
+            RequiresNms = model.RequiresNms,
+            OnnxFile = model.OnnxFile,
+            Description = model.Description,
+            License = model.License
+        };
     }
 
     /// <summary>
-    /// Tries to resolve a model identifier.
+    /// Creates a fallback model info for unknown model IDs (HuggingFace repos or local paths).
     /// </summary>
-    /// <param name="modelIdOrAlias">Model ID, alias, or local path.</param>
-    /// <param name="modelInfo">The resolved model information.</param>
-    /// <returns>True if resolved successfully.</returns>
-    public bool TryResolve(string modelIdOrAlias, out DetectorModelInfo? modelInfo)
+    protected override DetectorModelInfo CreateFallbackModelInfo(string modelId)
     {
-        try
-        {
-            modelInfo = Resolve(modelIdOrAlias);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[DetectorModelRegistry] Model resolve failed for '{modelIdOrAlias}': {ex.Message}");
-            modelInfo = null;
-            return false;
-        }
-    }
+        Trace.TraceInformation($"[DetectorModelRegistry] Creating fallback model info for: {modelId}");
 
-    /// <summary>
-    /// Gets all registered models.
-    /// </summary>
-    public IEnumerable<DetectorModelInfo> GetAll() => _modelsById.Values;
-
-    /// <summary>
-    /// Gets all available aliases including "auto".
-    /// </summary>
-    public IEnumerable<string> GetAliases()
-    {
-        yield return "auto";
-        foreach (var alias in _modelsByAlias.Keys)
+        // Check if it's a local path with an ONNX file
+        if (modelId.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
+            Path.IsPathRooted(modelId) ||
+            modelId.StartsWith("./", StringComparison.Ordinal) ||
+            modelId.StartsWith("../", StringComparison.Ordinal) ||
+            modelId.StartsWith(".\\", StringComparison.Ordinal) ||
+            modelId.StartsWith("..\\", StringComparison.Ordinal))
         {
-            yield return alias;
+            return CreateLocalModelInfo(modelId);
         }
-    }
 
-    private static bool IsLocalPath(string path)
-    {
-        return path.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
-               Path.IsPathRooted(path) ||
-               path.StartsWith("./", StringComparison.Ordinal) ||
-               path.StartsWith("../", StringComparison.Ordinal) ||
-               path.StartsWith(".\\", StringComparison.Ordinal) ||
-               path.StartsWith("..\\", StringComparison.Ordinal);
+        return CreateHuggingFaceModelInfo(modelId);
     }
 
     private static DetectorModelInfo CreateLocalModelInfo(string path)
@@ -210,24 +140,5 @@ public sealed class DetectorModelRegistry
             Description = $"HuggingFace model: {modelId}",
             License = "Unknown"
         };
-    }
-}
-
-/// <summary>
-/// Exception thrown when a model cannot be found.
-/// </summary>
-public class ModelNotFoundException : Exception
-{
-    /// <summary>
-    /// The model identifier that was not found.
-    /// </summary>
-    public string ModelId { get; }
-
-    /// <summary>
-    /// Initializes a new instance.
-    /// </summary>
-    public ModelNotFoundException(string message, string modelId) : base(message)
-    {
-        ModelId = modelId;
     }
 }

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { api } from '../api/client';
 import type { DetectResponse } from '../api/types';
 import { Loader2, Upload } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Detect() {
   const [modelId, setModelId] = useState('default');
@@ -114,6 +115,11 @@ export function Detect() {
           )}
         </div>
       </div>
+
+      <CurlExample commands={[
+        { label: 'Detect', command: `curl -X POST http://localhost:5000/v1/images/detect \\\n  -F file=@image.jpg \\\n  -F model=${modelId} \\\n  -F threshold=${confidenceThreshold}` },
+        { label: 'List Labels', command: `curl http://localhost:5000/v1/images/detect/labels` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

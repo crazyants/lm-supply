@@ -1,5 +1,6 @@
 using FluentAssertions;
 using LMSupply.Captioner.Models;
+using LMSupply.Exceptions;
 using LMSupply.Vision;
 
 namespace LMSupply.Captioner.Tests;
@@ -7,22 +8,106 @@ namespace LMSupply.Captioner.Tests;
 public class ModelRegistryTests
 {
     [Fact]
-    public void TryGetModel_WithDefaultAlias_ShouldReturnVitGpt2()
+    public void Resolve_WithDefaultAlias_ShouldReturnVitGpt2()
     {
         // Act
-        var result = ModelRegistry.TryGetModel("default", out var modelInfo);
+        var modelInfo = CaptionerModelRegistry.Default.Resolve("default");
+
+        // Assert
+        modelInfo.Should().NotBeNull();
+        modelInfo.RepoId.Should().Be("Xenova/vit-gpt2-image-captioning");
+    }
+
+    [Fact]
+    public void TryResolve_WithFastAlias_ShouldReturnGitBase()
+    {
+        // Act
+        var result = CaptionerModelRegistry.Default.TryResolve("fast", out var modelInfo);
 
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.AliasName.Should().Be("vit-gpt2");
+        modelInfo!.RepoId.Should().Be("Xenova/git-base-coco");
     }
 
     [Fact]
-    public void TryGetModel_WithVitGpt2Alias_ShouldReturnModel()
+    public void TryResolve_WithQualityAlias_ShouldReturnBlipBase()
     {
         // Act
-        var result = ModelRegistry.TryGetModel("vit-gpt2", out var modelInfo);
+        var result = CaptionerModelRegistry.Default.TryResolve("quality", out var modelInfo);
+
+        // Assert
+        result.Should().BeTrue();
+        modelInfo.Should().NotBeNull();
+        modelInfo!.RepoId.Should().Be("Xenova/blip-image-captioning-base");
+    }
+
+    [Fact]
+    public void TryResolve_WithLargeAlias_ShouldReturnBlipLarge()
+    {
+        // Act
+        var result = CaptionerModelRegistry.Default.TryResolve("large", out var modelInfo);
+
+        // Assert
+        result.Should().BeTrue();
+        modelInfo.Should().NotBeNull();
+        modelInfo!.RepoId.Should().Be("Xenova/blip-image-captioning-large");
+    }
+
+    [Fact]
+    public void TryResolve_WithRepoId_ShouldReturnModel()
+    {
+        // Act
+        var result = CaptionerModelRegistry.Default.TryResolve("Xenova/vit-gpt2-image-captioning", out var modelInfo);
+
+        // Assert
+        result.Should().BeTrue();
+        modelInfo.Should().NotBeNull();
+        modelInfo!.AliasName.Should().Be("default");
+    }
+
+    [Fact]
+    public void TryResolve_CaseInsensitive_ShouldWork()
+    {
+        // Act
+        var result1 = CaptionerModelRegistry.Default.TryResolve("DEFAULT", out var model1);
+        var result2 = CaptionerModelRegistry.Default.TryResolve("Default", out var model2);
+        var result3 = CaptionerModelRegistry.Default.TryResolve("default", out var model3);
+
+        // Assert
+        result1.Should().BeTrue();
+        result2.Should().BeTrue();
+        result3.Should().BeTrue();
+        model1!.RepoId.Should().Be(model2!.RepoId);
+        model2!.RepoId.Should().Be(model3!.RepoId);
+    }
+
+    [Fact]
+    public void TryResolve_WithUnknownModel_ShouldReturnFalse()
+    {
+        // Act
+        var result = CaptionerModelRegistry.Default.TryResolve("unknown-model", out var modelInfo);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Resolve_WithUnknownModel_ShouldThrow()
+    {
+        // Act
+        var act = () => CaptionerModelRegistry.Default.Resolve("unknown-model");
+
+        // Assert
+        act.Should().Throw<ModelNotFoundException>()
+            .WithMessage("*unknown-model*not found*");
+    }
+
+    [Fact]
+    public void TryResolve_WithShortName_ShouldResolve()
+    {
+        // Act - short name is the part after '/' in the repo ID
+        var result = CaptionerModelRegistry.Default.TryResolve("vit-gpt2-image-captioning", out var modelInfo);
 
         // Assert
         result.Should().BeTrue();
@@ -31,102 +116,79 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void TryGetModel_WithRepoId_ShouldReturnModel()
+    public void TryResolve_WithAutoAlias_ShouldReturnHardwareAdaptive()
     {
         // Act
-        var result = ModelRegistry.TryGetModel("Xenova/vit-gpt2-image-captioning", out var modelInfo);
+        var result = CaptionerModelRegistry.Default.TryResolve("auto", out var modelInfo);
 
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.AliasName.Should().Be("vit-gpt2");
+        modelInfo!.AliasName.Should().Be("auto");
     }
 
     [Fact]
-    public void TryGetModel_CaseInsensitive_ShouldWork()
+    public void GetAliases_ShouldContainStandardAliases()
     {
         // Act
-        var result1 = ModelRegistry.TryGetModel("VIT-GPT2", out var model1);
-        var result2 = ModelRegistry.TryGetModel("Vit-Gpt2", out var model2);
-        var result3 = ModelRegistry.TryGetModel("vit-gpt2", out var model3);
+        var aliases = CaptionerModelRegistry.Default.GetAliases();
 
         // Assert
-        result1.Should().BeTrue();
-        result2.Should().BeTrue();
-        result3.Should().BeTrue();
-        model1.Should().Be(model2);
-        model2.Should().Be(model3);
+        var aliasNames = aliases.Select(a => a.Name).ToList();
+        aliasNames.Should().Contain("auto");
+        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("fast");
+        aliasNames.Should().Contain("quality");
+        aliasNames.Should().Contain("large");
     }
 
     [Fact]
-    public void TryGetModel_WithUnknownModel_ShouldReturnFalse()
+    public void GetAvailableModels_ShouldReturnAllRegisteredModels()
     {
         // Act
-        var result = ModelRegistry.TryGetModel("unknown-model", out var modelInfo);
+        var models = CaptionerModelRegistry.Default.GetAvailableModels();
 
         // Assert
-        result.Should().BeFalse();
-        modelInfo.Should().BeNull();
+        models.Should().HaveCount(4);
+        models.Select(m => m.RepoId).Should().Contain("Xenova/vit-gpt2-image-captioning");
+        models.Select(m => m.RepoId).Should().Contain("Xenova/git-base-coco");
+        models.Select(m => m.RepoId).Should().Contain("Xenova/blip-image-captioning-base");
+        models.Select(m => m.RepoId).Should().Contain("Xenova/blip-image-captioning-large");
     }
 
     [Fact]
-    public void GetModel_WithValidAlias_ShouldReturnModel()
+    public void RegisterAlias_ShouldCreateNewMapping()
     {
+        // Arrange
+        var registry = new CaptionerModelRegistry(DefaultModels.All);
+
         // Act
-        var model = ModelRegistry.GetModel("vit-gpt2");
+        registry.RegisterAlias("my-custom", "Xenova/vit-gpt2-image-captioning");
+        var result = registry.TryResolve("my-custom", out var model);
 
         // Assert
-        model.Should().NotBeNull();
-        model.AliasName.Should().Be("vit-gpt2");
+        result.Should().BeTrue();
+        model!.RepoId.Should().Be("Xenova/vit-gpt2-image-captioning");
     }
 
     [Fact]
-    public void GetModel_WithUnknownModel_ShouldThrow()
+    public void RegisterAlias_WithSystemAliasName_ShouldThrow()
     {
+        // Arrange
+        var registry = new CaptionerModelRegistry(DefaultModels.All);
+
         // Act
-        var act = () => ModelRegistry.GetModel("unknown-model");
+        var act = () => registry.RegisterAlias("default", "Xenova/vit-gpt2-image-captioning");
 
         // Assert
-        act.Should().Throw<KeyNotFoundException>()
-            .WithMessage("*unknown-model*not found*");
-    }
-
-    [Fact]
-    public void GetAvailableModels_ShouldReturnRegisteredAliases()
-    {
-        // Act
-        var models = ModelRegistry.GetAvailableModels().ToList();
-
-        // Assert
-        models.Should().Contain("vit-gpt2");
-    }
-
-    [Fact]
-    public void GetAvailableModels_ShouldReturnDistinctAliases()
-    {
-        // Act
-        var models = ModelRegistry.GetAvailableModels().ToList();
-
-        // Assert
-        models.Should().OnlyHaveUniqueItems();
-    }
-
-    [Fact]
-    public void GetAllModels_ShouldReturnModelInfoObjects()
-    {
-        // Act
-        var models = ModelRegistry.GetAllModels().ToList();
-
-        // Assert
-        models.Should().NotBeEmpty();
-        models.Should().AllSatisfy(m => m.Should().NotBeNull());
+        act.Should().Throw<AliasConflictException>();
     }
 
     [Fact]
     public void VitGpt2Model_ShouldHaveCorrectConfiguration()
     {
         // Act
-        var model = ModelRegistry.GetModel("vit-gpt2");
+        var model = CaptionerModelRegistry.Default.Resolve("default");
 
         // Assert
         model.EncoderFile.Should().Be("encoder_model.onnx");
@@ -143,7 +205,7 @@ public class ModelRegistryTests
     public void VitGpt2Model_ShouldUseViTGpt2PreprocessProfile()
     {
         // Act
-        var model = ModelRegistry.GetModel("vit-gpt2");
+        var model = CaptionerModelRegistry.Default.Resolve("default");
 
         // Assert
         model.PreprocessProfile.Width.Should().Be(224);
@@ -151,65 +213,44 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void RegisterModel_ShouldAddNewModel()
+    public void DefaultModels_All_ShouldContainAllModels()
     {
-        // Arrange
-        var newModel = new ModelInfo(
-            RepoId: "test/test-model",
-            AliasName: "test-model",
-            DisplayName: "Test Model",
-            EncoderFile: "encoder.onnx",
-            DecoderFile: "decoder.onnx",
-            TokenizerType: TokenizerType.Gpt2,
-            PreprocessProfile: PreprocessProfile.ImageNet,
-            SupportsVqa: true,
-            VocabSize: 10000,
-            BosTokenId: 1,
-            EosTokenId: 2,
-            PadTokenId: 0);
+        // Assert
+        DefaultModels.All.Should().HaveCount(4);
+        DefaultModels.All.Should().Contain(DefaultModels.VitGpt2);
+        DefaultModels.All.Should().Contain(DefaultModels.GitBase);
+        DefaultModels.All.Should().Contain(DefaultModels.BlipBase);
+        DefaultModels.All.Should().Contain(DefaultModels.BlipLarge);
+    }
 
+    [Fact]
+    public void DefaultModels_Default_ShouldBeVitGpt2()
+    {
+        // Assert
+        DefaultModels.Default.Should().Be(DefaultModels.VitGpt2);
+    }
+
+    [Fact]
+    public void LocalCaptioner_Registry_ShouldExposeRegistry()
+    {
         // Act
-        ModelRegistry.RegisterModel(newModel);
-        var result = ModelRegistry.TryGetModel("test-model", out var retrieved);
+        var registry = LocalCaptioner.Registry;
+
+        // Assert
+        registry.Should().NotBeNull();
+        registry.Should().BeOfType<CaptionerModelRegistry>();
+    }
+
+    [Fact]
+    public void TryResolve_WithHuggingFaceRepoId_ShouldCreateFallback()
+    {
+        // Act - unknown HF repo should create a fallback
+        var result = CaptionerModelRegistry.Default.TryResolve("my-org/my-captioner", out var modelInfo);
 
         // Assert
         result.Should().BeTrue();
-        retrieved.Should().Be(newModel);
-    }
-
-    [Fact]
-    public void RegisterModel_WithNullModel_ShouldThrow()
-    {
-        // Act
-        var act = () => ModelRegistry.RegisterModel(null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>();
-    }
-
-    [Fact]
-    public void RegisterAlias_ShouldCreateNewMapping()
-    {
-        // Arrange - ensure base model exists
-        ModelRegistry.TryGetModel("vit-gpt2", out _).Should().BeTrue();
-
-        // Act
-        ModelRegistry.RegisterAlias("my-custom-alias", "vit-gpt2");
-        var result = ModelRegistry.TryGetModel("my-custom-alias", out var model);
-
-        // Assert
-        result.Should().BeTrue();
-        model!.AliasName.Should().Be("vit-gpt2");
-    }
-
-    [Fact]
-    public void RegisterAlias_WithNonexistentModel_ShouldThrow()
-    {
-        // Act
-        var act = () => ModelRegistry.RegisterAlias("new-alias", "nonexistent-model");
-
-        // Assert
-        act.Should().Throw<ArgumentException>()
-            .WithMessage("*nonexistent-model*not found*");
+        modelInfo.Should().NotBeNull();
+        modelInfo!.RepoId.Should().Be("my-org/my-captioner");
+        modelInfo.Description.Should().Contain("Custom model");
     }
 }

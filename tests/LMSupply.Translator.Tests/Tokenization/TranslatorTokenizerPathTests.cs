@@ -146,5 +146,6 @@ public class TranslatorTokenizerPathTests : IDisposable
         {
             // Ignore cleanup errors
         }
+        GC.SuppressFinalize(this);
     }
 }

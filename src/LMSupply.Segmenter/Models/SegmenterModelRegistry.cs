@@ -4,82 +4,21 @@ using LMSupply.Hardware;
 namespace LMSupply.Segmenter.Models;
 
 /// <summary>
-/// Registry for looking up segmenter model information by ID or alias.
+/// Model registry for the Segmenter domain.
 /// </summary>
-public sealed class SegmenterModelRegistry
+public sealed class SegmenterModelRegistry : ModelRegistryBase<SegmenterModelInfo>
 {
-    private readonly Dictionary<string, SegmenterModelInfo> _modelsByAlias;
-    private readonly Dictionary<string, SegmenterModelInfo> _modelsById;
-
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static SegmenterModelRegistry Default { get; } = new(DefaultModels.All);
 
     /// <summary>
-    /// Initializes a new registry with the specified models.
+    /// Initializes a new registry with the specified system models.
     /// </summary>
-    /// <param name="models">Models to register.</param>
-    public SegmenterModelRegistry(IEnumerable<SegmenterModelInfo> models)
-    {
-        ArgumentNullException.ThrowIfNull(models);
-
-        var modelList = models.ToList();
-        _modelsByAlias = new Dictionary<string, SegmenterModelInfo>(StringComparer.OrdinalIgnoreCase);
-        _modelsById = new Dictionary<string, SegmenterModelInfo>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var model in modelList)
-        {
-            _modelsByAlias[model.AliasName] = model;
-            _modelsById[model.Id] = model;
-        }
-    }
-
-    /// <summary>
-    /// Resolves a model identifier to its full information.
-    /// Supports "auto" alias which selects optimal model based on hardware.
-    /// </summary>
-    /// <param name="modelIdOrAlias">Model ID, alias, local path, or "auto".</param>
-    /// <returns>The model information.</returns>
-    public SegmenterModelInfo Resolve(string modelIdOrAlias)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelIdOrAlias);
-
-        // Handle "auto" alias - select optimal model based on hardware
-        if (modelIdOrAlias.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            return GetAutoModel();
-        }
-
-        // Check if it's a local path
-        if (IsLocalPath(modelIdOrAlias))
-        {
-            return CreateLocalModelInfo(modelIdOrAlias);
-        }
-
-        // Try alias first
-        if (_modelsByAlias.TryGetValue(modelIdOrAlias, out var modelByAlias))
-        {
-            return modelByAlias;
-        }
-
-        // Try full ID
-        if (_modelsById.TryGetValue(modelIdOrAlias, out var modelById))
-        {
-            return modelById;
-        }
-
-        // Assume it's a HuggingFace ID not in our registry
-        if (modelIdOrAlias.Contains('/'))
-        {
-            return CreateHuggingFaceModelInfo(modelIdOrAlias);
-        }
-
-        throw new ModelNotFoundException(
-            $"Model '{modelIdOrAlias}' not found. Use a built-in alias (default, fast, quality, large, interactive, auto), " +
-            "a HuggingFace model ID (org/model), or a local file path.",
-            modelIdOrAlias);
-    }
+    /// <param name="systemModels">Models to register as system defaults.</param>
+    public SegmenterModelRegistry(IEnumerable<SegmenterModelInfo> systemModels)
+        : base(systemModels) { }
 
     /// <summary>
     /// Gets the optimal model based on current hardware profile.
@@ -92,65 +31,57 @@ public sealed class SegmenterModelRegistry
     /// - High:   MaskFormer ResNet50 (44M params) - quality
     /// - Ultra:  MaskFormer ResNet50 (44M params) - highest accuracy
     /// </remarks>
-    public static SegmenterModelInfo GetAutoModel()
+    protected override SegmenterModelInfo GetAutoModel()
     {
         var tier = HardwareProfile.Current.Tier;
+        Trace.TraceInformation($"[SegmenterModelRegistry] Auto-selecting model for tier: {tier}");
 
-        return tier switch
+        var model = tier switch
         {
-            PerformanceTier.Ultra => DefaultModels.MaskFormerResNet50,
-            PerformanceTier.High => DefaultModels.MaskFormerResNet50,
+            PerformanceTier.Ultra or PerformanceTier.High => DefaultModels.MaskFormerResNet50,
             PerformanceTier.Medium => DefaultModels.SegFormerB0,
             _ => DefaultModels.MediaPipeSelfie
+        };
+
+        return new SegmenterModelInfo
+        {
+            Id = model.Id,
+            AliasName = "auto",
+            DisplayName = model.DisplayName,
+            Architecture = model.Architecture,
+            ParametersM = model.ParametersM,
+            SizeBytes = model.SizeBytes,
+            MIoU = model.MIoU,
+            InputSize = model.InputSize,
+            NumClasses = model.NumClasses,
+            OnnxFile = model.OnnxFile,
+            EncoderFile = model.EncoderFile,
+            DecoderFile = model.DecoderFile,
+            Dataset = model.Dataset,
+            Description = model.Description,
+            License = model.License
         };
     }
 
     /// <summary>
-    /// Tries to resolve a model identifier.
+    /// Creates a fallback model info for unknown model IDs (HuggingFace repos or local paths).
     /// </summary>
-    /// <param name="modelIdOrAlias">Model ID, alias, or local path.</param>
-    /// <param name="modelInfo">The resolved model information.</param>
-    /// <returns>True if resolved successfully.</returns>
-    public bool TryResolve(string modelIdOrAlias, out SegmenterModelInfo? modelInfo)
+    protected override SegmenterModelInfo CreateFallbackModelInfo(string modelId)
     {
-        try
-        {
-            modelInfo = Resolve(modelIdOrAlias);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[SegmenterModelRegistry] Model resolve failed for '{modelIdOrAlias}': {ex.Message}");
-            modelInfo = null;
-            return false;
-        }
-    }
+        Trace.TraceInformation($"[SegmenterModelRegistry] Creating fallback model info for: {modelId}");
 
-    /// <summary>
-    /// Gets all registered models.
-    /// </summary>
-    public IEnumerable<SegmenterModelInfo> GetAll() => _modelsById.Values;
-
-    /// <summary>
-    /// Gets all available aliases including "auto".
-    /// </summary>
-    public IEnumerable<string> GetAliases()
-    {
-        yield return "auto";
-        foreach (var alias in _modelsByAlias.Keys)
+        // Check if it's a local path with an ONNX file
+        if (modelId.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
+            Path.IsPathRooted(modelId) ||
+            modelId.StartsWith("./", StringComparison.Ordinal) ||
+            modelId.StartsWith("../", StringComparison.Ordinal) ||
+            modelId.StartsWith(".\\", StringComparison.Ordinal) ||
+            modelId.StartsWith("..\\", StringComparison.Ordinal))
         {
-            yield return alias;
+            return CreateLocalModelInfo(modelId);
         }
-    }
 
-    private static bool IsLocalPath(string path)
-    {
-        return path.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
-               Path.IsPathRooted(path) ||
-               path.StartsWith("./", StringComparison.Ordinal) ||
-               path.StartsWith("../", StringComparison.Ordinal) ||
-               path.StartsWith(".\\", StringComparison.Ordinal) ||
-               path.StartsWith("..\\", StringComparison.Ordinal);
+        return CreateHuggingFaceModelInfo(modelId);
     }
 
     private static SegmenterModelInfo CreateLocalModelInfo(string path)
@@ -224,24 +155,5 @@ public sealed class SegmenterModelRegistry
             Description = $"HuggingFace model: {modelId}",
             License = "Unknown"
         };
-    }
-}
-
-/// <summary>
-/// Exception thrown when a model cannot be found.
-/// </summary>
-public class ModelNotFoundException : Exception
-{
-    /// <summary>
-    /// The model identifier that was not found.
-    /// </summary>
-    public string ModelId { get; }
-
-    /// <summary>
-    /// Initializes a new instance.
-    /// </summary>
-    public ModelNotFoundException(string message, string modelId) : base(message)
-    {
-        ModelId = modelId;
     }
 }

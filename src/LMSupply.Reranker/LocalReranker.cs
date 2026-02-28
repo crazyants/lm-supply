@@ -18,6 +18,12 @@ public static class LocalReranker
     public const string DefaultModel = "default";
 
     /// <summary>
+    /// Gets the model registry for the Reranker domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<ModelInfo> Registry => RerankerModelRegistry.Default;
+
+    /// <summary>
     /// Loads the default reranker model.
     /// </summary>
     /// <param name="options">Optional configuration options.</param>
@@ -162,7 +168,7 @@ public static class LocalReranker
     /// <returns>Available model aliases.</returns>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return ModelRegistry.Default.GetAliases();
+        return RerankerModelRegistry.Default.GetAliases().Select(a => a.Name);
     }
 
     /// <summary>
@@ -171,6 +177,6 @@ public static class LocalReranker
     /// <returns>Collection of model information.</returns>
     public static IEnumerable<ModelInfo> GetAllModels()
     {
-        return ModelRegistry.Default.GetAll();
+        return RerankerModelRegistry.Default.GetAvailableModels();
     }
 }

@@ -9,6 +9,12 @@ namespace LMSupply.Translator;
 public static class LocalTranslator
 {
     /// <summary>
+    /// Gets the model registry for the Translator domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<TranslatorModelInfo> Registry => TranslatorModelRegistry.Default;
+
+    /// <summary>
     /// Loads a translation model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -58,7 +64,7 @@ public static class LocalTranslator
     /// <returns>Available model aliases.</returns>
     public static IEnumerable<string> GetAvailableModels()
     {
-        return TranslatorModelRegistry.Default.GetAliases();
+        return TranslatorModelRegistry.Default.GetAliases().Select(a => a.Name);
     }
 
     /// <summary>
@@ -67,6 +73,6 @@ public static class LocalTranslator
     /// <returns>Collection of model information.</returns>
     public static IEnumerable<TranslatorModelInfo> GetAllModels()
     {
-        return TranslatorModelRegistry.Default.GetAll();
+        return TranslatorModelRegistry.Default.GetAvailableModels();
     }
 }

@@ -1,4 +1,6 @@
 using FluentAssertions;
+using LMSupply;
+using LMSupply.Exceptions;
 using LMSupply.Segmenter.Models;
 
 namespace LMSupply.Segmenter.Tests;
@@ -89,9 +91,9 @@ public class SegmenterModelRegistryTests
     }
 
     [Fact]
-    public void GetAll_ShouldReturnAllBuiltInModels()
+    public void GetAvailableModels_ShouldReturnAllBuiltInModels()
     {
-        var models = _registry.GetAll().ToList();
+        var models = _registry.GetAvailableModels();
 
         // SegFormerB0, MediaPipeSelfie, MaskFormerResNet50, SegFormerB0Large (same ID as B0), MobileSAM
         // But SegFormerB0 and SegFormerB0Large share the same ID so only 4 unique by ID
@@ -99,17 +101,19 @@ public class SegmenterModelRegistryTests
     }
 
     [Fact]
-    public void GetAliases_ShouldReturnAllAliases()
+    public void GetAliases_ShouldReturnAllAliasesAsAliasInfo()
     {
-        var aliases = _registry.GetAliases().ToList();
+        var aliases = _registry.GetAliases();
 
-        aliases.Should().Contain(["default", "quality", "fast", "large", "interactive"]);
+        var aliasNames = aliases.Select(a => a.Name).ToList();
+        aliasNames.Should().Contain(["auto", "default", "quality", "fast", "large", "interactive"]);
+        aliases.Should().AllSatisfy(a => a.Kind.Should().Be(AliasKind.System));
     }
 
     [Fact]
     public void DefaultModels_ShouldHaveApache2License()
     {
-        var models = _registry.GetAll();
+        var models = _registry.GetAvailableModels();
 
         // All ONNX models use Apache-2.0 license
         models.Should().OnlyContain(m => m.License == "Apache-2.0");
@@ -131,10 +135,50 @@ public class SegmenterModelRegistryTests
     [Fact]
     public void DefaultModels_NonInteractiveModels_ShouldNotHaveEncoderDecoder()
     {
-        var models = _registry.GetAll()
+        var models = _registry.GetAvailableModels()
             .Where(m => !m.IsInteractive);
 
         models.Should().OnlyContain(m => m.EncoderFile == null);
         models.Should().OnlyContain(m => m.DecoderFile == null);
+    }
+
+    [Fact]
+    public void RegisterAlias_ShouldBeResolvable()
+    {
+        var registry = new SegmenterModelRegistry(DefaultModels.All);
+
+        registry.RegisterAlias("my-segmenter", "optimum/segformer-b0-finetuned-ade-512-512");
+
+        var model = registry.Resolve("my-segmenter");
+        model.Should().NotBeNull();
+        model.Id.Should().Be("optimum/segformer-b0-finetuned-ade-512-512");
+    }
+
+    [Fact]
+    public void RegisterAlias_SystemAliasConflict_ShouldThrow()
+    {
+        var registry = new SegmenterModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", "optimum/segformer-b0-finetuned-ade-512-512");
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void Resolve_AutoAlias_ShouldReturnModel()
+    {
+        var model = _registry.Resolve("auto");
+
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void LocalSegmenter_Registry_ShouldExpose()
+    {
+        var registry = LocalSegmenter.Registry;
+
+        registry.Should().NotBeNull();
+        registry.Should().BeAssignableTo<IModelRegistry<SegmenterModelInfo>>();
     }
 }

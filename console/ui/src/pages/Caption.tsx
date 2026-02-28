@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { api } from '../api/client';
 import type { CaptionResponse, VqaResponse } from '../api/types';
 import { Loader2, Upload, Image, MessageSquare } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 type Mode = 'caption' | 'vqa';
 
@@ -172,6 +173,11 @@ export function Caption() {
           </div>
         )}
       </div>
+
+      <CurlExample commands={[
+        { label: 'Caption', command: `curl -X POST http://localhost:5000/v1/images/caption \\\n  -F file=@image.jpg \\\n  -F model=${modelId}` },
+        { label: 'Visual QA', command: `curl -X POST http://localhost:5000/v1/images/vqa \\\n  -F file=@image.jpg \\\n  -F question="What is in this image?" \\\n  -F model=${modelId}` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

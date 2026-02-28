@@ -22,8 +22,9 @@ public record DetectionModelInfo(
     /// </summary>
     public string? Description => DisplayName;
 
-    // IModelInfoBase explicit implementation
-    string IModelInfoBase.Id => RepoId;
+    // IModelInfoBase explicit implementation — include subfolder for uniqueness
+    // because multiple models share the same RepoId with different subfolders.
+    string IModelInfoBase.Id => Subfolder is not null ? $"{RepoId}/{Subfolder}" : RepoId;
     /// <summary>
     /// Optional subfolder within the HuggingFace repository.
     /// </summary>

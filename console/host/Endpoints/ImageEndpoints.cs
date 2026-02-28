@@ -135,16 +135,15 @@ public static class ImageEndpoints
         // GET /v1/images/models - List available models
         group.MapGet("/models", () =>
         {
-            var aliases = LMSupply.ImageGenerator.Models.WellKnownImageModels.GetAliases();
-            var models = aliases.Select(alias =>
+            var registry = LMSupply.ImageGenerator.Models.ImageGeneratorModelRegistry.Default;
+            var models = registry.GetAvailableModels().Select(info =>
             {
-                var def = LMSupply.ImageGenerator.Models.WellKnownImageModels.Resolve(alias);
                 return new
                 {
-                    id = alias,
-                    repo_id = def.RepoId,
-                    recommended_steps = def.RecommendedSteps,
-                    recommended_guidance_scale = def.RecommendedGuidanceScale
+                    id = info.AliasName,
+                    repo_id = info.ModelId,
+                    recommended_steps = info.RecommendedSteps,
+                    recommended_guidance_scale = info.RecommendedGuidanceScale
                 };
             }).ToList();
 

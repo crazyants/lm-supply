@@ -1,4 +1,6 @@
 using FluentAssertions;
+using LMSupply;
+using LMSupply.Exceptions;
 using LMSupply.Transcriber.Models;
 
 namespace LMSupply.Transcriber.Tests;
@@ -14,17 +16,18 @@ public class TranscriberModelRegistryTests
     [Fact]
     public void GetAliases_ShouldReturnStandardAliases()
     {
-        var aliases = TranscriberModelRegistry.Default.GetAliases().ToList();
+        var aliases = TranscriberModelRegistry.Default.GetAliases();
+        var aliasNames = aliases.Select(a => a.Name).ToList();
 
-        aliases.Should().Contain("default");
-        aliases.Should().Contain("fast");
-        aliases.Should().Contain("quality");
+        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("fast");
+        aliasNames.Should().Contain("quality");
     }
 
     [Fact]
-    public void GetAll_ShouldReturnAllModels()
+    public void GetAvailableModels_ShouldReturnAllModels()
     {
-        var models = TranscriberModelRegistry.Default.GetAll().ToList();
+        var models = TranscriberModelRegistry.Default.GetAvailableModels();
 
         models.Should().NotBeEmpty();
         models.Count.Should().BeGreaterThanOrEqualTo(3);
@@ -35,9 +38,9 @@ public class TranscriberModelRegistryTests
     [InlineData("fast")]
     [InlineData("quality")]
     [InlineData("large")]
-    public void TryGet_ValidAlias_ShouldReturnModel(string alias)
+    public void TryResolve_ValidAlias_ShouldReturnModel(string alias)
     {
-        var result = TranscriberModelRegistry.Default.TryGet(alias, out var model);
+        var result = TranscriberModelRegistry.Default.TryResolve(alias, out var model);
 
         result.Should().BeTrue();
         model.Should().NotBeNull();
@@ -45,21 +48,21 @@ public class TranscriberModelRegistryTests
     }
 
     [Fact]
-    public void TryGet_InvalidAlias_ShouldReturnFalse()
+    public void TryResolve_InvalidAlias_ShouldReturnFalse()
     {
-        var result = TranscriberModelRegistry.Default.TryGet("nonexistent-model", out var model);
+        var result = TranscriberModelRegistry.Default.TryResolve("nonexistent-model", out var model);
 
         result.Should().BeFalse();
         model.Should().BeNull();
     }
 
     [Fact]
-    public void TryGet_ByModelId_ShouldReturnModel()
+    public void TryResolve_ByModelId_ShouldReturnModel()
     {
-        var allModels = TranscriberModelRegistry.Default.GetAll().ToList();
-        var firstModel = allModels.First();
+        var allModels = TranscriberModelRegistry.Default.GetAvailableModels();
+        var firstModel = allModels[0];
 
-        var result = TranscriberModelRegistry.Default.TryGet(firstModel.Id, out var model);
+        var result = TranscriberModelRegistry.Default.TryResolve(firstModel.Id, out var model);
 
         result.Should().BeTrue();
         model.Should().NotBeNull();
@@ -67,11 +70,11 @@ public class TranscriberModelRegistryTests
     }
 
     [Fact]
-    public void GetAliases_ShouldBeCaseInsensitive()
+    public void TryResolve_ShouldBeCaseInsensitive()
     {
-        var resultLower = TranscriberModelRegistry.Default.TryGet("default", out var modelLower);
-        var resultUpper = TranscriberModelRegistry.Default.TryGet("DEFAULT", out var modelUpper);
-        var resultMixed = TranscriberModelRegistry.Default.TryGet("Default", out var modelMixed);
+        var resultLower = TranscriberModelRegistry.Default.TryResolve("default", out var modelLower);
+        var resultUpper = TranscriberModelRegistry.Default.TryResolve("DEFAULT", out var modelUpper);
+        var resultMixed = TranscriberModelRegistry.Default.TryResolve("Default", out var modelMixed);
 
         resultLower.Should().BeTrue();
         resultUpper.Should().BeTrue();
@@ -86,9 +89,9 @@ public class TranscriberModelRegistryTests
     /// Fix for issue #4: Large model returns 401 Unauthorized error.
     /// </summary>
     [Fact]
-    public void TryGet_LargeAlias_ShouldResolveToTurboModel()
+    public void TryResolve_LargeAlias_ShouldResolveToTurboModel()
     {
-        var result = TranscriberModelRegistry.Default.TryGet("large", out var model);
+        var result = TranscriberModelRegistry.Default.TryResolve("large", out var model);
 
         result.Should().BeTrue();
         model.Should().NotBeNull();
@@ -101,9 +104,9 @@ public class TranscriberModelRegistryTests
     /// that don't require authentication for download.
     /// </summary>
     [Fact]
-    public void GetAll_AllModels_ShouldUsePublicRepositories()
+    public void GetAvailableModels_AllModels_ShouldUsePublicRepositories()
     {
-        var models = TranscriberModelRegistry.Default.GetAll();
+        var models = TranscriberModelRegistry.Default.GetAvailableModels();
 
         // Known gated models that should NOT be used
         var gatedModels = new[]
@@ -119,4 +122,52 @@ public class TranscriberModelRegistryTests
         }
     }
 
+    [Fact]
+    public void Resolve_AutoAlias_ShouldReturnModel()
+    {
+        var model = TranscriberModelRegistry.Default.Resolve("auto");
+
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void Resolve_UnknownAlias_ShouldThrow()
+    {
+        var act = () => TranscriberModelRegistry.Default.Resolve("nonexistent");
+
+        act.Should().Throw<ModelNotFoundException>()
+            .Where(e => e.ModelId == "nonexistent");
+    }
+
+    [Fact]
+    public void RegisterAlias_ShouldBeResolvable()
+    {
+        var registry = new TranscriberModelRegistry(DefaultModels.All);
+
+        registry.RegisterAlias("my-whisper", DefaultModels.WhisperBase.Id);
+
+        var model = registry.Resolve("my-whisper");
+        model.Should().NotBeNull();
+        model.Id.Should().Be(DefaultModels.WhisperBase.Id);
+    }
+
+    [Fact]
+    public void RegisterAlias_SystemAliasConflict_ShouldThrow()
+    {
+        var registry = new TranscriberModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", DefaultModels.WhisperBase.Id);
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void LocalTranscriber_Registry_ShouldExpose()
+    {
+        var registry = LocalTranscriber.Registry;
+
+        registry.Should().NotBeNull();
+        registry.Should().BeAssignableTo<IModelRegistry<TranscriberModelInfo>>();
+    }
 }

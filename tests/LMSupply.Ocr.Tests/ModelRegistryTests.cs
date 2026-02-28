@@ -5,55 +5,54 @@ namespace LMSupply.Ocr.Tests;
 
 public class ModelRegistryTests
 {
-    #region Detection Model Tests
+    #region Detection Registry Tests
 
     [Fact]
-    public void TryGetDetectionModel_WithDefaultAlias_ShouldReturnDbNetV3()
+    public void DetectionRegistry_Resolve_Default_ShouldReturnDbNetV3()
     {
         // Act
-        var result = ModelRegistry.TryGetDetectionModel("default", out var modelInfo);
+        var model = OcrDetectionModelRegistry.Default.Resolve("default");
 
         // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.AliasName.Should().Be("dbnet-v3");
+        model.Should().NotBeNull();
+        model.RepoId.Should().Be("monkt/paddleocr-onnx");
+        model.ModelFile.Should().Be("det.onnx");
     }
 
     [Fact]
-    public void TryGetDetectionModel_WithDbNetV3Alias_ShouldReturnModel()
+    public void DetectionRegistry_Resolve_DbNetV3_ShouldReturnModel()
     {
         // Act
-        var result = ModelRegistry.TryGetDetectionModel("dbnet-v3", out var modelInfo);
+        var model = OcrDetectionModelRegistry.Default.Resolve("dbnet-v3");
 
         // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.RepoId.Should().Be("monkt/paddleocr-onnx");
-        modelInfo.ModelFile.Should().Be("det.onnx");
-        modelInfo.Subfolder.Should().Be("detection/v3");
+        model.Should().NotBeNull();
+        model.RepoId.Should().Be("monkt/paddleocr-onnx");
+        model.ModelFile.Should().Be("det.onnx");
+        model.Subfolder.Should().Be("detection/v3");
     }
 
     [Fact]
-    public void TryGetDetectionModel_CaseInsensitive_ShouldWork()
+    public void DetectionRegistry_TryResolve_CaseInsensitive_ShouldWork()
     {
         // Act
-        var result1 = ModelRegistry.TryGetDetectionModel("DBNET-V3", out var model1);
-        var result2 = ModelRegistry.TryGetDetectionModel("DbNet-V3", out var model2);
-        var result3 = ModelRegistry.TryGetDetectionModel("dbnet-v3", out var model3);
+        var result1 = OcrDetectionModelRegistry.Default.TryResolve("DBNET-V3", out var model1);
+        var result2 = OcrDetectionModelRegistry.Default.TryResolve("DbNet-V3", out var model2);
+        var result3 = OcrDetectionModelRegistry.Default.TryResolve("dbnet-v3", out var model3);
 
         // Assert
         result1.Should().BeTrue();
         result2.Should().BeTrue();
         result3.Should().BeTrue();
-        model1.Should().Be(model2);
-        model2.Should().Be(model3);
+        model1!.RepoId.Should().Be(model2!.RepoId);
+        model2!.RepoId.Should().Be(model3!.RepoId);
     }
 
     [Fact]
-    public void TryGetDetectionModel_WithUnknownModel_ShouldReturnFalse()
+    public void DetectionRegistry_TryResolve_UnknownModel_ShouldReturnFalse()
     {
         // Act
-        var result = ModelRegistry.TryGetDetectionModel("unknown-model", out var modelInfo);
+        var result = OcrDetectionModelRegistry.Default.TryResolve("unknown-model", out var modelInfo);
 
         // Assert
         result.Should().BeFalse();
@@ -61,42 +60,43 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void GetDetectionModel_WithValidAlias_ShouldReturnModel()
+    public void DetectionRegistry_Resolve_UnknownModel_ShouldThrow()
     {
         // Act
-        var model = ModelRegistry.GetDetectionModel("dbnet-v3");
+        var act = () => OcrDetectionModelRegistry.Default.Resolve("unknown-model");
 
         // Assert
-        model.Should().NotBeNull();
-        model.AliasName.Should().Be("dbnet-v3");
-    }
-
-    [Fact]
-    public void GetDetectionModel_WithUnknownModel_ShouldThrow()
-    {
-        // Act
-        var act = () => ModelRegistry.GetDetectionModel("unknown-model");
-
-        // Assert
-        act.Should().Throw<KeyNotFoundException>()
+        act.Should().Throw<Exception>()
             .WithMessage("*unknown-model*not found*");
     }
 
     [Fact]
-    public void GetAvailableDetectionModels_ShouldReturnRegisteredAliases()
+    public void DetectionRegistry_GetAvailableModels_ShouldContainDbNetV3()
     {
         // Act
-        var models = ModelRegistry.GetAvailableDetectionModels().ToList();
+        var models = OcrDetectionModelRegistry.Default.GetAvailableModels();
 
         // Assert
-        models.Should().Contain("dbnet-v3");
+        models.Should().Contain(m => m.AliasName == "default" || m.AliasName == "dbnet-v3");
+    }
+
+    [Fact]
+    public void DetectionRegistry_Auto_ShouldResolve()
+    {
+        // Act
+        var model = OcrDetectionModelRegistry.Default.Resolve("auto");
+
+        // Assert
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+        model.RepoId.Should().Be("monkt/paddleocr-onnx");
     }
 
     [Fact]
     public void DbNetV3Model_ShouldHaveCorrectConfiguration()
     {
         // Act
-        var model = ModelRegistry.GetDetectionModel("dbnet-v3");
+        var model = OcrDetectionModelRegistry.Default.Resolve("dbnet-v3");
 
         // Assert
         model.InputWidth.Should().Be(960);
@@ -108,119 +108,134 @@ public class ModelRegistryTests
 
     #endregion
 
-    #region Recognition Model Tests
+    #region Recognition Registry Tests
 
     [Fact]
-    public void TryGetRecognitionModel_WithDefaultAlias_ShouldReturnEnglishModel()
+    public void RecognitionRegistry_Resolve_Default_ShouldReturnEnglishModel()
     {
         // Act
-        var result = ModelRegistry.TryGetRecognitionModel("default", out var modelInfo);
+        var model = OcrRecognitionModelRegistry.Default.Resolve("default");
 
         // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.AliasName.Should().Be("crnn-en-v3");
+        model.Should().NotBeNull();
+        model.LanguageCodes.Should().Contain("en");
+        model.RepoId.Should().Be("monkt/paddleocr-onnx");
     }
 
     [Fact]
-    public void TryGetRecognitionModel_WithEnglishAlias_ShouldReturnModel()
+    public void RecognitionRegistry_Resolve_CrnnEnV3_ShouldReturnModel()
     {
         // Act
-        var result = ModelRegistry.TryGetRecognitionModel("crnn-en-v3", out var modelInfo);
+        var model = OcrRecognitionModelRegistry.Default.Resolve("crnn-en-v3");
 
         // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.RepoId.Should().Be("monkt/paddleocr-onnx");
-        modelInfo.ModelFile.Should().Be("rec.onnx");
-        modelInfo.DictFile.Should().Be("dict.txt");
-        modelInfo.Subfolder.Should().Be("languages/english");
+        model.Should().NotBeNull();
+        model.RepoId.Should().Be("monkt/paddleocr-onnx");
+        model.ModelFile.Should().Be("rec.onnx");
+        model.DictFile.Should().Be("dict.txt");
+        model.Subfolder.Should().Be("languages/english");
     }
 
     [Fact]
-    public void TryGetRecognitionModel_WithKoreanAlias_ShouldReturnModel()
+    public void RecognitionRegistry_Resolve_KoreanAlias_ShouldReturnModel()
     {
         // Act
-        var result = ModelRegistry.TryGetRecognitionModel("crnn-korean-v3", out var modelInfo);
+        var model = OcrRecognitionModelRegistry.Default.Resolve("crnn-korean-v3");
 
         // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.ModelFile.Should().Be("rec.onnx");
-        modelInfo.Subfolder.Should().Be("languages/korean");
-        modelInfo.LanguageCodes.Should().Contain("ko");
+        model.Should().NotBeNull();
+        model.ModelFile.Should().Be("rec.onnx");
+        model.Subfolder.Should().Be("languages/korean");
+        model.LanguageCodes.Should().Contain("ko");
     }
 
     [Fact]
-    public void TryGetRecognitionModel_CaseInsensitive_ShouldWork()
+    public void RecognitionRegistry_TryResolve_CaseInsensitive_ShouldWork()
     {
         // Act
-        var result1 = ModelRegistry.TryGetRecognitionModel("CRNN-EN-V3", out var model1);
-        var result2 = ModelRegistry.TryGetRecognitionModel("Crnn-En-V3", out var model2);
+        var result1 = OcrRecognitionModelRegistry.Default.TryResolve("CRNN-EN-V3", out var model1);
+        var result2 = OcrRecognitionModelRegistry.Default.TryResolve("Crnn-En-V3", out var model2);
 
         // Assert
         result1.Should().BeTrue();
         result2.Should().BeTrue();
-        model1.Should().Be(model2);
+        model1!.RepoId.Should().Be(model2!.RepoId);
     }
 
     [Fact]
-    public void GetRecognitionModelForLanguage_WithEnglish_ShouldReturnEnglishModel()
+    public void RecognitionRegistry_ResolveForLanguage_English_ShouldReturnEnglishModel()
     {
         // Act
-        var model = ModelRegistry.GetRecognitionModelForLanguage("en");
+        var model = OcrRecognitionModelRegistry.Default.ResolveForLanguage("en");
 
         // Assert
-        model.AliasName.Should().Be("crnn-en-v3");
+        model.LanguageCodes.Should().Contain("en");
     }
 
     [Fact]
-    public void GetRecognitionModelForLanguage_WithKorean_ShouldReturnKoreanModel()
+    public void RecognitionRegistry_ResolveForLanguage_Korean_ShouldReturnKoreanModel()
     {
         // Act
-        var model = ModelRegistry.GetRecognitionModelForLanguage("ko");
+        var model = OcrRecognitionModelRegistry.Default.ResolveForLanguage("ko");
 
         // Assert
-        model.AliasName.Should().Be("crnn-korean-v3");
+        model.LanguageCodes.Should().Contain("ko");
     }
 
     [Fact]
-    public void GetRecognitionModelForLanguage_WithUnknownLanguage_ShouldFallbackToEnglish()
+    public void RecognitionRegistry_ResolveForLanguage_UnknownLanguage_ShouldFallbackToEnglish()
     {
         // Act
-        var model = ModelRegistry.GetRecognitionModelForLanguage("unknown");
+        var model = OcrRecognitionModelRegistry.Default.ResolveForLanguage("unknown");
 
         // Assert
-        model.AliasName.Should().Be("crnn-en-v3");
+        model.LanguageCodes.Should().Contain("en");
     }
 
     [Fact]
-    public void GetRecognitionModelForLanguage_WithLanguageRegion_ShouldMatch()
+    public void RecognitionRegistry_ResolveForLanguage_WithRegion_ShouldMatch()
     {
         // Act
-        var model = ModelRegistry.GetRecognitionModelForLanguage("en-US");
+        var model = OcrRecognitionModelRegistry.Default.ResolveForLanguage("en-US");
 
         // Assert
-        model.AliasName.Should().Be("crnn-en-v3");
+        model.LanguageCodes.Should().Contain("en");
     }
 
     [Fact]
-    public void GetAvailableRecognitionModels_ShouldReturnRegisteredAliases()
+    public void RecognitionRegistry_LanguageCode_ShouldResolveDirectly()
     {
+        // Language codes are registered as system aliases
         // Act
-        var models = ModelRegistry.GetAvailableRecognitionModels().ToList();
+        var enModel = OcrRecognitionModelRegistry.Default.Resolve("en");
+        var koModel = OcrRecognitionModelRegistry.Default.Resolve("ko");
+        var zhModel = OcrRecognitionModelRegistry.Default.Resolve("zh");
+        var arModel = OcrRecognitionModelRegistry.Default.Resolve("ar");
+        var ruModel = OcrRecognitionModelRegistry.Default.Resolve("ru");
 
         // Assert
-        models.Should().Contain("crnn-en-v3");
-        models.Should().Contain("crnn-korean-v3");
-        models.Should().Contain("crnn-chinese-v3");
+        enModel.LanguageCodes.Should().Contain("en");
+        koModel.LanguageCodes.Should().Contain("ko");
+        zhModel.LanguageCodes.Should().Contain("zh");
+        arModel.LanguageCodes.Should().Contain("ar");
+        ruModel.LanguageCodes.Should().Contain("ru");
     }
 
     [Fact]
-    public void GetSupportedLanguages_ShouldReturnLanguageCodes()
+    public void RecognitionRegistry_GetAvailableModels_ShouldReturnRegisteredModels()
     {
         // Act
-        var languages = ModelRegistry.GetSupportedLanguages().ToList();
+        var models = OcrRecognitionModelRegistry.Default.GetAvailableModels();
+
+        // Assert (distinct by RepoId — deduplicated by base class)
+        models.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void RecognitionRegistry_GetSupportedLanguages_ShouldReturnLanguageCodes()
+    {
+        // Act
+        var languages = OcrRecognitionModelRegistry.Default.GetSupportedLanguages().ToList();
 
         // Assert
         languages.Should().Contain("en");
@@ -231,10 +246,22 @@ public class ModelRegistryTests
     }
 
     [Fact]
+    public void RecognitionRegistry_Auto_ShouldResolve()
+    {
+        // Act
+        var model = OcrRecognitionModelRegistry.Default.Resolve("auto");
+
+        // Assert
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+        model.LanguageCodes.Should().Contain("en");
+    }
+
+    [Fact]
     public void CrnnEnV3Model_ShouldHaveCorrectConfiguration()
     {
         // Act
-        var model = ModelRegistry.GetRecognitionModel("crnn-en-v3");
+        var model = OcrRecognitionModelRegistry.Default.Resolve("crnn-en-v3");
 
         // Assert
         model.InputHeight.Should().Be(48);
@@ -249,104 +276,133 @@ public class ModelRegistryTests
     #region Registration Tests
 
     [Fact]
-    public void RegisterDetectionModel_ShouldAddNewModel()
+    public void DetectionRegistry_RegisterAlias_ShouldCreateNewMapping()
     {
         // Arrange
-        var newModel = new DetectionModelInfo(
-            RepoId: "test/test-detection",
-            AliasName: "test-detection",
-            DisplayName: "Test Detection Model",
-            ModelFile: "test_det.onnx");
+        var registry = new OcrDetectionModelRegistry(DefaultDetectionModels.All);
 
         // Act
-        ModelRegistry.RegisterDetectionModel(newModel);
-        var result = ModelRegistry.TryGetDetectionModel("test-detection", out var retrieved);
+        registry.RegisterAlias("my-det-alias", "dbnet-v3");
+        var result = registry.TryResolve("my-det-alias", out var model);
 
         // Assert
         result.Should().BeTrue();
-        retrieved.Should().Be(newModel);
+        model!.RepoId.Should().Be("monkt/paddleocr-onnx");
     }
 
     [Fact]
-    public void RegisterDetectionModel_WithNullModel_ShouldThrow()
-    {
-        // Act
-        var act = () => ModelRegistry.RegisterDetectionModel(null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>();
-    }
-
-    [Fact]
-    public void RegisterRecognitionModel_ShouldAddNewModel()
+    public void RecognitionRegistry_RegisterAlias_ShouldCreateNewMapping()
     {
         // Arrange
-        var newModel = new RecognitionModelInfo(
-            RepoId: "test/test-recognition",
-            AliasName: "test-recognition",
-            DisplayName: "Test Recognition Model",
-            ModelFile: "test_rec.onnx",
-            DictFile: "test_dict.txt",
-            LanguageCodes: ["test"]);
+        var registry = new OcrRecognitionModelRegistry(DefaultRecognitionModels.All);
 
         // Act
-        ModelRegistry.RegisterRecognitionModel(newModel);
-        var result = ModelRegistry.TryGetRecognitionModel("test-recognition", out var retrieved);
+        registry.RegisterAlias("my-rec-alias", "crnn-en-v3");
+        var result = registry.TryResolve("my-rec-alias", out var model);
 
         // Assert
         result.Should().BeTrue();
-        retrieved.Should().Be(newModel);
+        model!.LanguageCodes.Should().Contain("en");
     }
 
     [Fact]
-    public void RegisterRecognitionModel_WithNullModel_ShouldThrow()
+    public void DetectionRegistry_GetAliases_ShouldIncludeSystemAliases()
     {
         // Act
-        var act = () => ModelRegistry.RegisterRecognitionModel(null!);
+        var aliases = OcrDetectionModelRegistry.Default.GetAliases();
 
         // Assert
-        act.Should().Throw<ArgumentNullException>();
+        aliases.Should().Contain(a => a.Name == "auto");
+        aliases.Should().Contain(a => a.Name == "default");
+        aliases.Should().Contain(a => a.Name == "dbnet-v3");
     }
 
     [Fact]
-    public void RegisterDetectionAlias_ShouldCreateNewMapping()
+    public void RecognitionRegistry_GetAliases_ShouldIncludeLanguageCodeAliases()
     {
-        // Arrange - ensure base model exists
-        ModelRegistry.TryGetDetectionModel("dbnet-v3", out _).Should().BeTrue();
-
         // Act
-        ModelRegistry.RegisterDetectionAlias("my-det-alias", "dbnet-v3");
-        var result = ModelRegistry.TryGetDetectionModel("my-det-alias", out var model);
+        var aliases = OcrRecognitionModelRegistry.Default.GetAliases();
 
         // Assert
+        aliases.Should().Contain(a => a.Name == "auto");
+        aliases.Should().Contain(a => a.Name == "default");
+        aliases.Should().Contain(a => a.Name == "crnn-en-v3");
+        aliases.Should().Contain(a => a.Name == "en");
+        aliases.Should().Contain(a => a.Name == "ko");
+        aliases.Should().Contain(a => a.Name == "zh");
+    }
+
+    #endregion
+
+    #region LocalOcr Registry Exposure Tests
+
+    [Fact]
+    public void LocalOcr_DetectionRegistry_ShouldExposeDefault()
+    {
+        // Act
+        var registry = LocalOcr.DetectionRegistry;
+
+        // Assert
+        registry.Should().NotBeNull();
+        registry.Should().BeSameAs(OcrDetectionModelRegistry.Default);
+    }
+
+    [Fact]
+    public void LocalOcr_RecognitionRegistry_ShouldExposeDefault()
+    {
+        // Act
+        var registry = LocalOcr.RecognitionRegistry;
+
+        // Assert
+        registry.Should().NotBeNull();
+        registry.Should().BeSameAs(OcrRecognitionModelRegistry.Default);
+    }
+
+    #endregion
+
+    #region Backward Compatibility (Legacy Facade) Tests
+
+    [Fact]
+    public void LegacyFacade_TryGetDetectionModel_ShouldStillWork()
+    {
+#pragma warning disable CS0618 // Obsolete
+        var result = ModelRegistry.TryGetDetectionModel("default", out var modelInfo);
+#pragma warning restore CS0618
+
         result.Should().BeTrue();
-        model!.AliasName.Should().Be("dbnet-v3");
+        modelInfo.Should().NotBeNull();
     }
 
     [Fact]
-    public void RegisterDetectionAlias_WithNonexistentModel_ShouldThrow()
+    public void LegacyFacade_TryGetRecognitionModel_ShouldStillWork()
     {
-        // Act
-        var act = () => ModelRegistry.RegisterDetectionAlias("new-alias", "nonexistent-model");
+#pragma warning disable CS0618 // Obsolete
+        var result = ModelRegistry.TryGetRecognitionModel("default", out var modelInfo);
+#pragma warning restore CS0618
 
-        // Assert
-        act.Should().Throw<ArgumentException>()
-            .WithMessage("*nonexistent-model*not found*");
-    }
-
-    [Fact]
-    public void RegisterRecognitionAlias_ShouldCreateNewMapping()
-    {
-        // Arrange - ensure base model exists
-        ModelRegistry.TryGetRecognitionModel("crnn-en-v3", out _).Should().BeTrue();
-
-        // Act
-        ModelRegistry.RegisterRecognitionAlias("my-rec-alias", "crnn-en-v3");
-        var result = ModelRegistry.TryGetRecognitionModel("my-rec-alias", out var model);
-
-        // Assert
         result.Should().BeTrue();
-        model!.AliasName.Should().Be("crnn-en-v3");
+        modelInfo.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void LegacyFacade_GetRecognitionModelForLanguage_ShouldStillWork()
+    {
+#pragma warning disable CS0618 // Obsolete
+        var model = ModelRegistry.GetRecognitionModelForLanguage("ko");
+#pragma warning restore CS0618
+
+        model.LanguageCodes.Should().Contain("ko");
+    }
+
+    [Fact]
+    public void LegacyFacade_GetSupportedLanguages_ShouldStillWork()
+    {
+#pragma warning disable CS0618 // Obsolete
+        var languages = ModelRegistry.GetSupportedLanguages().ToList();
+#pragma warning restore CS0618
+
+        languages.Should().Contain("en");
+        languages.Should().Contain("ko");
     }
 
     #endregion

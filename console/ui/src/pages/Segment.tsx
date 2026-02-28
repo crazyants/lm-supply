@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { api } from '../api/client';
 import type { SegmentResponse } from '../api/types';
 import { Loader2, Upload } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 export function Segment() {
   const [modelId, setModelId] = useState('default');
@@ -98,6 +99,11 @@ export function Segment() {
           )}
         </div>
       </div>
+
+      <CurlExample commands={[
+        { label: 'Segment', command: `curl -X POST http://localhost:5000/v1/images/segment \\\n  -F file=@image.jpg \\\n  -F model=${modelId}` },
+        { label: 'List Labels', command: `curl http://localhost:5000/v1/images/segment/labels` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

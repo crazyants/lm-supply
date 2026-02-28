@@ -393,6 +393,7 @@ public class GeneratorFunctionalTests
 
     // ── Static Tests: Model Registry & Options (no model loading) ─
 
+#pragma warning disable CS0618 // Testing obsolete ModelRegistry facade
     [Fact]
     [Trait("Axis", "Loading")]
     public void L_ModelRegistry_GetAllModels_ReturnsModels()
@@ -453,6 +454,7 @@ public class GeneratorFunctionalTests
             m.RecommendedContextLength.Should().BeGreaterThan(0, "ContextLength should be > 0");
         });
     }
+#pragma warning restore CS0618
 
     [Fact]
     [Trait("Axis", "Quality")]

@@ -13,6 +13,16 @@ namespace LMSupply.Ocr;
 public static class LocalOcr
 {
     /// <summary>
+    /// Gets the detection model registry.
+    /// </summary>
+    public static IModelRegistry<DetectionModelInfo> DetectionRegistry => OcrDetectionModelRegistry.Default;
+
+    /// <summary>
+    /// Gets the recognition model registry.
+    /// </summary>
+    public static IModelRegistry<RecognitionModelInfo> RecognitionRegistry => OcrRecognitionModelRegistry.Default;
+
+    /// <summary>
     /// Loads an OCR pipeline with the specified detection and recognition models.
     /// </summary>
     /// <param name="detectionModel">
@@ -42,7 +52,7 @@ public static class LocalOcr
             detectionModel, options, progress, cancellationToken).ConfigureAwait(false);
 
         // Resolve recognition model based on language hint if not specified
-        recognitionModel ??= ModelRegistry.GetRecognitionModelForLanguage(options.LanguageHint).AliasName;
+        recognitionModel ??= OcrRecognitionModelRegistry.Default.ResolveForLanguage(options.LanguageHint).AliasName;
 
         var (recModelInfo, recModelPath, dictPath) = await ResolveRecognitionModelAsync(
             recognitionModel, options, progress, cancellationToken).ConfigureAwait(false);
@@ -76,7 +86,7 @@ public static class LocalOcr
         options ??= new OcrOptions { LanguageHint = languageCode };
         options.LanguageHint = languageCode;
 
-        var recognitionModel = ModelRegistry.GetRecognitionModelForLanguage(languageCode).AliasName;
+        var recognitionModel = OcrRecognitionModelRegistry.Default.ResolveForLanguage(languageCode).AliasName;
         return await LoadAsync("default", recognitionModel, options, progress, cancellationToken).ConfigureAwait(false);
     }
 
@@ -84,19 +94,19 @@ public static class LocalOcr
     /// Gets a list of pre-configured detection model IDs available for download.
     /// </summary>
     public static IEnumerable<string> GetAvailableDetectionModels()
-        => ModelRegistry.GetAvailableDetectionModels();
+        => OcrDetectionModelRegistry.Default.GetAvailableModels().Select(m => m.AliasName).Distinct().Order();
 
     /// <summary>
     /// Gets a list of pre-configured recognition model IDs available for download.
     /// </summary>
     public static IEnumerable<string> GetAvailableRecognitionModels()
-        => ModelRegistry.GetAvailableRecognitionModels();
+        => OcrRecognitionModelRegistry.Default.GetAvailableModels().Select(m => m.AliasName).Distinct().Order();
 
     /// <summary>
     /// Gets a list of supported language codes.
     /// </summary>
     public static IEnumerable<string> GetSupportedLanguages()
-        => ModelRegistry.GetSupportedLanguages();
+        => OcrRecognitionModelRegistry.Default.GetSupportedLanguages();
 
     private static async Task<(DetectionModelInfo info, string modelPath)> ResolveDetectionModelAsync(
         string modelIdOrPath,
@@ -108,15 +118,15 @@ public static class LocalOcr
         if (File.Exists(modelIdOrPath))
         {
             // Try to find matching model info or create a default one
-            var modelInfo = ModelRegistry.TryGetDetectionModel("default", out var info)
-                ? info
+            var modelInfo = OcrDetectionModelRegistry.Default.TryResolve("default", out var info)
+                ? info!
                 : throw new ModelNotFoundException("No default detection model configured", modelIdOrPath);
 
             return (modelInfo, modelIdOrPath);
         }
 
         // Check if it's a known model alias
-        if (ModelRegistry.TryGetDetectionModel(modelIdOrPath, out var knownModel))
+        if (OcrDetectionModelRegistry.Default.TryResolve(modelIdOrPath, out var knownModel) && knownModel is not null)
         {
             var cacheDir = options.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
             using var downloader = new HuggingFaceDownloader(cacheDir);
@@ -162,8 +172,8 @@ public static class LocalOcr
         if (File.Exists(modelIdOrPath))
         {
             // Try to find matching model info or create a default one
-            var modelInfo = ModelRegistry.TryGetRecognitionModel("default", out var info)
-                ? info
+            var modelInfo = OcrRecognitionModelRegistry.Default.TryResolve("default", out var info)
+                ? info!
                 : throw new ModelNotFoundException("No default recognition model configured", modelIdOrPath);
 
             // Look for dictionary file in the same directory
@@ -179,7 +189,7 @@ public static class LocalOcr
         }
 
         // Check if it's a known model alias
-        if (ModelRegistry.TryGetRecognitionModel(modelIdOrPath, out var knownModel))
+        if (OcrRecognitionModelRegistry.Default.TryResolve(modelIdOrPath, out var knownModel) && knownModel is not null)
         {
             var cacheDir = options.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
             using var downloader = new HuggingFaceDownloader(cacheDir);

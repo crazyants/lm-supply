@@ -1,4 +1,6 @@
 using FluentAssertions;
+using LMSupply;
+using LMSupply.Exceptions;
 using LMSupply.Detector.Models;
 
 namespace LMSupply.Detector.Tests;
@@ -89,25 +91,27 @@ public class DetectorModelRegistryTests
     }
 
     [Fact]
-    public void GetAll_ShouldReturnAllBuiltInModels()
+    public void GetAvailableModels_ShouldReturnAllBuiltInModels()
     {
-        var models = _registry.GetAll().ToList();
+        var models = _registry.GetAvailableModels();
 
         models.Should().HaveCount(5); // RtDetrV2S, RtDetrV2M, RtDetrV2L, RtDetrV2MS, RtDetrV2X
     }
 
     [Fact]
-    public void GetAliases_ShouldReturnAllAliases()
+    public void GetAliases_ShouldReturnAllAliasesAsAliasInfo()
     {
-        var aliases = _registry.GetAliases().ToList();
+        var aliases = _registry.GetAliases();
 
-        aliases.Should().Contain(["default", "quality", "fast", "large", "xlarge"]);
+        var aliasNames = aliases.Select(a => a.Name).ToList();
+        aliasNames.Should().Contain(["auto", "default", "quality", "fast", "large", "xlarge"]);
+        aliases.Should().AllSatisfy(a => a.Kind.Should().Be(AliasKind.System));
     }
 
     [Fact]
     public void DefaultModels_ShouldAllBeNmsFree()
     {
-        var models = _registry.GetAll();
+        var models = _registry.GetAvailableModels();
 
         // All RT-DETR v2 models are NMS-free
         models.Should().OnlyContain(m => m.RequiresNms == false);
@@ -117,8 +121,58 @@ public class DetectorModelRegistryTests
     [Fact]
     public void DefaultModels_ShouldAllHaveApache2License()
     {
-        var models = _registry.GetAll();
+        var models = _registry.GetAvailableModels();
 
         models.Should().OnlyContain(m => m.License == "Apache-2.0");
+    }
+
+    [Fact]
+    public void RegisterAlias_ShouldBeResolvable()
+    {
+        var registry = new DetectorModelRegistry(DefaultModels.All);
+
+        registry.RegisterAlias("my-detector", "xnorpx/rt-detr2-onnx:m");
+
+        var model = registry.Resolve("my-detector");
+        model.Should().NotBeNull();
+        model.Id.Should().Be("xnorpx/rt-detr2-onnx:m");
+    }
+
+    [Fact]
+    public void RegisterAlias_SystemAliasConflict_ShouldThrow()
+    {
+        var registry = new DetectorModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", "xnorpx/rt-detr2-onnx:m");
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void Resolve_AutoAlias_ShouldReturnModel()
+    {
+        var model = _registry.Resolve("auto");
+
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void LocalDetector_Registry_ShouldExpose()
+    {
+        var registry = LocalDetector.Registry;
+
+        registry.Should().NotBeNull();
+        registry.Should().BeAssignableTo<IModelRegistry<DetectorModelInfo>>();
+    }
+
+    [Fact]
+    public void LocalDetector_GetAvailableModels_ShouldReturnAliasNames()
+    {
+        var models = LocalDetector.GetAvailableModels().ToList();
+
+        models.Should().Contain("default");
+        models.Should().Contain("auto");
+        models.Should().AllSatisfy(m => m.Should().BeOfType<string>());
     }
 }

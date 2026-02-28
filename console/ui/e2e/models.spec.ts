@@ -45,7 +45,11 @@ test.describe('Models page', () => {
 
   // Test plan: 14.1.5 — Empty state
   test('empty cached models shows message or table when populated', async ({ page }) => {
-    // Wait for the heading to show count (data loaded)
+    // Wait for the refresh icon to stop spinning (API calls completed)
+    const refreshBtn = page.getByRole('button', { name: /Refresh/ });
+    await expect(refreshBtn.locator('.animate-spin')).toBeHidden({ timeout: 15_000 });
+
+    // Now read the count after data has loaded
     const heading = page.getByRole('heading', { name: /Cached Models/ });
     await expect(heading).toContainText(/\(\d+\)/, { timeout: 5_000 });
     const headingText = await heading.textContent();

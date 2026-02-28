@@ -48,7 +48,7 @@ internal static class GeneratorModelLoader
         using var downloader = new HuggingFaceDownloader(cacheDir);
 
         // Look up model in registry to get subfolder preference
-        var modelInfo = ModelRegistry.GetModel(modelId);
+        GeneratorModelRegistry.Default.TryResolve(modelId, out var modelInfo);
 
         // Build preferences from registry info if available
         var preferences = modelInfo?.Subfolder != null

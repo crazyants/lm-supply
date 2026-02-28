@@ -1,135 +1,62 @@
 namespace LMSupply.Generator;
 
 /// <summary>
-/// Registry of supported ONNX models with license and configuration information.
+/// Legacy registry of supported ONNX models with license and configuration information.
+/// Use <see cref="GeneratorModelRegistry"/> instead for new code.
 /// </summary>
+[Obsolete("Use GeneratorModelRegistry.Default instead. This class will be removed in a future version.")]
 public static class ModelRegistry
 {
-    private static readonly Dictionary<string, ModelInfo> _models = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Tier 1: MIT License - No restrictions
-        ["microsoft/Phi-4-mini-instruct-onnx"] = new ModelInfo
-        {
-            ModelId = "microsoft/Phi-4-mini-instruct-onnx",
-            DisplayName = "Phi-4 Mini",
-            ParameterCount = 3_800_000_000,
-            License = LicenseTier.MIT,
-            LicenseName = "MIT",
-            ChatFormat = "phi3",
-            DefaultQuantization = Quantization.Quant4,
-            RecommendedContextLength = 16384,
-            NumLayers = 32,
-            HiddenSize = 3072,
-            Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
-        },
-        ["microsoft/Phi-3.5-mini-instruct-onnx"] = new ModelInfo
-        {
-            ModelId = "microsoft/Phi-3.5-mini-instruct-onnx",
-            DisplayName = "Phi-3.5 Mini",
-            ParameterCount = 3_800_000_000,
-            License = LicenseTier.MIT,
-            LicenseName = "MIT",
-            ChatFormat = "phi3",
-            DefaultQuantization = Quantization.Quant4,
-            RecommendedContextLength = 4096,
-            NumLayers = 32,
-            HiddenSize = 3072,
-            Subfolder = "cpu_and_mobile/cpu-int4-awq-block-128-acc-level-4"
-        },
-        ["microsoft/phi-4-onnx"] = new ModelInfo
-        {
-            ModelId = "microsoft/phi-4-onnx",
-            DisplayName = "Phi-4",
-            ParameterCount = 14_000_000_000,
-            License = LicenseTier.MIT,
-            LicenseName = "MIT",
-            ChatFormat = "phi3",
-            DefaultQuantization = Quantization.Quant4,
-            RecommendedContextLength = 8192,
-            NumLayers = 40,
-            HiddenSize = 5120,
-            Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
-        },
+    // Keep a static dict for backward-compatible GetModel()/IsRegistered()
+    // These methods return null for unknown models, which the new registry doesn't do.
+    private static readonly Dictionary<string, ModelInfo> _modelsById;
 
-        // Tier 2: Conditional - Usage restrictions apply
-        ["onnx-community/Llama-3.2-1B-Instruct-ONNX"] = new ModelInfo
+    static ModelRegistry()
+    {
+        _modelsById = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var model in DefaultGeneratorModels.All)
         {
-            ModelId = "onnx-community/Llama-3.2-1B-Instruct-ONNX",
-            DisplayName = "Llama 3.2 1B",
-            ParameterCount = 1_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Llama 3.2 Community License",
-            LicenseRestrictions = "700M MAU limit for commercial use",
-            ChatFormat = "llama3",
-            DefaultQuantization = Quantization.Quant4,
-            RecommendedContextLength = 4096,
-            NumLayers = 16,
-            HiddenSize = 2048,
-            Subfolder = "onnx"
-        },
-        ["onnx-community/Llama-3.2-3B-Instruct-ONNX"] = new ModelInfo
-        {
-            ModelId = "onnx-community/Llama-3.2-3B-Instruct-ONNX",
-            DisplayName = "Llama 3.2 3B",
-            ParameterCount = 3_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Llama 3.2 Community License",
-            LicenseRestrictions = "700M MAU limit for commercial use",
-            ChatFormat = "llama3",
-            DefaultQuantization = Quantization.Quant4,
-            RecommendedContextLength = 4096,
-            NumLayers = 28,
-            HiddenSize = 3072,
-            Subfolder = "onnx"
-        },
-        ["google/gemma-2-2b-it-onnx"] = new ModelInfo
-        {
-            ModelId = "google/gemma-2-2b-it-onnx",
-            DisplayName = "Gemma 2 2B",
-            ParameterCount = 2_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Gemma Terms of Use",
-            LicenseRestrictions = "Prohibited Use Policy applies",
-            ChatFormat = "gemma",
-            DefaultQuantization = Quantization.Quant4,
-            RecommendedContextLength = 4096,
-            NumLayers = 26,
-            HiddenSize = 2304,
-            Subfolder = "onnx"
+            _modelsById[model.ModelId] = model;
         }
-    };
+    }
 
     /// <summary>
     /// Gets all registered models.
     /// </summary>
+    [Obsolete("Use GeneratorModelRegistry.Default.GetAvailableModels() instead.")]
     public static IReadOnlyList<ModelInfo> GetAllModels() =>
-        _models.Values.ToList();
+        GeneratorModelRegistry.Default.GetAvailableModels().ToList();
 
     /// <summary>
     /// Gets models filtered by license tier.
     /// </summary>
+    [Obsolete("Use GeneratorModelRegistry.Default.GetAvailableModels() with LINQ instead.")]
     public static IReadOnlyList<ModelInfo> GetModelsByLicense(LicenseTier tier) =>
-        _models.Values.Where(m => m.License == tier).ToList();
+        GeneratorModelRegistry.Default.GetAvailableModels().Where(m => m.License == tier).ToList();
 
     /// <summary>
     /// Gets MIT-licensed models (no usage restrictions).
     /// </summary>
+    [Obsolete("Use GeneratorModelRegistry.Default.GetAvailableModels() with LINQ instead.")]
     public static IReadOnlyList<ModelInfo> GetUnrestrictedModels() =>
         GetModelsByLicense(LicenseTier.MIT);
 
     /// <summary>
     /// Gets model information by ID.
+    /// Returns null for unknown models (unlike the new registry which throws).
     /// </summary>
     /// <param name="modelId">The model identifier (e.g., "microsoft/Phi-3.5-mini-instruct-onnx").</param>
     /// <returns>Model information if found, null otherwise.</returns>
+    [Obsolete("Use GeneratorModelRegistry.Default.TryResolve() instead.")]
     public static ModelInfo? GetModel(string modelId) =>
-        _models.GetValueOrDefault(modelId);
+        _modelsById.GetValueOrDefault(modelId);
 
     /// <summary>
     /// Checks if a model is registered.
     /// </summary>
+    [Obsolete("Use GeneratorModelRegistry.Default.TryResolve() instead.")]
     public static bool IsRegistered(string modelId) =>
-        _models.ContainsKey(modelId);
+        _modelsById.ContainsKey(modelId);
 
     /// <summary>
     /// Gets models that fit within available memory.
@@ -137,9 +64,10 @@ public static class ModelRegistry
     /// <param name="availableMemoryBytes">Available memory in bytes.</param>
     /// <param name="contextLength">Desired context length.</param>
     /// <returns>List of models that can fit in memory.</returns>
+    [Obsolete("Use GeneratorModelRegistry.Default.GetAvailableModels() with memory filtering instead.")]
     public static IReadOnlyList<ModelInfo> GetModelsForMemory(long availableMemoryBytes, int contextLength = 4096)
     {
-        return _models.Values
+        return GeneratorModelRegistry.Default.GetAvailableModels()
             .Where(m => CanFitInMemory(m, availableMemoryBytes, contextLength))
             .OrderByDescending(m => m.ParameterCount)
             .ToList();
@@ -148,6 +76,7 @@ public static class ModelRegistry
     /// <summary>
     /// Gets the default recommended model based on hardware.
     /// </summary>
+    [Obsolete("Use GeneratorModelRegistry.Default.Resolve(\"auto\") instead.")]
     public static ModelInfo GetDefaultModel()
     {
         var recommendation = HardwareDetector.GetRecommendation();
@@ -159,7 +88,7 @@ public static class ModelRegistry
             .OrderBy(m => m.License) // MIT first (lower enum value)
             .ThenByDescending(m => m.ParameterCount);
 
-        return candidates.FirstOrDefault() ?? _models["microsoft/Phi-3.5-mini-instruct-onnx"];
+        return candidates.FirstOrDefault() ?? DefaultGeneratorModels.Phi35Mini;
     }
 
     private static bool CanFitInMemory(ModelInfo model, long availableMemoryBytes, int contextLength)
@@ -195,12 +124,27 @@ public enum LicenseTier
 /// <summary>
 /// Model metadata and configuration.
 /// </summary>
-public sealed record ModelInfo
+public sealed record ModelInfo : IModelInfoBase
 {
     /// <summary>
     /// Unique model identifier (HuggingFace format: org/model-name).
     /// </summary>
     public required string ModelId { get; init; }
+
+    // IModelInfoBase implementation
+    string IModelInfoBase.Id => ModelId;
+
+    /// <summary>
+    /// Gets the alias name for this model.
+    /// Set by the registry for system aliases (e.g., "default", "fast").
+    /// Defaults to ModelId if not explicitly set.
+    /// </summary>
+    public string AliasName { get; init; } = null!;
+
+    /// <summary>
+    /// Gets the model description.
+    /// </summary>
+    public string? Description { get; init; }
 
     /// <summary>
     /// Human-friendly display name.

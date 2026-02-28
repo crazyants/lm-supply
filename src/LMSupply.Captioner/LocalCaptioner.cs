@@ -12,6 +12,12 @@ namespace LMSupply.Captioner;
 public static class LocalCaptioner
 {
     /// <summary>
+    /// Gets the model registry for the Captioner domain.
+    /// Provides access to model resolution, alias management, and model enumeration.
+    /// </summary>
+    public static IModelRegistry<ModelInfo> Registry => CaptionerModelRegistry.Default;
+
+    /// <summary>
     /// Loads a captioning model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
@@ -48,18 +54,18 @@ public static class LocalCaptioner
                     modelIdOrPath);
             }
         }
-        // Check if it's a known model alias
-        else if (ModelRegistry.TryGetModel(modelIdOrPath, out modelInfo))
+        // Check if it's a known model alias (only system/user aliases, not HF fallbacks)
+        else if (TryResolveKnownModel(modelIdOrPath, out modelInfo))
         {
             // Download model from HuggingFace
             var cacheDir = options.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
             using var downloader = new HuggingFaceDownloader(cacheDir);
 
             // Build model-specific file list
-            var modelFiles = GetRequiredFiles(modelInfo);
+            var modelFiles = GetRequiredFiles(modelInfo!);
 
             modelDir = await downloader.DownloadModelAsync(
-                modelInfo.RepoId,
+                modelInfo!.RepoId,
                 files: modelFiles,
                 subfolder: modelInfo.Subfolder,
                 progress: progress,
@@ -112,12 +118,14 @@ public static class LocalCaptioner
     /// <summary>
     /// Gets a list of pre-configured model IDs available for download.
     /// </summary>
-    public static IEnumerable<string> GetAvailableModels() => ModelRegistry.GetAvailableModels();
+    public static IEnumerable<string> GetAvailableModels() =>
+        CaptionerModelRegistry.Default.GetAliases().Select(a => a.Name);
 
     /// <summary>
     /// Gets all registered model information (deduplicated by alias name).
     /// </summary>
-    public static IEnumerable<ModelInfo> GetAllModels() => ModelRegistry.GetAllModels();
+    public static IEnumerable<ModelInfo> GetAllModels() =>
+        CaptionerModelRegistry.Default.GetAvailableModels();
 
     private static async Task<ICaptionerModel> CreateCaptionerAsync(
         string modelDir,
@@ -128,6 +136,35 @@ public static class LocalCaptioner
         // Currently only ViT-GPT2 style models are supported
         // Future: Add support for Florence-2, SmolVLM, etc.
         return await VitGpt2Captioner.CreateAsync(modelDir, modelInfo, options, tokenizerDir).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves only known models (system aliases, user aliases, registered IDs).
+    /// Does NOT create fallback for unknown HuggingFace repos, preserving the
+    /// auto-discovery download path for truly unknown models.
+    /// </summary>
+    private static bool TryResolveKnownModel(string modelIdOrAlias, out ModelInfo? modelInfo)
+    {
+        var registry = CaptionerModelRegistry.Default;
+
+        // Check if it would resolve to a fallback (contains '/' but not registered)
+        // In that case, return false so the auto-discovery path is used instead
+        if (modelIdOrAlias.Contains('/'))
+        {
+            // Only resolve if it's a registered model ID (not a fallback)
+            var knownModels = registry.GetAvailableModels();
+            var match = knownModels.FirstOrDefault(m =>
+                m.RepoId.Equals(modelIdOrAlias, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                modelInfo = match;
+                return true;
+            }
+            modelInfo = null;
+            return false;
+        }
+
+        return registry.TryResolve(modelIdOrAlias, out modelInfo);
     }
 
     private static bool TryInferModelInfo(string modelDir, out ModelInfo? modelInfo)
@@ -160,7 +197,7 @@ public static class LocalCaptioner
 
             if (File.Exists(vocabPath))
             {
-                modelInfo = ModelRegistry.GetModel("vit-gpt2");
+                modelInfo = CaptionerModelRegistry.Default.Resolve("default");
                 return true;
             }
         }

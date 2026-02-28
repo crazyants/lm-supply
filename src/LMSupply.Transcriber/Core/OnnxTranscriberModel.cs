@@ -296,17 +296,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             if (_isInitialized) return;
 
             // Resolve model info
-            if (!TranscriberModelRegistry.Default.TryGet(_options.ModelId, out _modelInfo))
-            {
-                // Treat as HuggingFace model ID
-                _modelInfo = new TranscriberModelInfo
-                {
-                    Id = _options.ModelId,
-                    AliasName = _options.ModelId,
-                    DisplayName = _options.ModelId,
-                    Architecture = "Whisper"
-                };
-            }
+            _modelInfo = TranscriberModelRegistry.Default.Resolve(_options.ModelId);
 
             // Download model if needed and get discovery result
             var (baseModelPath, discovery) = await ResolveModelPathAsync(cancellationToken);

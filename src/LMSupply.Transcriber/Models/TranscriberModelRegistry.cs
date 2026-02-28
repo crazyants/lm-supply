@@ -1,67 +1,24 @@
+using System.Diagnostics;
 using LMSupply.Hardware;
 
 namespace LMSupply.Transcriber.Models;
 
 /// <summary>
-/// Registry for managing transcriber model configurations.
+/// Model registry for the Transcriber domain.
 /// </summary>
-public sealed class TranscriberModelRegistry
+public sealed class TranscriberModelRegistry : ModelRegistryBase<TranscriberModelInfo>
 {
-    private readonly Dictionary<string, TranscriberModelInfo> _models = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, TranscriberModelInfo> _byId = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Gets the default registry instance with built-in models.
+    /// </summary>
+    public static TranscriberModelRegistry Default { get; } = new(DefaultModels.All);
 
     /// <summary>
-    /// Gets the default registry instance with pre-configured models.
+    /// Initializes a new registry with the specified system models.
     /// </summary>
-    public static TranscriberModelRegistry Default { get; } = CreateDefault();
-
-    private TranscriberModelRegistry() { }
-
-    private static TranscriberModelRegistry CreateDefault()
-    {
-        var registry = new TranscriberModelRegistry();
-        foreach (var model in DefaultModels.All)
-        {
-            registry.Register(model);
-        }
-        return registry;
-    }
-
-    /// <summary>
-    /// Registers a model configuration.
-    /// </summary>
-    /// <param name="info">The model information to register.</param>
-    public void Register(TranscriberModelInfo info)
-    {
-        _models[info.AliasName] = info;
-        _byId[info.Id] = info;
-    }
-
-    /// <summary>
-    /// Tries to get model info by alias or ID.
-    /// Supports "auto" alias which selects optimal model based on hardware.
-    /// </summary>
-    /// <param name="aliasOrId">The alias, HuggingFace model ID, or "auto".</param>
-    /// <param name="info">The model information if found.</param>
-    /// <returns>True if found, false otherwise.</returns>
-    public bool TryGet(string aliasOrId, out TranscriberModelInfo? info)
-    {
-        // Handle "auto" alias - select optimal model based on hardware
-        if (aliasOrId.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            info = GetAutoModel();
-            return true;
-        }
-
-        if (_models.TryGetValue(aliasOrId, out info))
-            return true;
-
-        if (_byId.TryGetValue(aliasOrId, out info))
-            return true;
-
-        info = null;
-        return false;
-    }
+    /// <param name="systemModels">Models to register as system defaults.</param>
+    public TranscriberModelRegistry(IEnumerable<TranscriberModelInfo> systemModels)
+        : base(systemModels) { }
 
     /// <summary>
     /// Gets the optimal model based on current hardware profile.
@@ -74,35 +31,57 @@ public sealed class TranscriberModelRegistry
     /// - High:   Whisper Small (244M params) - quality
     /// - Ultra:  Whisper Large V3 Turbo (809M params) - highest quality
     /// </remarks>
-    public static TranscriberModelInfo GetAutoModel()
+    protected override TranscriberModelInfo GetAutoModel()
     {
         var tier = HardwareProfile.Current.Tier;
+        Trace.TraceInformation($"[TranscriberModelRegistry] Auto-selecting model for tier: {tier}");
 
-        return tier switch
+        var model = tier switch
         {
             PerformanceTier.Ultra => DefaultModels.WhisperLargeV3Turbo,
             PerformanceTier.High => DefaultModels.WhisperSmall,
             PerformanceTier.Medium => DefaultModels.WhisperBase,
             _ => DefaultModels.WhisperTiny
         };
-    }
 
-    /// <summary>
-    /// Gets all registered aliases including "auto".
-    /// </summary>
-    /// <returns>Collection of model aliases.</returns>
-    public IEnumerable<string> GetAliases()
-    {
-        yield return "auto";
-        foreach (var alias in _models.Keys)
+        return new TranscriberModelInfo
         {
-            yield return alias;
-        }
+            Id = model.Id,
+            AliasName = "auto",
+            DisplayName = model.DisplayName,
+            Architecture = model.Architecture,
+            ParametersM = model.ParametersM,
+            SizeBytes = model.SizeBytes,
+            WerLibriSpeech = model.WerLibriSpeech,
+            MaxDurationSeconds = model.MaxDurationSeconds,
+            SampleRate = model.SampleRate,
+            NumMelBins = model.NumMelBins,
+            HiddenSize = model.HiddenSize,
+            EncoderFile = model.EncoderFile,
+            DecoderFile = model.DecoderFile,
+            SupportedLanguages = model.SupportedLanguages,
+            IsMultilingual = model.IsMultilingual,
+            Description = model.Description,
+            License = model.License
+        };
     }
 
     /// <summary>
-    /// Gets all registered model information.
+    /// Creates a fallback model info for unknown model IDs (HuggingFace repos or local paths).
     /// </summary>
-    /// <returns>Collection of model information.</returns>
-    public IEnumerable<TranscriberModelInfo> GetAll() => _models.Values;
+    protected override TranscriberModelInfo CreateFallbackModelInfo(string modelId)
+    {
+        Trace.TraceInformation($"[TranscriberModelRegistry] Creating fallback model info for: {modelId}");
+
+        var parts = modelId.Split('/');
+        var name = parts.Length > 1 ? parts[1] : modelId;
+
+        return new TranscriberModelInfo
+        {
+            Id = modelId,
+            AliasName = modelId,
+            DisplayName = name,
+            Architecture = "Whisper"
+        };
+    }
 }

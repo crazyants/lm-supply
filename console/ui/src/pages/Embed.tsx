@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import { ModelSelector } from '../components/ModelSelector';
 import { Loader2 } from 'lucide-react';
+import { CurlExample } from '../components/CurlExample';
 
 interface EmbeddingResult {
   index: number;
@@ -75,6 +76,10 @@ export function Embed() {
           Generate Embeddings
         </button>
       </form>
+
+      <CurlExample commands={[
+        { label: 'Embeddings', command: `curl -X POST http://localhost:5000/v1/embeddings \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${modelId || 'default'}","input":["Hello world","How are you"]}'` },
+      ]} />
 
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded">

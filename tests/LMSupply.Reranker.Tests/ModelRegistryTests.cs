@@ -1,4 +1,5 @@
 using FluentAssertions;
+using LMSupply;
 using LMSupply.Exceptions;
 using LMSupply.Reranker.Models;
 
@@ -6,7 +7,7 @@ namespace LMSupply.Reranker.Tests;
 
 public class ModelRegistryTests
 {
-    private readonly ModelRegistry _registry = ModelRegistry.Default;
+    private readonly RerankerModelRegistry _registry = RerankerModelRegistry.Default;
 
     [Theory]
     [InlineData("default")]
@@ -90,18 +91,105 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void GetAll_ShouldReturnAllBuiltInModels()
+    public void GetAvailableModels_ShouldReturnAllBuiltInModels()
     {
-        var models = _registry.GetAll().ToList();
+        var models = _registry.GetAvailableModels();
 
         models.Should().HaveCount(6);
     }
 
     [Fact]
-    public void GetAliases_ShouldReturnAllAliases()
+    public void GetAliases_ShouldReturnAllAliasesAsAliasInfo()
     {
-        var aliases = _registry.GetAliases().ToList();
+        var aliases = _registry.GetAliases();
 
-        aliases.Should().Contain(["default", "quality", "fast", "multilingual", "large"]);
+        var aliasNames = aliases.Select(a => a.Name).ToList();
+        aliasNames.Should().Contain(["auto", "default", "quality", "fast", "multilingual", "large"]);
+        aliases.Should().AllSatisfy(a => a.Kind.Should().Be(AliasKind.System));
+    }
+
+    [Fact]
+    public void RegisterAlias_ShouldBeResolvable()
+    {
+        var registry = new RerankerModelRegistry(DefaultModels.All);
+
+        registry.RegisterAlias("my-model", "BAAI/bge-reranker-base");
+
+        var model = registry.Resolve("my-model");
+        model.Should().NotBeNull();
+        model.Id.Should().Be("BAAI/bge-reranker-base");
+    }
+
+    [Fact]
+    public void RegisterAlias_SystemAliasConflict_ShouldThrow()
+    {
+        var registry = new RerankerModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("default", "BAAI/bge-reranker-base");
+
+        act.Should().Throw<AliasConflictException>();
+    }
+
+    [Fact]
+    public void RemoveAlias_UserAlias_ShouldSucceed()
+    {
+        var registry = new RerankerModelRegistry(DefaultModels.All);
+        registry.RegisterAlias("temp-alias", "BAAI/bge-reranker-base");
+
+        var removed = registry.RemoveAlias("temp-alias");
+
+        removed.Should().BeTrue();
+        var act = () => registry.Resolve("temp-alias");
+        act.Should().Throw<ModelNotFoundException>();
+    }
+
+    [Fact]
+    public void RemoveAlias_SystemAlias_ShouldReturnFalse()
+    {
+        var registry = new RerankerModelRegistry(DefaultModels.All);
+
+        var removed = registry.RemoveAlias("default");
+
+        removed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetAliases_WithUserAlias_ShouldIncludeBoth()
+    {
+        var registry = new RerankerModelRegistry(DefaultModels.All);
+        registry.RegisterAlias("custom", "BAAI/bge-reranker-large");
+
+        var aliases = registry.GetAliases();
+
+        aliases.Should().Contain(a => a.Name == "custom" && a.Kind == AliasKind.User);
+        aliases.Should().Contain(a => a.Name == "default" && a.Kind == AliasKind.System);
+    }
+
+    [Fact]
+    public void Resolve_AutoAlias_ShouldReturnModel()
+    {
+        var model = _registry.Resolve("auto");
+
+        model.Should().NotBeNull();
+        model.AliasName.Should().Be("auto");
+    }
+
+    [Fact]
+    public void LocalReranker_Registry_ShouldExpose()
+    {
+        var registry = LocalReranker.Registry;
+
+        registry.Should().NotBeNull();
+        registry.Should().BeAssignableTo<IModelRegistry<ModelInfo>>();
+    }
+
+    [Fact]
+    public void LocalReranker_GetAvailableModels_ShouldReturnAliasNames()
+    {
+        var models = LocalReranker.GetAvailableModels().ToList();
+
+        models.Should().Contain("default");
+        models.Should().Contain("auto");
+        models.Should().AllSatisfy(m => m.Should().BeOfType<string>());
     }
 }

@@ -22,6 +22,7 @@ test.describe('Chat — Enter key', () => {
 
     await page.goto('/chat');
     await expect(page.locator('main').getByRole('heading', { name: 'Chat' })).toBeVisible();
+    await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
 
     const input = page.locator('input[type="text"]').first();
     await input.fill('Hello');
@@ -174,6 +175,7 @@ test.describe('Synthesize — Enter key in form', () => {
 
     await page.goto('/synthesize');
     await expect(page.locator('main').getByRole('heading', { name: 'Text to Speech' })).toBeVisible();
+    await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
 
     const textarea = page.locator('textarea');
     await textarea.fill('Test speech synthesis');

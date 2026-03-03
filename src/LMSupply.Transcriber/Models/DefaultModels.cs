@@ -4,6 +4,14 @@ namespace LMSupply.Transcriber.Models;
 /// Default transcription model configurations.
 /// All models use MIT license (OpenAI Whisper).
 /// </summary>
+/// <remarks>
+/// <para>Alias naming convention:</para>
+/// <list type="bullet">
+///   <item><term>Standard tiers</term><description>fast, default, quality, large, turbo, medium, distil — multilingual or English</description></item>
+///   <item><term>Language name</term><description>english — standalone language alias for backward compatibility</description></item>
+///   <item><term>Language-specific tier</term><description>{tier}-{lang} using ISO 639-1 codes — e.g., large-ko, fast-ja</description></item>
+/// </list>
+/// </remarks>
 public static class DefaultModels
 {
     /// <summary>
@@ -101,25 +109,25 @@ public static class DefaultModels
     };
 
     /// <summary>
-    /// Whisper Large V3 Turbo - Best balance of quality and speed for "large" alias.
-    /// MIT license, 809M params, ~3GB. 8x faster than original Large V3.
-    /// Note: Original whisper-large-v3 is gated and requires HuggingFace authentication.
+    /// Whisper Large V3 - Full 32-decoder-layer multilingual model.
+    /// MIT license, 1550M params, ~6.4GB. Highest quality, slowest inference.
+    /// Note: Uses whisper-large-v3-ONNX (public), not whisper-large-v3 (gated).
     /// </summary>
     public static TranscriberModelInfo WhisperLargeV3 { get; } = new()
     {
-        Id = "onnx-community/whisper-large-v3-turbo",
+        Id = "onnx-community/whisper-large-v3-ONNX",
         AliasName = "large",
-        DisplayName = "Whisper Large V3 Turbo",
+        DisplayName = "Whisper Large V3",
         Architecture = "Whisper",
-        ParametersM = 809f,
-        SizeBytes = 3_200_000_000,
-        WerLibriSpeech = 2.7f,
+        ParametersM = 1550f,
+        SizeBytes = 6_400_000_000,
+        WerLibriSpeech = 2.5f,
         MaxDurationSeconds = 30,
         SampleRate = 16000,
         NumMelBins = 128, // Large V3 uses 128 mel bins
         HiddenSize = 1280,
         IsMultilingual = true,
-        Description = "Whisper Large V3 Turbo for highest quality transcription. 8x faster than original V3.",
+        Description = "Whisper Large V3 with full 32 decoder layers for highest quality multilingual transcription.",
         License = "MIT",
         DecoderFile = "decoder_model_merged.onnx"
     };
@@ -174,6 +182,30 @@ public static class DefaultModels
     };
 
     /// <summary>
+    /// Whisper Large V3 Turbo Korean - Korean-optimized large model.
+    /// MIT license, 809M params, ~3GB. Fine-tuned for Korean ASR.
+    /// Based on royshilkrot/whisper-large-v3-turbo-korean-ggml.
+    /// </summary>
+    public static TranscriberModelInfo WhisperLargeV3TurboKorean { get; } = new()
+    {
+        Id = "onnx-community/whisper-large-v3-turbo-korean-ggml-ONNX",
+        AliasName = "large-ko",
+        DisplayName = "Whisper Large V3 Turbo (Korean)",
+        Architecture = "Whisper",
+        ParametersM = 809f,
+        SizeBytes = 3_200_000_000,
+        MaxDurationSeconds = 30,
+        SampleRate = 16000,
+        NumMelBins = 128,
+        HiddenSize = 1280,
+        IsMultilingual = false,
+        SupportedLanguages = ["ko"],
+        Description = "Whisper Large V3 Turbo fine-tuned for Korean speech recognition.",
+        License = "MIT",
+        DecoderFile = "decoder_model_merged.onnx"
+    };
+
+    /// <summary>
     /// Whisper Base English-only - Optimized for English.
     /// MIT license, 74M params, ~290MB.
     /// </summary>
@@ -209,6 +241,7 @@ public static class DefaultModels
         WhisperLargeV3,
         WhisperLargeV3Turbo,
         DistilWhisperLargeV3,
+        WhisperLargeV3TurboKorean,
         WhisperBaseEn
     ];
 }

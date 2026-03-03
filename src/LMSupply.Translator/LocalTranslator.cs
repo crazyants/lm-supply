@@ -55,7 +55,7 @@ public static class LocalTranslator
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return LoadAsync("default", options, progress, cancellationToken);
+        return LoadAsync(options?.ModelId ?? "default", options, progress, cancellationToken);
     }
 
     /// <summary>

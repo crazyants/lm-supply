@@ -1,3 +1,5 @@
+using LMSupply.Transcriber.Internal;
+
 namespace LMSupply.Transcriber.Models;
 
 /// <summary>
@@ -89,4 +91,32 @@ public sealed class TranscriberModelInfo : IModelInfoBase
     /// Gets or sets the license type.
     /// </summary>
     public string License { get; init; } = "MIT";
+
+    /// <summary>
+    /// Creates a new instance with parameters overridden from a parsed Whisper config.
+    /// Only non-null config values are applied.
+    /// </summary>
+    internal TranscriberModelInfo WithConfigOverrides(WhisperModelConfig config)
+    {
+        return new TranscriberModelInfo
+        {
+            Id = Id,
+            AliasName = AliasName,
+            DisplayName = DisplayName,
+            Architecture = Architecture,
+            ParametersM = ParametersM,
+            SizeBytes = SizeBytes,
+            WerLibriSpeech = WerLibriSpeech,
+            MaxDurationSeconds = MaxDurationSeconds,
+            SampleRate = SampleRate,
+            NumMelBins = config.NumMelBins ?? NumMelBins,
+            HiddenSize = config.HiddenSize ?? HiddenSize,
+            EncoderFile = EncoderFile,
+            DecoderFile = DecoderFile,
+            SupportedLanguages = SupportedLanguages,
+            IsMultilingual = IsMultilingual,
+            Description = Description,
+            License = License
+        };
+    }
 }

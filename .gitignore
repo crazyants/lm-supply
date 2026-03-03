@@ -45,6 +45,7 @@ tmpclaude-*
 local-docs/
 local-tests/
 nul
+test-files/
 
 # Local test samples (not for distribution)
 samples/Gemma3Test/

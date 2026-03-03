@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Text;
+using LMSupply.Transcriber.Internal;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -120,6 +123,10 @@ internal sealed class WhisperDecoder
             float? languageProbability = null;
             int segmentId = 0;
 
+            // Per-segment metric tracking
+            var currentSegmentLogProbs = new List<float>();
+            float? chunkNoSpeechProb = null;
+
             // For merged models, we'll track KV cache state
             Dictionary<string, DenseTensor<float>>? kvCache = null;
 
@@ -240,11 +247,23 @@ internal sealed class WhisperDecoder
                 // Greedy selection: argmax
                 var nextToken = ArgMax(lastLogits);
 
-                // Detect language from first generated token after SOT
-                if (tokens.Count == initialTokens.Length && WhisperTokenizer.IsLanguageToken(nextToken))
+                // Compute log probability of selected token for AvgLogProb metric
+                if (!WhisperTokenizer.IsSpecialToken(nextToken))
                 {
-                    detectedLanguage = WhisperTokenizer.GetLanguageFromToken(nextToken);
-                    languageProbability = ComputeLanguageTokenProbability(lastLogits, nextToken);
+                    currentSegmentLogProbs.Add(ComputeLogProb(lastLogits, nextToken));
+                }
+
+                // Detect language from first generated token after SOT
+                if (tokens.Count == initialTokens.Length)
+                {
+                    // Compute no-speech probability at the first decoder step
+                    chunkNoSpeechProb = ComputeNoSpeechProb(lastLogits);
+
+                    if (WhisperTokenizer.IsLanguageToken(nextToken))
+                    {
+                        detectedLanguage = WhisperTokenizer.GetLanguageFromToken(nextToken);
+                        languageProbability = ComputeLanguageTokenProbability(lastLogits, nextToken);
+                    }
                 }
 
                 // Check for end of text
@@ -272,15 +291,21 @@ internal sealed class WhisperDecoder
 
                         if (!string.IsNullOrWhiteSpace(segmentText))
                         {
+                            var trimmedText = segmentText.Trim();
                             segments.Add(new TranscriptionSegment
                             {
                                 Id = segmentId++,
                                 Start = currentSegmentStart,
                                 End = timestamp,
-                                Text = segmentText.Trim()
+                                Text = trimmedText,
+                                AvgLogProb = currentSegmentLogProbs.Count > 0
+                                    ? currentSegmentLogProbs.Average() : null,
+                                NoSpeechProb = chunkNoSpeechProb,
+                                CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
                             });
                         }
 
+                        currentSegmentLogProbs.Clear();
                         currentSegmentTokens.Clear();
                     }
                 }
@@ -302,12 +327,17 @@ internal sealed class WhisperDecoder
 
                 if (!string.IsNullOrWhiteSpace(segmentText))
                 {
+                    var trimmedText = segmentText.Trim();
                     segments.Add(new TranscriptionSegment
                     {
                         Id = segmentId,
                         Start = currentSegmentStart,
                         End = 30.0, // Default chunk length
-                        Text = segmentText.Trim()
+                        Text = trimmedText,
+                        AvgLogProb = currentSegmentLogProbs.Count > 0
+                            ? currentSegmentLogProbs.Average() : null,
+                        NoSpeechProb = chunkNoSpeechProb,
+                        CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
                     });
                 }
             }
@@ -320,12 +350,17 @@ internal sealed class WhisperDecoder
 
                 if (!string.IsNullOrWhiteSpace(fullText))
                 {
+                    var trimmedText = fullText.Trim();
                     segments.Add(new TranscriptionSegment
                     {
                         Id = 0,
                         Start = 0,
                         End = 30.0,
-                        Text = fullText.Trim()
+                        Text = trimmedText,
+                        AvgLogProb = currentSegmentLogProbs.Count > 0
+                            ? currentSegmentLogProbs.Average() : null,
+                        NoSpeechProb = chunkNoSpeechProb,
+                        CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
                     });
                 }
             }
@@ -391,6 +426,53 @@ internal sealed class WhisperDecoder
         }
 
         return MathF.Exp(logits[selectedToken] - maxLogit) / sumExp;
+    }
+
+    /// <summary>
+    /// Computes log probability of the selected token using log-softmax.
+    /// </summary>
+    private static float ComputeLogProb(float[] logits, int token)
+    {
+        // log P(token) = logits[token] - log(sum(exp(logits)))
+        // For numerical stability: subtract max first
+        var max = float.NegativeInfinity;
+        for (int i = 0; i < logits.Length; i++)
+        {
+            if (logits[i] > max) max = logits[i];
+        }
+
+        float sumExp = 0f;
+        for (int i = 0; i < logits.Length; i++)
+        {
+            sumExp += MathF.Exp(logits[i] - max);
+        }
+
+        return (logits[token] - max) - MathF.Log(sumExp);
+    }
+
+    /// <summary>
+    /// Computes the probability that the current audio chunk contains no speech.
+    /// Uses the no_speech token (50362) softmax probability over the full vocabulary.
+    /// </summary>
+    private static float ComputeNoSpeechProb(float[] logits)
+    {
+        const int noSpeechToken = WhisperTokenizer.NoSpeechToken;
+        if (noSpeechToken >= logits.Length)
+            return 0f;
+
+        var max = float.NegativeInfinity;
+        for (int i = 0; i < logits.Length; i++)
+        {
+            if (logits[i] > max) max = logits[i];
+        }
+
+        float sumExp = 0f;
+        for (int i = 0; i < logits.Length; i++)
+        {
+            sumExp += MathF.Exp(logits[i] - max);
+        }
+
+        return MathF.Exp(logits[noSpeechToken] - max) / sumExp;
     }
 
     private static int ArgMax(float[] values)

@@ -38,6 +38,7 @@ public class TranscriberModelRegistryTests
     [InlineData("fast")]
     [InlineData("quality")]
     [InlineData("large")]
+    [InlineData("large-ko")]
     public void TryResolve_ValidAlias_ShouldReturnModel(string alias)
     {
         var result = TranscriberModelRegistry.Default.TryResolve(alias, out var model);
@@ -84,18 +85,17 @@ public class TranscriberModelRegistryTests
     }
 
     /// <summary>
-    /// Verifies that the "large" alias points to whisper-large-v3-turbo (public model),
+    /// Verifies that the "large" alias points to whisper-large-v3-ONNX (public, full 32-layer model),
     /// not the gated whisper-large-v3 which requires HuggingFace authentication.
-    /// Fix for issue #4: Large model returns 401 Unauthorized error.
     /// </summary>
     [Fact]
-    public void TryResolve_LargeAlias_ShouldResolveToTurboModel()
+    public void TryResolve_LargeAlias_ShouldResolveToFullV3Model()
     {
         var result = TranscriberModelRegistry.Default.TryResolve("large", out var model);
 
         result.Should().BeTrue();
         model.Should().NotBeNull();
-        model!.Id.Should().Contain("turbo", "large alias should use turbo model to avoid gated model auth issues");
+        model!.Id.Should().Be("onnx-community/whisper-large-v3-ONNX", "large alias should use full V3 model");
         model.Id.Should().NotBe("onnx-community/whisper-large-v3", "gated model requires HuggingFace auth");
     }
 
@@ -169,5 +169,46 @@ public class TranscriberModelRegistryTests
 
         registry.Should().NotBeNull();
         registry.Should().BeAssignableTo<IModelRegistry<TranscriberModelInfo>>();
+    }
+
+    [Fact]
+    public void TryResolve_LargeKoAlias_ShouldResolveToKoreanModel()
+    {
+        var result = TranscriberModelRegistry.Default.TryResolve("large-ko", out var model);
+
+        result.Should().BeTrue();
+        model.Should().NotBeNull();
+        model!.Id.Should().Contain("korean");
+        model.NumMelBins.Should().Be(128, "Korean large model uses 128 mel bins");
+        model.HiddenSize.Should().Be(1280, "Korean large model uses 1280 hidden size");
+    }
+
+    [Fact]
+    public void TryResolve_LargeKoAlias_ShouldHaveKoreanLanguage()
+    {
+        var model = TranscriberModelRegistry.Default.Resolve("large-ko");
+
+        model.SupportedLanguages.Should().NotBeNull();
+        model.SupportedLanguages.Should().Contain("ko");
+        model.IsMultilingual.Should().BeFalse("Korean model is language-specific");
+    }
+
+    [Fact]
+    public void GetAliases_ShouldContainLanguageAliases()
+    {
+        var aliases = TranscriberModelRegistry.Default.GetAliases();
+        var aliasNames = aliases.Select(a => a.Name).ToList();
+
+        aliasNames.Should().Contain("large-ko");
+    }
+
+    [Fact]
+    public void RegisterAlias_LargeKoConflict_ShouldThrow()
+    {
+        var registry = new TranscriberModelRegistry(DefaultModels.All);
+
+        var act = () => registry.RegisterAlias("large-ko", "some/other-model");
+
+        act.Should().Throw<AliasConflictException>();
     }
 }

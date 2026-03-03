@@ -5,6 +5,7 @@ using LMSupply.Download;
 using LMSupply.Inference;
 using LMSupply.Transcriber.Audio;
 using LMSupply.Transcriber.Decoding;
+using LMSupply.Transcriber.Internal;
 using LMSupply.Transcriber.Models;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -101,6 +102,9 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
         var chunks = AudioProcessor.SplitIntoChunks(samples);
         var segmentId = 0;
+        string? lastYieldedText = null;
+        var compressionThreshold = options?.CompressionRatioThreshold ?? 2.4f;
+        var noSpeechThreshold = options?.NoSpeechThreshold ?? 0.6f;
 
         foreach (var chunk in chunks)
         {
@@ -111,6 +115,23 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
             foreach (var segment in result.Segments)
             {
+                var trimmedText = segment.Text.Trim();
+
+                // Skip consecutive duplicates across chunks
+                if (string.Equals(trimmedText, lastYieldedText, StringComparison.Ordinal))
+                    continue;
+
+                // Skip high compression ratio (hallucination)
+                var ratio = segment.CompressionRatio
+                    ?? SegmentPostProcessor.ComputeCompressionRatio(trimmedText);
+                if (ratio > compressionThreshold)
+                    continue;
+
+                // Skip high no-speech probability
+                if (segment.NoSpeechProb.HasValue && segment.NoSpeechProb.Value > noSpeechThreshold)
+                    continue;
+
+                lastYieldedText = trimmedText;
                 yield return new TranscriptionSegment
                 {
                     Id = segmentId++,
@@ -139,14 +160,16 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         if (samples.Length <= 480000) // 30 seconds
         {
             var result = await TranscribeChunkAsync(samples, options, cancellationToken);
+            var (filteredSegments, filteredText) = SegmentPostProcessor.Process(
+                result.Segments.ToList(), options);
             sw.Stop();
 
             return new TranscriptionResult
             {
-                Text = result.Text,
+                Text = filteredText,
                 Language = result.Language,
                 LanguageProbability = result.LanguageProbability,
-                Segments = result.Segments,
+                Segments = filteredSegments,
                 DurationSeconds = duration,
                 InferenceTimeMs = sw.Elapsed.TotalMilliseconds
             };
@@ -189,14 +212,16 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             }
         }
 
+        // Apply post-processing: dedup + threshold filtering
+        var (postSegments, postText) = SegmentPostProcessor.Process(allSegments, options);
         sw.Stop();
 
         return new TranscriptionResult
         {
-            Text = string.Join(" ", textParts),
+            Text = postText,
             Language = detectedLanguage ?? "en",
             LanguageProbability = languageProb,
-            Segments = allSegments,
+            Segments = postSegments,
             DurationSeconds = duration,
             InferenceTimeMs = sw.Elapsed.TotalMilliseconds
         };
@@ -300,6 +325,25 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
             // Download model if needed and get discovery result
             var (baseModelPath, discovery) = await ResolveModelPathAsync(cancellationToken);
+
+            // Auto-detect model parameters from config.json for fallback models
+            // Fallback models have AliasName == Id (set by CreateFallbackModelInfo)
+            if (_modelInfo!.AliasName == _modelInfo.Id)
+            {
+                var configDir = discovery?.GetOnnxDirectory(baseModelPath);
+
+                // Try onnx subdirectory first (from discovery or convention), then base model path
+                var config = (configDir != null ? WhisperConfigReader.ReadConfig(configDir) : null)
+                    ?? WhisperConfigReader.ReadConfig(baseModelPath);
+
+                if (config != null)
+                {
+                    Trace.TraceInformation($"[OnnxTranscriberModel] Auto-detected config for fallback model '{_modelInfo.Id}' - " +
+                        $"NumMelBins: {config.NumMelBins?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "default"}, " +
+                        $"HiddenSize: {config.HiddenSize?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "default"}");
+                    _modelInfo = _modelInfo.WithConfigOverrides(config);
+                }
+            }
 
             // Determine encoder/decoder paths using discovery result or fallback to legacy behavior
             string encoderPath;

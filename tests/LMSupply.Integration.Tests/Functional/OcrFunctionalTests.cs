@@ -352,6 +352,16 @@ public class OcrFunctionalTests
 
     [Fact]
     [Trait("Axis", "Loading")]
+    public void L_FastDetectionAlias_ReturnsDbNetV3()
+    {
+        var model = OcrDetectionModelRegistry.Default.Resolve("fast");
+
+        model.RepoId.Should().Be("monkt/paddleocr-onnx", "fast detection alias should point to paddleocr repo");
+        model.ModelFile.Should().Be("det.onnx", "fast detection model file should be det.onnx");
+    }
+
+    [Fact]
+    [Trait("Axis", "Loading")]
     public void L_GetRecognitionModelForLanguage_FallsBackToEnglish()
     {
         // Japanese is documented as falling back to English (not available in repository)

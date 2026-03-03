@@ -205,8 +205,8 @@ export function Caption() {
             <div>
               <h3 className="text-sm font-medium mt-2">Alternatives:</h3>
               <ul className="list-disc list-inside text-sm text-muted-foreground">
-                {captionResult.alternatives.map((alt, i) => (
-                  <li key={i}>{alt}</li>
+                {captionResult.alternatives.map((alt) => (
+                  <li key={alt}>{alt}</li>
                 ))}
               </ul>
             </div>

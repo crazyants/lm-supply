@@ -23,28 +23,12 @@ public sealed class CaptionerModelRegistry : ModelRegistryBase<ModelInfo>
 
     /// <summary>
     /// Gets the optimal model based on current hardware profile.
-    /// Uses PerformanceTier to select appropriate model size.
+    /// Currently only ViT-GPT2 is available (BLIP repos became inaccessible circa 2026-03).
     /// </summary>
-    /// <remarks>
-    /// Tier mapping:
-    /// - Low:    vit-gpt2 - lightweight, most stable
-    /// - Medium: blip-base - balanced quality, 384x384
-    /// - High:   blip-large - higher quality
-    /// - Ultra:  blip-large - higher quality
-    /// </remarks>
     protected override ModelInfo GetAutoModel()
     {
-        var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[CaptionerModelRegistry] Auto-selecting model for tier: {tier}");
-
-        var model = tier switch
-        {
-            PerformanceTier.Ultra or PerformanceTier.High => DefaultModels.BlipLarge,
-            PerformanceTier.Medium => DefaultModels.BlipBase,
-            _ => DefaultModels.VitGpt2
-        };
-
-        return model with { AliasName = "auto" };
+        Trace.TraceInformation("[CaptionerModelRegistry] Auto-selecting default captioning model");
+        return DefaultModels.VitGpt2 with { AliasName = "auto" };
     }
 
     /// <summary>

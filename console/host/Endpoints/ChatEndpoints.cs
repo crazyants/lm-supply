@@ -19,6 +19,17 @@ public static class ChatEndpoints
         {
             var ct = context.RequestAborted;
 
+            // Validate messages before model loading
+            if (request.Messages == null || request.Messages.Count == 0)
+            {
+                context.Response.StatusCode = 400;
+                await context.Response.WriteAsJsonAsync(new ErrorResponse
+                {
+                    Error = new ErrorDetail { Message = "'messages' field is required and must not be empty", Type = "invalid_request_error" }
+                }, ct);
+                return;
+            }
+
             // Handle streaming separately to avoid IResult after response started
             if (request.Stream)
             {
@@ -44,7 +55,10 @@ public static class ChatEndpoints
                     if (!context.Response.HasStarted)
                     {
                         context.Response.StatusCode = 500;
-                        await context.Response.WriteAsJsonAsync(new { error = FormatError(ex) }, ct);
+                        await context.Response.WriteAsJsonAsync(new ErrorResponse
+                        {
+                            Error = new ErrorDetail { Message = FormatError(ex), Type = "internal_error" }
+                        }, ct);
                     }
                 }
                 return;
@@ -95,7 +109,10 @@ public static class ChatEndpoints
             catch (Exception ex)
             {
                 context.Response.StatusCode = 500;
-                await context.Response.WriteAsJsonAsync(new { error = FormatError(ex) }, ct);
+                await context.Response.WriteAsJsonAsync(new ErrorResponse
+                {
+                    Error = new ErrorDetail { Message = FormatError(ex), Type = "internal_error" }
+                }, ct);
             }
         })
         .WithName("CreateChatCompletion")

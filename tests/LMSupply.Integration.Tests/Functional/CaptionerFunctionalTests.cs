@@ -158,9 +158,6 @@ public class CaptionerFunctionalTests
         // Should contain both user-friendly aliases and model names
         models.Should().Contain("default", "should include 'default' alias");
         models.Should().Contain("fast", "should include 'fast' alias");
-        models.Should().Contain("quality", "should include 'quality' alias");
-        models.Should().Contain("large", "should include 'large' alias");
-        models.Should().Contain("git-base", "should include model name");
     }
 
     [Fact]
@@ -228,9 +225,9 @@ public class CaptionerFunctionalTests
     {
         var models = LocalCaptioner.GetAvailableModels().ToList();
 
-        // 4 aliases (default, fast, quality, large) + 4 model names + 4 repo IDs = 12
-        models.Count.Should().BeGreaterThanOrEqualTo(12,
-            "registry should have at least 12 entries (aliases + model names + repo IDs)");
+        // 2 aliases (default, fast) + model names + repo IDs
+        models.Count.Should().BeGreaterThanOrEqualTo(4,
+            "registry should have at least 4 entries (aliases + model names + repo IDs)");
     }
 
     [Fact]
@@ -240,9 +237,6 @@ public class CaptionerFunctionalTests
         var models = LocalCaptioner.GetAvailableModels().ToList();
 
         models.Should().Contain("vit-gpt2");
-        models.Should().Contain("blip-base");
-        models.Should().Contain("blip-large");
-        models.Should().Contain("git-base");
     }
 
     // ── GetAllModels API (no model loading) ───────────────────────
@@ -253,8 +247,8 @@ public class CaptionerFunctionalTests
     {
         var models = LocalCaptioner.GetAllModels().ToList();
 
-        models.Count.Should().Be(4,
-            "registry has 4 unique captioning models");
+        models.Count.Should().Be(1,
+            "registry has 1 unique captioning model (VitGpt2, aliased as both default and fast)");
     }
 
     [Fact]
@@ -280,10 +274,8 @@ public class CaptionerFunctionalTests
         var models = LocalCaptioner.GetAllModels().ToList();
         var aliases = models.Select(m => m.AliasName).ToList();
 
-        aliases.Should().Contain("vit-gpt2");
-        aliases.Should().Contain("blip-base");
-        aliases.Should().Contain("blip-large");
-        aliases.Should().Contain("git-base");
+        aliases.Should().Contain("default");
+        aliases.Should().Contain("fast");
     }
 
     // ── Gap Tests: Caption quality, text image ──────────────────

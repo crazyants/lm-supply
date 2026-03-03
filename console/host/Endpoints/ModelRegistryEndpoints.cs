@@ -1,3 +1,4 @@
+using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Services;
 using LMSupply.Generator;
 using LMSupply.ImageGenerator.Models;
@@ -42,7 +43,7 @@ public static class ModelRegistryEndpoints
             var modelType = GetModelTypeByName(type, cachedRepoIds);
             if (modelType == null)
             {
-                return Results.NotFound(new { error = $"Unknown model type: {type}" });
+                return ApiHelper.Error($"Unknown model type: {type}", "invalid_request_error", 404);
             }
 
             return Results.Ok(modelType);

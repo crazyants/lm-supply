@@ -140,8 +140,8 @@ export function Ocr() {
             <div>
               <h3 className="font-medium mb-2">Text Blocks</h3>
               <div className="space-y-1 max-h-64 overflow-auto">
-                {result.blocks.map((block, i) => (
-                  <div key={i} className="flex gap-2 text-sm p-2 bg-muted rounded">
+                {result.blocks.map((block) => (
+                  <div key={`${block.text.substring(0, 30)}-${block.confidence}`} className="flex gap-2 text-sm p-2 bg-muted rounded">
                     <span className="text-muted-foreground flex-shrink-0">
                       [{(block.confidence * 100).toFixed(0)}%]
                     </span>

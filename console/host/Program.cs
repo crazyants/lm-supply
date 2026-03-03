@@ -112,15 +112,25 @@ app.MapGet("/", () =>
     return Results.Redirect("/swagger");
 });
 
-// SPA 폴백: API 이외의 경로는 index.html로 (클라이언트 사이드 라우팅)
-app.MapFallback(() =>
+// SPA 폴백: API 이외의 GET 경로는 index.html로 (클라이언트 사이드 라우팅)
+// Only match GET requests — POST/PUT/DELETE to unknown routes should return 404, not HTML
+app.MapFallback(context =>
 {
+    if (!HttpMethods.IsGet(context.Request.Method))
+    {
+        context.Response.StatusCode = 404;
+        return Task.CompletedTask;
+    }
+
     var indexFile = embeddedProvider?.GetFileInfo("index.html");
     if (indexFile is { Exists: true })
     {
-        return Results.Stream(indexFile.CreateReadStream(), "text/html");
+        context.Response.ContentType = "text/html";
+        return indexFile.CreateReadStream().CopyToAsync(context.Response.Body);
     }
-    return Results.NotFound();
+
+    context.Response.StatusCode = 404;
+    return Task.CompletedTask;
 });
 
 app.Run();

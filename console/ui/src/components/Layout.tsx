@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -19,6 +19,8 @@ import {
   Download,
   Loader2,
   RefreshCw,
+  Menu,
+  X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSystemStore } from '../stores/systemStore';
@@ -124,21 +126,44 @@ function UpdateIndicator() {
   );
 }
 
-export function Layout() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card">
-        <div className="p-4 border-b border-border">
-          <h1 className="text-xl font-bold">LMSupply Console</h1>
-          <p className="text-sm text-muted-foreground">Local AI Testing</p>
-        </div>
-        <nav className="p-2 flex flex-col h-[calc(100%-5rem)]">
-          {/* Dashboard */}
-          {topNavItems.map((item) => (
+    <>
+      <div className="p-4 border-b border-border">
+        <h1 className="text-xl font-bold">LMSupply Console</h1>
+        <p className="text-sm text-muted-foreground">Local AI Testing</p>
+      </div>
+      <nav className="p-2 flex flex-col h-[calc(100%-5rem)]">
+        {/* Dashboard */}
+        {topNavItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-accent hover:text-accent-foreground'
+              )
+            }
+          >
+            <item.icon className="w-4 h-4" />
+            {item.label}
+          </NavLink>
+        ))}
+
+        {/* Divider */}
+        <div className="border-t border-border my-2" />
+
+        {/* Feature items */}
+        <div className="flex-1 overflow-y-auto">
+          {featureNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
@@ -152,67 +177,88 @@ export function Layout() {
               {item.label}
             </NavLink>
           ))}
+        </div>
 
-          {/* Divider */}
-          <div className="border-t border-border my-2" />
-
-          {/* Feature items */}
-          <div className="flex-1 overflow-y-auto">
-            {featureNavItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-accent hover:text-accent-foreground'
-                  )
-                }
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </NavLink>
-            ))}
+        {/* Bottom section: Models & API Docs */}
+        <div className="border-t border-border pt-2 mt-2 space-y-1">
+          <NavLink
+            to="/models"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-accent hover:text-accent-foreground'
+              )
+            }
+          >
+            <Settings className="w-4 h-4" />
+            Models
+          </NavLink>
+          <a
+            href="/swagger"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <FileText className="w-4 h-4" />
+            API Docs
+            <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+          </a>
+          {/* Version & Update */}
+          <div className="border-t border-border mt-1 pt-1">
+            <UpdateIndicator />
           </div>
+        </div>
+      </nav>
+    </>
+  );
+}
 
-          {/* Bottom section: Models & API Docs */}
-          <div className="border-t border-border pt-2 mt-2 space-y-1">
-            <NavLink
-              to="/models"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent hover:text-accent-foreground'
-                )
-              }
-            >
-              <Settings className="w-4 h-4" />
-              Models
-            </NavLink>
-            <a
-              href="/swagger"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <FileText className="w-4 h-4" />
-              API Docs
-              <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
-            </a>
-            {/* Version & Update */}
-            <div className="border-t border-border mt-1 pt-1">
-              <UpdateIndicator />
-            </div>
-          </div>
-        </nav>
+export function Layout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  return (
+    <div className="flex h-screen bg-background">
+      {/* Mobile top bar */}
+      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 p-3 border-b border-border bg-card md:hidden">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-1.5 rounded-md hover:bg-accent"
+          aria-label="Toggle sidebar"
+        >
+          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+        <span className="font-semibold text-sm">LMSupply Console</span>
+      </div>
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — desktop: always visible, mobile: slide-in overlay */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 w-64 border-r border-border bg-card transition-transform duration-200 ease-in-out md:static md:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        <SidebarContent onNavigate={() => setSidebarOpen(false)} />
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      {/* Main Content — add top padding on mobile for the fixed top bar */}
+      <main className="flex-1 overflow-auto pt-12 md:pt-0">
         <Outlet />
       </main>
     </div>

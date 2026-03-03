@@ -127,7 +127,7 @@ export function Segment() {
               <h3 className="font-medium mb-3">Top Detected Classes</h3>
               <div className="space-y-2">
                 {result.segments.map((segment, i) => (
-                  <div key={i} className="flex items-center gap-3">
+                  <div key={segment.id} className="flex items-center gap-3">
                     <div className={`w-4 h-4 rounded ${getClassColor(i)}`} />
                     <span className="font-medium w-32 truncate" title={segment.label ?? `Class ${segment.id}`}>
                       {segment.label ?? `Class ${segment.id}`}

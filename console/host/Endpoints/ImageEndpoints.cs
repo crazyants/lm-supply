@@ -26,11 +26,19 @@ public static class ImageEndpoints
                     return ApiHelper.Error("'prompt' field is required");
                 }
 
+                // Parse and validate size BEFORE model loading
+                var (width, height) = ParseSize(request.Size);
+                if (width % 8 != 0 || height % 8 != 0)
+                {
+                    return ApiHelper.Error($"Image dimensions must be divisible by 8. Got {width}x{height}.");
+                }
+                if (width < 64 || width > 2048 || height < 64 || height > 2048)
+                {
+                    return ApiHelper.Error($"Image dimensions must be between 64 and 2048. Got {width}x{height}.");
+                }
+
                 var modelId = request.Model ?? "default";
                 var generator = await manager.GetImageGeneratorAsync(modelId, ct);
-
-                // Parse size if provided
-                var (width, height) = ParseSize(request.Size);
 
                 var options = new GenerationOptions
                 {
@@ -82,11 +90,19 @@ public static class ImageEndpoints
                     return ApiHelper.Error("'prompt' field is required");
                 }
 
+                // Parse and validate size BEFORE model loading
+                var (width, height) = ParseSize(request.Size);
+                if (width % 8 != 0 || height % 8 != 0)
+                {
+                    return ApiHelper.Error($"Image dimensions must be divisible by 8. Got {width}x{height}.");
+                }
+                if (width < 64 || width > 2048 || height < 64 || height > 2048)
+                {
+                    return ApiHelper.Error($"Image dimensions must be between 64 and 2048. Got {width}x{height}.");
+                }
+
                 var modelId = request.Model ?? "default";
                 var generator = await manager.GetImageGeneratorAsync(modelId, ct);
-
-                // Parse size if provided
-                var (width, height) = ParseSize(request.Size);
 
                 var options = new GenerationOptions
                 {

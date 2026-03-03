@@ -123,8 +123,8 @@ export function Transcribe() {
             <div>
               <h3 className="font-medium mb-2">Segments</h3>
               <div className="space-y-1 max-h-64 overflow-auto">
-                {result.segments.map((seg, i) => (
-                  <div key={i} className="flex gap-2 text-sm p-2 bg-muted rounded">
+                {result.segments.map((seg) => (
+                  <div key={seg.id} className="flex gap-2 text-sm p-2 bg-muted rounded">
                     <span className="text-muted-foreground w-32 flex-shrink-0">
                       [{seg.start.toFixed(2)}s - {seg.end.toFixed(2)}s]
                     </span>

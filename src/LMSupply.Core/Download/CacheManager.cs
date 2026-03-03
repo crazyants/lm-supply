@@ -292,17 +292,16 @@ public static class CacheManager
                 return ModelType.Generator;
         }
 
+        // Reranker: reranker, cross-encoder (must check BEFORE embedder — bge-reranker matches bge-)
+        if (repoLower.Contains("rerank") || repoLower.Contains("cross-encoder"))
+            return ModelType.Reranker;
+
         // Embedder: bge, e5, gte, minilm, mpnet, etc.
         if (repoLower.Contains("bge-") || repoLower.Contains("/e5-") ||
             repoLower.Contains("gte-") || repoLower.Contains("minilm") ||
             repoLower.Contains("mpnet") || repoLower.Contains("sentence-transformers") ||
             repoLower.Contains("embedding") || repoLower.Contains("embed"))
             return ModelType.Embedder;
-
-        // Reranker: reranker, cross-encoder
-        if (repoLower.Contains("rerank") || repoLower.Contains("cross-encoder") ||
-            repoLower.Contains("bge-reranker"))
-            return ModelType.Reranker;
 
         // ImageGenerator: stable-diffusion, lcm, dreamshaper, sdxl
         if (repoLower.Contains("stable-diffusion") || repoLower.Contains("lcm") ||

@@ -119,7 +119,7 @@ public static class ModelsEndpoints
             var exists = loadedModels.Any(m => $"{m.ModelType}:{m.ModelId}" == decodedKey);
 
             if (!exists)
-                return Results.NotFound(new { error = $"Model not loaded: {decodedKey}" });
+                return ApiHelper.Error($"Model not loaded: {decodedKey}", "not_found", 404);
 
             await manager.UnloadModelAsync(decodedKey);
             return Results.Ok(new { message = $"Model unloaded: {decodedKey}" });
@@ -133,6 +133,11 @@ public static class ModelsEndpoints
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(request.Type))
+                {
+                    return ApiHelper.Error("'type' field is required");
+                }
+
                 var key = await manager.LoadModelAsync(request, ct);
                 var loadedModels = manager.GetLoadedModels();
                 var info = loadedModels.FirstOrDefault(m => $"{m.ModelType}:{m.ModelId}" == key);
@@ -144,9 +149,7 @@ public static class ModelsEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Json(
-                    new { error = ex.Message },
-                    statusCode: 500);
+                return ApiHelper.InternalError(ex);
             }
         })
         .WithName("LoadModel")
@@ -172,7 +175,7 @@ public static class ModelsEndpoints
                 return Results.Ok(new { message = $"Model deleted: {decodedRepoId}" });
             }
 
-            return Results.NotFound(new { error = $"Model not found: {decodedRepoId}" });
+            return ApiHelper.Error($"Model not found: {decodedRepoId}", "not_found", 404);
         })
         .WithName("DeleteModel")
         .WithSummary("Delete a cached model")
@@ -223,7 +226,10 @@ public static class ModelsEndpoints
             if (string.IsNullOrWhiteSpace(request.RepoId))
             {
                 context.Response.StatusCode = 400;
-                await context.Response.WriteAsJsonAsync(new { error = "RepoId is required" }, ct);
+                await context.Response.WriteAsJsonAsync(new ErrorResponse
+                {
+                    Error = new ErrorDetail { Message = "RepoId is required", Type = "invalid_request_error" }
+                }, ct);
                 return;
             }
 

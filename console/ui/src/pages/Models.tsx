@@ -176,7 +176,7 @@ export function Models() {
                     <tr key={model.repoId} className="border-b border-border/50">
                       <td className="p-2">
                         <p className="font-medium">{model.repoId}</p>
-                        <p className="text-xs text-muted-foreground truncate max-w-xs">
+                        <p className="text-xs text-muted-foreground truncate max-w-xs" title={model.localPath}>
                           {model.localPath}
                         </p>
                       </td>

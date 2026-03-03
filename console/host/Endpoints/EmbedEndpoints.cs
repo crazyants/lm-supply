@@ -16,9 +16,13 @@ public static class EmbedEndpoints
         {
             try
             {
-                var embedder = await manager.GetEmbedderAsync(request.Model, ct);
                 var inputs = ApiHelper.ParseInput(request.Input);
+                if (inputs.Count == 0)
+                {
+                    return ApiHelper.Error("'input' field is required");
+                }
 
+                var embedder = await manager.GetEmbedderAsync(request.Model, ct);
                 var embeddings = await embedder.EmbedAsync(inputs, ct);
 
                 var data = embeddings.Select((e, i) => new EmbeddingData

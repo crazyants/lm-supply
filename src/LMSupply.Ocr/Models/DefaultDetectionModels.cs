@@ -27,6 +27,11 @@ internal static class DefaultDetectionModels
     public static DetectionModelInfo DbNetV3Default { get; } = DbNetV3 with { AliasName = "default" };
 
     /// <summary>
+    /// Same model registered under the "fast" alias (single-model domain).
+    /// </summary>
+    public static DetectionModelInfo DbNetV3Fast { get; } = DbNetV3 with { AliasName = "fast" };
+
+    /// <summary>
     /// Gets all built-in detection models.
     /// Primary alias first so it becomes the canonical entry in GetAvailableModels().
     /// </summary>
@@ -34,5 +39,6 @@ internal static class DefaultDetectionModels
     [
         DbNetV3,          // dbnet-v3 (primary)
         DbNetV3Default,   // default (alias)
+        DbNetV3Fast,      // fast (alias)
     ];
 }

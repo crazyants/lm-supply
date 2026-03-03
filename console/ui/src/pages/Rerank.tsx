@@ -124,7 +124,7 @@ export function Rerank() {
           </h2>
           <div className="space-y-2">
             {results.map((result, i) => (
-              <div key={i} className="p-3 bg-muted rounded flex items-start gap-3">
+              <div key={result.index} className="p-3 bg-muted rounded flex items-start gap-3">
                 <div className="w-16 flex-shrink-0">
                   <span className="text-lg font-bold">#{i + 1}</span>
                   <p className="text-xs text-muted-foreground">

@@ -158,8 +158,8 @@ export function Detect() {
 
               {/* Detailed list */}
               <div className="space-y-2 max-h-96 overflow-auto">
-                {result.objects.map((det, i) => (
-                  <div key={i} className="flex items-center gap-4 p-2 bg-muted rounded">
+                {result.objects.map((det) => (
+                  <div key={`${det.label}-${det.bounding_box.x.toFixed(0)}-${det.bounding_box.y.toFixed(0)}-${det.bounding_box.width.toFixed(0)}x${det.bounding_box.height.toFixed(0)}`} className="flex items-center gap-4 p-2 bg-muted rounded">
                     <span className="font-medium w-24">{det.label}</span>
                     <span className="text-sm text-muted-foreground">
                       {(det.confidence * 100).toFixed(1)}%

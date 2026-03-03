@@ -33,6 +33,18 @@ public class ModelRegistryTests
     }
 
     [Fact]
+    public void DetectionRegistry_Resolve_FastAlias_ShouldReturnDbNetV3()
+    {
+        // Act — "fast" alias added in cycle 135 (single-model domain)
+        var model = OcrDetectionModelRegistry.Default.Resolve("fast");
+
+        // Assert
+        model.Should().NotBeNull();
+        model.RepoId.Should().Be("monkt/paddleocr-onnx");
+        model.ModelFile.Should().Be("det.onnx");
+    }
+
+    [Fact]
     public void DetectionRegistry_TryResolve_CaseInsensitive_ShouldWork()
     {
         // Act
@@ -314,7 +326,18 @@ public class ModelRegistryTests
         // Assert
         aliases.Should().Contain(a => a.Name == "auto");
         aliases.Should().Contain(a => a.Name == "default");
+        aliases.Should().Contain(a => a.Name == "fast");
         aliases.Should().Contain(a => a.Name == "dbnet-v3");
+    }
+
+    [Fact]
+    public void DefaultDetectionModels_All_ShouldContainAllModels()
+    {
+        // Assert
+        DefaultDetectionModels.All.Should().HaveCount(3);
+        DefaultDetectionModels.All.Should().Contain(DefaultDetectionModels.DbNetV3);
+        DefaultDetectionModels.All.Should().Contain(DefaultDetectionModels.DbNetV3Default);
+        DefaultDetectionModels.All.Should().Contain(DefaultDetectionModels.DbNetV3Fast);
     }
 
     [Fact]

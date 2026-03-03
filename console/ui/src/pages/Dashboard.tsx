@@ -52,13 +52,41 @@ export function Dashboard() {
     fetchModels();
     fetchLoadedModels();
 
-    // Poll status every 5 seconds
-    const interval = setInterval(() => {
-      fetchStatus();
-      fetchLoadedModels();
-    }, 5000);
+    // Poll status every 5 seconds, pausing when tab is not visible
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-    return () => clearInterval(interval);
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(() => {
+        fetchStatus();
+        fetchLoadedModels();
+      }, 5000);
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchStatus();
+        fetchLoadedModels();
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchStatus, fetchModels, fetchLoadedModels]);
 
   return (
@@ -93,11 +121,13 @@ export function Dashboard() {
           subtitle={`${formatBytes((status?.ramUsageMB ?? 0) * 1024 * 1024)} / ${formatBytes((status?.ramTotalMB ?? 0) * 1024 * 1024)}`}
           icon={MemoryStick}
         />
-        {status?.vramTotalMB && (
+        {status?.gpuAvailable && (
           <StatCard
             title="VRAM Usage"
-            value={`${status.vramUsagePercent?.toFixed(0) ?? 0}%`}
-            subtitle={`${formatBytes((status.vramUsageMB ?? 0) * 1024 * 1024)} / ${formatBytes(status.vramTotalMB * 1024 * 1024)}`}
+            value={status.vramTotalMB ? `${status.vramUsagePercent?.toFixed(0) ?? 0}%` : 'N/A'}
+            subtitle={status.vramTotalMB
+              ? `${formatBytes((status.vramUsageMB ?? 0) * 1024 * 1024)} / ${formatBytes(status.vramTotalMB * 1024 * 1024)}`
+              : `${status.gpuProvider ?? 'GPU'} detected`}
             icon={Gauge}
             color="text-purple-500"
           />
@@ -151,13 +181,15 @@ export function Dashboard() {
                   key={`${model.modelType}:${model.modelId}`}
                   className="flex items-center justify-between p-2 bg-muted rounded"
                 >
-                  <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                      {model.modelType}
+                    </span>
                     <p className="font-medium text-sm">{model.modelId}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {model.modelType} - Last used:{' '}
-                      {new Date(model.lastUsedAt).toLocaleTimeString()}
-                    </p>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(model.lastUsedAt).toLocaleTimeString()}
+                  </p>
                 </div>
               ))
             )}

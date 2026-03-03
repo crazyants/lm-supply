@@ -19,39 +19,15 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void TryResolve_WithFastAlias_ShouldReturnGitBase()
+    public void TryResolve_WithFastAlias_ShouldReturnVitGpt2()
     {
-        // Act
+        // Act — "fast" now aliases to VitGpt2 (git-base-coco repo became inaccessible)
         var result = CaptionerModelRegistry.Default.TryResolve("fast", out var modelInfo);
 
         // Assert
         result.Should().BeTrue();
         modelInfo.Should().NotBeNull();
-        modelInfo!.RepoId.Should().Be("Xenova/git-base-coco");
-    }
-
-    [Fact]
-    public void TryResolve_WithQualityAlias_ShouldReturnBlipBase()
-    {
-        // Act
-        var result = CaptionerModelRegistry.Default.TryResolve("quality", out var modelInfo);
-
-        // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.RepoId.Should().Be("Xenova/blip-image-captioning-base");
-    }
-
-    [Fact]
-    public void TryResolve_WithLargeAlias_ShouldReturnBlipLarge()
-    {
-        // Act
-        var result = CaptionerModelRegistry.Default.TryResolve("large", out var modelInfo);
-
-        // Assert
-        result.Should().BeTrue();
-        modelInfo.Should().NotBeNull();
-        modelInfo!.RepoId.Should().Be("Xenova/blip-image-captioning-large");
+        modelInfo!.RepoId.Should().Be("Xenova/vit-gpt2-image-captioning");
     }
 
     [Fact]
@@ -138,8 +114,6 @@ public class ModelRegistryTests
         aliasNames.Should().Contain("auto");
         aliasNames.Should().Contain("default");
         aliasNames.Should().Contain("fast");
-        aliasNames.Should().Contain("quality");
-        aliasNames.Should().Contain("large");
     }
 
     [Fact]
@@ -149,11 +123,9 @@ public class ModelRegistryTests
         var models = CaptionerModelRegistry.Default.GetAvailableModels();
 
         // Assert
-        models.Should().HaveCount(4);
+        // Both default and fast point to the same repo, so GetAvailableModels deduplicates
+        models.Should().HaveCount(1);
         models.Select(m => m.RepoId).Should().Contain("Xenova/vit-gpt2-image-captioning");
-        models.Select(m => m.RepoId).Should().Contain("Xenova/git-base-coco");
-        models.Select(m => m.RepoId).Should().Contain("Xenova/blip-image-captioning-base");
-        models.Select(m => m.RepoId).Should().Contain("Xenova/blip-image-captioning-large");
     }
 
     [Fact]
@@ -216,11 +188,9 @@ public class ModelRegistryTests
     public void DefaultModels_All_ShouldContainAllModels()
     {
         // Assert
-        DefaultModels.All.Should().HaveCount(4);
+        DefaultModels.All.Should().HaveCount(2);
         DefaultModels.All.Should().Contain(DefaultModels.VitGpt2);
-        DefaultModels.All.Should().Contain(DefaultModels.GitBase);
-        DefaultModels.All.Should().Contain(DefaultModels.BlipBase);
-        DefaultModels.All.Should().Contain(DefaultModels.BlipLarge);
+        DefaultModels.All.Should().Contain(DefaultModels.VitGpt2Fast);
     }
 
     [Fact]

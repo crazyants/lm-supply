@@ -5,16 +5,19 @@ import { ModelSelector } from '../components/ModelSelector';
 import { Send, Bot, User, Square } from 'lucide-react';
 import { CurlExample } from '../components/CurlExample';
 
+type ChatMessageWithId = ChatMessage & { id: number };
+
 export function Chat() {
   const [modelId, setModelId] = useState('');
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessageWithId[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [lastElapsedMs, setLastElapsedMs] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamStartRef = useRef<number>(0);
+  const nextMsgIdRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,7 +45,7 @@ export function Chat() {
     e.preventDefault();
     if (!input.trim() || isLoading || !modelId) return;
 
-    const userMessage: ChatMessage = { role: 'user', content: input.trim() };
+    const userMessage: ChatMessageWithId = { id: nextMsgIdRef.current++, role: 'user', content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
@@ -53,7 +56,7 @@ export function Chat() {
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
 
-    const allMessages = [...messages, userMessage];
+    const allMessages: ChatMessage[] = [...messages, userMessage].map(({ role, content }) => ({ role, content }));
     let fullContent = '';
 
     try {
@@ -69,7 +72,7 @@ export function Chat() {
       setLastElapsedMs(Math.round(performance.now() - streamStartRef.current));
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: fullContent },
+        { id: nextMsgIdRef.current++, role: 'assistant', content: fullContent },
       ]);
       setStreamingContent('');
     } catch (error) {
@@ -79,7 +82,7 @@ export function Chat() {
         if (fullContent) {
           setMessages((prev) => [
             ...prev,
-            { role: 'assistant', content: fullContent + '\n\n(cancelled)' },
+            { id: nextMsgIdRef.current++, role: 'assistant', content: fullContent + '\n\n(cancelled)' },
           ]);
         }
         setStreamingContent('');
@@ -87,7 +90,7 @@ export function Chat() {
         console.error('Chat error:', error);
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: `Error: ${(error as Error).message}` },
+          { id: nextMsgIdRef.current++, role: 'assistant', content: `Error: ${(error as Error).message}` },
         ]);
       }
     } finally {
@@ -123,9 +126,9 @@ export function Chat() {
           </div>
         )}
 
-        {messages.map((msg, i) => (
+        {messages.map((msg) => (
           <div
-            key={i}
+            key={msg.id}
             className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}
           >
             {msg.role === 'assistant' && (

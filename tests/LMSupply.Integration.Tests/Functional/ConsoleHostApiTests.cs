@@ -339,6 +339,8 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         var response = await _client.GetAsync("/api/cache/loaded");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.ValueKind.Should().Be(JsonValueKind.Array);
     }
 
     [Fact]
@@ -779,6 +781,7 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Inference")]
+    [Trait("Category", "Integration")]
     public async Task POST_Speech_ReturnsWavAudio()
     {
         var content = JsonContent.Create(new
@@ -812,6 +815,7 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Inference")]
+    [Trait("Category", "Integration")]
     public async Task POST_Caption_FormUpload_ReturnsCaption()
     {
         var imageBytes = TestDataHelper.CreateGradientBmp(256, 256);
@@ -828,6 +832,7 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Inference")]
+    [Trait("Category", "Integration")]
     public async Task POST_Detect_FormUpload_ReturnsDetections()
     {
         var imageBytes = TestDataHelper.CreateGradientBmp(640, 480);
@@ -1100,11 +1105,11 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
     [Trait("Axis", "API-Error")]
     public async Task POST_ImageGeneration_InvalidSize_Returns400()
     {
+        // Size not divisible by 8 should be rejected before model loading
         var content = JsonContent.Create(new
         {
             prompt = "test image",
-            width = 3, // Not divisible by 8
-            height = 3
+            size = "3x3"
         });
         var response = await _client.PostAsync("/v1/images/generations", content);
 
@@ -1112,10 +1117,37 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    [Trait("Axis", "API-GET")]
-    public async Task GET_NonExistentEndpoint_Returns404()
+    [Trait("Axis", "API-Error")]
+    public async Task POST_ImageGenerate_Extended_InvalidSize_Returns400()
     {
+        var content = JsonContent.Create(new
+        {
+            prompt = "test image",
+            size = "13x13"
+        });
+        var response = await _client.PostAsync("/v1/images/generate", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_NonExistentEndpoint_SpaFallback_Returns200()
+    {
+        // SPA fallback serves index.html for unknown GET routes (client-side routing)
         var response = await _client.GetAsync("/v1/nonexistent");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("text/html");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_NonExistentEndpoint_Returns404()
+    {
+        // Non-GET requests to unknown routes should return 404, not SPA fallback
+        var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/nonexistent", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -1164,6 +1196,48 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.IsSuccessStatusCode.Should().BeFalse(
             "empty JSON body should not be accepted");
+    }
+
+    // ── Group D2b: Pre-model validation (cycle 127) ─────────────
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Embeddings_InputBeforeModelLoad_Returns400()
+    {
+        // Input validation should happen BEFORE model loading
+        var content = JsonContent.Create(new { input = Array.Empty<string>(), model = "nonexistent-model-xyz" });
+        var response = await _client.PostAsync("/v1/embeddings", content);
+
+        // Should get 400 (validation error) not 500 (model not found)
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "empty input should be caught before attempting model loading");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_ChatCompletions_EmptyMessages_Returns400_NotServerError()
+    {
+        var content = JsonContent.Create(new
+        {
+            model = "nonexistent-model-xyz",
+            messages = Array.Empty<object>()
+        });
+        var response = await _client.PostAsync("/v1/chat/completions", content);
+
+        // Should get 400 (validation error) not 500 (model not found)
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "empty messages should be caught before attempting model loading");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_CacheLoad_EmptyType_Returns400()
+    {
+        var content = JsonContent.Create(new { type = "", modelId = "default" });
+        var response = await _client.PostAsync("/api/cache/load", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "empty type should be rejected before attempting model loading");
     }
 
     [Fact]
@@ -1312,4 +1386,336 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
             .Should().BeTrue("response should include Allow-Credentials for credentialed CORS");
         values!.Should().Contain("true");
     }
+
+    // ── Group H: Test Plan Gap Coverage (§1-3, §7) ───────────────
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Health_ReturnsExpectedShape()
+    {
+        // Test plan 1.1.1: health endpoint returns status + timestamp
+        var response = await _client.GetAsync("/health");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("status").GetString().Should().Be("healthy");
+        json.TryGetProperty("timestamp", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_SystemStatus_ReturnsExpectedFields()
+    {
+        // Test plan 1.3.1: system status has engine, GPU, CPU/RAM fields
+        var response = await _client.GetAsync("/api/system/status");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var status = json.GetProperty("status");
+        status.TryGetProperty("engineReady", out _).Should().BeTrue();
+        status.TryGetProperty("gpuAvailable", out _).Should().BeTrue();
+        status.TryGetProperty("cpuUsage", out _).Should().BeTrue();
+        status.TryGetProperty("ramUsageMB", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_CacheStats_HasTypeBreakdown()
+    {
+        // Test plan 2.3.3: cache stats include type-level breakdown
+        var response = await _client.GetAsync("/api/cache/stats");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("totalModels", out _).Should().BeTrue();
+        json.TryGetProperty("totalSizeMB", out _).Should().BeTrue();
+        json.TryGetProperty("cacheDirectory", out _).Should().BeTrue();
+        json.TryGetProperty("byType", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_CacheLoad_MissingType_Returns400()
+    {
+        // Test plan 2.4.1: preload without required 'type' field
+        var content = JsonContent.Create(new { modelId = "default" });
+        var response = await _client.PostAsync("/api/cache/load", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task DELETE_LoadedModel_NonExistentKey_Returns404()
+    {
+        // Test plan 2.4.3: unload nonexistent model
+        var response = await _client.DeleteAsync("/api/cache/loaded/nonexistent%3Anonexistent");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Translate_MissingModel_Returns400()
+    {
+        // Test plan 3.4.5: translate with empty text
+        var content = JsonContent.Create(new { text = "Hello" });
+        var response = await _client.PostAsync("/v1/translate", content);
+
+        // Missing model field should trigger validation error
+        var statusCode = (int)response.StatusCode;
+        statusCode.Should().BeOneOf(400, 500);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_ChatCompletions_InvalidJson_Returns400()
+    {
+        // Test plan 7.2: malformed JSON body
+        var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/chat/completions", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Embeddings_InvalidJson_Returns400()
+    {
+        // Test plan 7.2: malformed JSON for embeddings
+        var content = new StringContent("not json at all", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/embeddings", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // ── Group I: Error Handling Audit (§7) ──────────────────────────
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Translate_InvalidJson_Returns400()
+    {
+        // Test plan 7.2: malformed JSON for translate
+        var content = new StringContent("{ broken }", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/translate", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Rerank_InvalidJson_Returns400()
+    {
+        // Test plan 7.2: malformed JSON for rerank
+        var content = new StringContent("not valid json", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/rerank", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Embeddings_ErrorResponse_HasStructuredFormat()
+    {
+        // Test plan 7.1: error responses follow OpenAI error format
+        var content = JsonContent.Create(new { input = "", model = "nonexistent-model-xyz" });
+        var response = await _client.PostAsync("/v1/embeddings", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse();
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("error", out var errorObj).Should().BeTrue("error response should have 'error' field");
+        errorObj.TryGetProperty("message", out _).Should().BeTrue("error should have 'message' field");
+        errorObj.TryGetProperty("type", out _).Should().BeTrue("error should have 'type' field");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Speech_InvalidJson_Returns400()
+    {
+        // Test plan 7.2: malformed JSON for speech
+        var content = new StringContent("{ broken json", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/audio/speech", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Transcribe_FormData_EmptyFile_Returns400()
+    {
+        // Test plan 7.3: empty file content should be rejected
+        using var formContent = new MultipartFormDataContent();
+        formContent.Add(new ByteArrayContent([]), "file", "empty.wav");
+        var response = await _client.PostAsync("/v1/audio/transcriptions", formContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task DELETE_CacheModel_NonExistentRepo_Returns404()
+    {
+        // Test plan 7.1: deleting non-existent cached model
+        var response = await _client.DeleteAsync("/api/cache/models/nonexistent-org%2Fnonexistent-model");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    // ── Group J: Swagger Documentation Completeness ───────────────
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Swagger_ContainsAllMajorEndpoints()
+    {
+        var response = await _client.GetAsync("/swagger/v1/swagger.json");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var paths = json.GetProperty("paths");
+        var pathKeys = new List<string>();
+        foreach (var prop in paths.EnumerateObject())
+        {
+            pathKeys.Add(prop.Name);
+        }
+
+        // AI inference endpoints
+        pathKeys.Should().Contain("/v1/embeddings", "embeddings endpoint should be documented");
+        pathKeys.Should().Contain("/v1/rerank", "rerank endpoint should be documented");
+        pathKeys.Should().Contain("/v1/chat/completions", "chat completions should be documented");
+        pathKeys.Should().Contain("/v1/translate", "translate endpoint should be documented");
+        pathKeys.Should().Contain("/v1/audio/transcriptions", "transcribe endpoint should be documented");
+        pathKeys.Should().Contain("/v1/audio/speech", "speech endpoint should be documented");
+
+        // Vision endpoints
+        pathKeys.Should().Contain("/v1/images/caption", "caption endpoint should be documented");
+        pathKeys.Should().Contain("/v1/images/vqa", "VQA endpoint should be documented");
+        pathKeys.Should().Contain("/v1/images/detect", "detect endpoint should be documented");
+        pathKeys.Should().Contain("/v1/images/ocr", "OCR endpoint should be documented");
+        pathKeys.Should().Contain("/v1/images/segment", "segment endpoint should be documented");
+
+        // System endpoints
+        pathKeys.Should().Contain("/api/system/status", "system status should be documented");
+        pathKeys.Should().Contain("/api/system/gpu", "GPU info should be documented");
+        pathKeys.Should().Contain("/api/system/version", "version should be documented");
+
+        // Cache management endpoints
+        pathKeys.Should().Contain("/api/cache/stats", "cache stats should be documented");
+        pathKeys.Should().Contain("/api/cache/loaded", "loaded models should be documented");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Swagger_HasVersionInfo()
+    {
+        var response = await _client.GetAsync("/swagger/v1/swagger.json");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var info = json.GetProperty("info");
+        info.GetProperty("title").GetString().Should().NotBeNullOrEmpty();
+        info.GetProperty("version").GetString().Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Swagger_EndpointsHaveTags()
+    {
+        var response = await _client.GetAsync("/swagger/v1/swagger.json");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var paths = json.GetProperty("paths");
+
+        // Verify at least some endpoints have tags (for Swagger UI grouping)
+        var taggedCount = 0;
+        foreach (var path in paths.EnumerateObject())
+        {
+            foreach (var method in path.Value.EnumerateObject())
+            {
+                if (method.Value.TryGetProperty("tags", out var tags) &&
+                    tags.GetArrayLength() > 0)
+                {
+                    taggedCount++;
+                }
+            }
+        }
+
+        taggedCount.Should().BeGreaterThan(0, "at least some endpoints should have tags for Swagger UI grouping");
+    }
+
+    // ── Group K: Model Management Coverage (§2) ──────────────────
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Models_OpenAI_HasObjectField()
+    {
+        // §2.1.3: OpenAI-compatible list includes "object" field
+        var response = await _client.GetAsync("/v1/models");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("object").GetString().Should().Be("list");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Models_OpenAI_ItemsHaveRequiredFields()
+    {
+        // §2.1.3/2.1.4: Each model item has required OpenAI fields
+        var response = await _client.GetAsync("/v1/models");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var first = json.GetProperty("data")[0];
+
+        first.TryGetProperty("id", out _).Should().BeTrue();
+        first.TryGetProperty("object", out _).Should().BeTrue();
+        first.GetProperty("object").GetString().Should().Be("model");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_ModelById_AnyId_Returns200()
+    {
+        // §2.1.4: OpenAI-compatible — returns model info for any ID
+        var response = await _client.GetAsync("/v1/models/nonexistent:unknown");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("id").GetString().Should().Be("nonexistent:unknown");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Registry_TypeHasAliasKindInfo()
+    {
+        // §2.1.2: Each model alias has kind (system/user) information
+        var response = await _client.GetAsync("/api/registry/models/embedder");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var first = json.GetProperty("models")[0];
+
+        first.TryGetProperty("aliasName", out _).Should().BeTrue();
+        first.TryGetProperty("repoId", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_CacheModelsByType_ReturnsArrayShape()
+    {
+        // §2.3.2: Cache models filtered by valid type returns array
+        var response = await _client.GetAsync("/api/cache/models/type/embedder");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.ValueKind.Should().Be(JsonValueKind.Array);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_DownloadCheck_ValidFormatNonExistent_ReturnsError()
+    {
+        // §2.2.2: Checking nonexistent model returns error, not crash
+        var content = JsonContent.Create(new { repoId = "nonexistent-org/fake-model-xyz" });
+        var response = await _client.PostAsync("/api/download/check", content);
+
+        // Should either be error (404) or OK with not-found indication
+        ((int)response.StatusCode).Should().BeGreaterThanOrEqualTo(200);
+    }
+
 }

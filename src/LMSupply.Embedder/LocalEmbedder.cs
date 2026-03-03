@@ -179,7 +179,7 @@ public static class LocalEmbedder
         // Create pooling strategy
         var poolingStrategy = PoolingFactory.Create(options.PoolingMode);
 
-        return new EmbeddingModel(modelId, engine, tokenizer, poolingStrategy, options, loadedModelInfo);
+        return new EmbeddingModel(modelId, engine, tokenizer, poolingStrategy, options, loadedModelInfo, modelPath);
     }
 
     /// <summary>

@@ -16,18 +16,24 @@ internal sealed class OcrPipeline : IOcr
     private readonly CrnnRecognizer _recognizer;
     private readonly DetectionModelInfo _detectionModel;
     private readonly RecognitionModelInfo _recognitionModel;
+    private readonly string? _detModelPath;
+    private readonly string? _recModelPath;
     private bool _disposed;
 
     private OcrPipeline(
         DbNetDetector detector,
         CrnnRecognizer recognizer,
         DetectionModelInfo detectionModel,
-        RecognitionModelInfo recognitionModel)
+        RecognitionModelInfo recognitionModel,
+        string? detModelPath = null,
+        string? recModelPath = null)
     {
         _detector = detector;
         _recognizer = recognizer;
         _detectionModel = detectionModel;
         _recognitionModel = recognitionModel;
+        _detModelPath = detModelPath;
+        _recModelPath = recModelPath;
     }
 
     /// <inheritdoc />
@@ -40,7 +46,18 @@ internal sealed class OcrPipeline : IOcr
     public ExecutionProvider RequestedProvider => _detector.RequestedProvider;
 
     /// <inheritdoc />
-    public long? EstimatedMemoryBytes => null; // OCR uses two models; size estimation not available without model paths
+    public long? EstimatedMemoryBytes
+    {
+        get
+        {
+            long total = 0;
+            if (_detModelPath is not null && File.Exists(_detModelPath))
+                total += new FileInfo(_detModelPath).Length;
+            if (_recModelPath is not null && File.Exists(_recModelPath))
+                total += new FileInfo(_recModelPath).Length;
+            return total > 0 ? total * 2 : null;
+        }
+    }
 
     /// <summary>
     /// Creates a new OCR pipeline instance.
@@ -49,13 +66,17 @@ internal sealed class OcrPipeline : IOcr
         DbNetDetector detector,
         CrnnRecognizer recognizer,
         DetectionModelInfo detectionModel,
-        RecognitionModelInfo recognitionModel)
+        RecognitionModelInfo recognitionModel,
+        string? detModelPath = null,
+        string? recModelPath = null)
     {
         return await Task.FromResult(new OcrPipeline(
             detector,
             recognizer,
             detectionModel,
-            recognitionModel)).ConfigureAwait(false);
+            recognitionModel,
+            detModelPath,
+            recModelPath)).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

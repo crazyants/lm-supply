@@ -28,8 +28,8 @@ public static class RerankEndpoints
                     return ApiHelper.Error("'documents' field is required and must not be empty");
                 }
 
-                var reranker = await manager.GetRerankerAsync(request.Model, ct);
-                var results = await reranker.RerankAsync(
+                await using var scope = await manager.GetRerankerAsync(request.Model, ct);
+                var results = await scope.Model.RerankAsync(
                     request.Query,
                     request.Documents,
                     request.TopN,
@@ -40,7 +40,7 @@ public static class RerankEndpoints
                 return Results.Ok(new RerankResponse
                 {
                     Id = id,
-                    Model = reranker.ModelId,
+                    Model = scope.Model.ModelId,
                     Results = results.Select(r => new RerankResult
                     {
                         Index = r.OriginalIndex,

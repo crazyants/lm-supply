@@ -393,12 +393,11 @@ public class GeneratorFunctionalTests
 
     // ── Static Tests: Model Registry & Options (no model loading) ─
 
-#pragma warning disable CS0618 // Testing obsolete ModelRegistry facade
     [Fact]
     [Trait("Axis", "Loading")]
-    public void L_ModelRegistry_GetAllModels_ReturnsModels()
+    public void L_ModelRegistry_GetAvailableModels_ReturnsModels()
     {
-        var models = ModelRegistry.GetAllModels();
+        var models = GeneratorModelRegistry.Default.GetAvailableModels();
 
         models.Should().NotBeEmpty();
         models.Count.Should().BeGreaterThanOrEqualTo(5,
@@ -407,9 +406,9 @@ public class GeneratorFunctionalTests
 
     [Fact]
     [Trait("Axis", "Loading")]
-    public void L_ModelRegistry_GetDefaultModel_ReturnsPhi4Mini()
+    public void L_ModelRegistry_DefaultAlias_ReturnsPhi4Mini()
     {
-        var defaultModel = ModelRegistry.GetDefaultModel();
+        var defaultModel = GeneratorModelRegistry.Default.Resolve("default");
 
         defaultModel.Should().NotBeNull();
         defaultModel.ModelId.Should().Contain("Phi-4-mini",
@@ -418,9 +417,11 @@ public class GeneratorFunctionalTests
 
     [Fact]
     [Trait("Axis", "Loading")]
-    public void L_ModelRegistry_GetUnrestrictedModels_ReturnsMITOnly()
+    public void L_ModelRegistry_GetAvailableModels_FilterMIT_ReturnsUnrestrictedOnly()
     {
-        var mitModels = ModelRegistry.GetUnrestrictedModels();
+        var mitModels = GeneratorModelRegistry.Default.GetAvailableModels()
+            .Where(m => m.License == LicenseTier.MIT)
+            .ToList();
 
         mitModels.Should().NotBeEmpty("there should be at least one MIT-licensed model");
         mitModels.Should().AllSatisfy(m =>
@@ -429,11 +430,11 @@ public class GeneratorFunctionalTests
 
     [Fact]
     [Trait("Axis", "Loading")]
-    public void L_ModelRegistry_GetModelsByLicense_FiltersCorrectly()
+    public void L_ModelRegistry_GetAvailableModels_LicenseFilteringIsConsistent()
     {
-        var allModels = ModelRegistry.GetAllModels();
-        var mitModels = ModelRegistry.GetModelsByLicense(LicenseTier.MIT);
-        var conditionalModels = ModelRegistry.GetModelsByLicense(LicenseTier.Conditional);
+        var allModels = GeneratorModelRegistry.Default.GetAvailableModels();
+        var mitModels = allModels.Where(m => m.License == LicenseTier.MIT).ToList();
+        var conditionalModels = allModels.Where(m => m.License == LicenseTier.Conditional).ToList();
 
         mitModels.Count.Should().BeGreaterThanOrEqualTo(1);
         (mitModels.Count + conditionalModels.Count).Should().BeLessThanOrEqualTo(allModels.Count);
@@ -443,7 +444,7 @@ public class GeneratorFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_ModelRegistry_AllModels_HaveRequiredFields()
     {
-        var models = ModelRegistry.GetAllModels();
+        var models = GeneratorModelRegistry.Default.GetAvailableModels();
 
         models.Should().AllSatisfy(m =>
         {
@@ -454,7 +455,6 @@ public class GeneratorFunctionalTests
             m.RecommendedContextLength.Should().BeGreaterThan(0, "ContextLength should be > 0");
         });
     }
-#pragma warning restore CS0618
 
     [Fact]
     [Trait("Axis", "Quality")]

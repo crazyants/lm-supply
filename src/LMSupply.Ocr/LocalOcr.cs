@@ -65,7 +65,7 @@ public static class LocalOcr
             .ConfigureAwait(false);
 
         // Create and return pipeline
-        return await OcrPipeline.CreateAsync(detector, recognizer, detModelInfo, recModelInfo)
+        return await OcrPipeline.CreateAsync(detector, recognizer, detModelInfo, recModelInfo, detModelPath, recModelPath)
             .ConfigureAwait(false);
     }
 

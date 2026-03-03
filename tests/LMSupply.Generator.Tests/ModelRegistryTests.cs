@@ -258,27 +258,13 @@ public class ModelRegistryTests
         });
     }
 
-    // ===== Legacy ModelRegistry facade tests =====
-
-#pragma warning disable CS0618 // Obsolete
     [Fact]
-    public void Legacy_GetAllModels_ReturnsAllRegisteredModels()
+    public void GetAvailableModels_FilterByUnrestricted_ReturnsMITOnly()
     {
-        // Act
-        var models = ModelRegistry.GetAllModels();
+        var models = GeneratorModelRegistry.Default.GetAvailableModels()
+            .Where(m => !m.HasRestrictions)
+            .ToList();
 
-        // Assert
-        models.Should().NotBeEmpty();
-        models.Should().HaveCountGreaterThanOrEqualTo(5);
-    }
-
-    [Fact]
-    public void Legacy_GetUnrestrictedModels_ReturnsMITLicensedOnly()
-    {
-        // Act
-        var models = ModelRegistry.GetUnrestrictedModels();
-
-        // Assert
         models.Should().NotBeEmpty();
         models.Should().AllSatisfy(m =>
         {
@@ -292,55 +278,18 @@ public class ModelRegistryTests
     [InlineData("microsoft/phi-4-onnx", LicenseTier.MIT)]
     [InlineData("onnx-community/Llama-3.2-1B-Instruct-ONNX", LicenseTier.Conditional)]
     [InlineData("onnx-community/Llama-3.2-3B-Instruct-ONNX", LicenseTier.Conditional)]
-    public void Legacy_GetModel_ReturnsCorrectLicense(string modelId, LicenseTier expectedLicense)
+    public void TryResolve_KnownModel_HasCorrectLicense(string modelId, LicenseTier expectedLicense)
     {
-        // Act
-        var model = ModelRegistry.GetModel(modelId);
-
-        // Assert
-        model.Should().NotBeNull();
+        var result = GeneratorModelRegistry.Default.TryResolve(modelId, out var model);
+        result.Should().BeTrue();
         model!.License.Should().Be(expectedLicense);
     }
 
     [Fact]
-    public void Legacy_GetModel_UnknownModel_ReturnsNull()
+    public void TryResolve_NonExistentNonRepoFormat_ReturnsFalse()
     {
-        // Act
-        var model = ModelRegistry.GetModel("unknown/model");
-
-        // Assert
-        model.Should().BeNull();
+        // Non-repo-format unknown string (no slash) should not resolve
+        var result = GeneratorModelRegistry.Default.TryResolve("completely-unknown-model", out _);
+        result.Should().BeFalse();
     }
-
-    [Fact]
-    public void Legacy_IsRegistered_KnownModel_ReturnsTrue()
-    {
-        // Act
-        var isRegistered = ModelRegistry.IsRegistered("microsoft/Phi-3.5-mini-instruct-onnx");
-
-        // Assert
-        isRegistered.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Legacy_IsRegistered_UnknownModel_ReturnsFalse()
-    {
-        // Act
-        var isRegistered = ModelRegistry.IsRegistered("unknown/model");
-
-        // Assert
-        isRegistered.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Legacy_GetDefaultModel_ReturnsValidModel()
-    {
-        // Act
-        var model = ModelRegistry.GetDefaultModel();
-
-        // Assert
-        model.Should().NotBeNull();
-        model.ModelId.Should().NotBeNullOrEmpty();
-    }
-#pragma warning restore CS0618
 }

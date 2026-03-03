@@ -35,7 +35,7 @@ public static class ChatEndpoints
             {
                 try
                 {
-                    var generator = await manager.GetGeneratorAsync(request.Model, ct);
+                    await using var scope = await manager.GetGeneratorAsync(request.Model, ct);
                     var messages = request.Messages.Select(m =>
                         new ChatMessage(Enum.Parse<ChatRole>(m.Role, ignoreCase: true), m.Content));
                     var options = new GenerationOptions
@@ -46,8 +46,8 @@ public static class ChatEndpoints
                         StopSequences = request.Stop?.ToList()
                     };
 
-                    var tokens = generator.GenerateChatAsync(messages, options, ct);
-                    await SseHelper.StreamChatCompletionAsync(context, generator.ModelId, tokens, ct);
+                    var tokens = scope.Model.GenerateChatAsync(messages, options, ct);
+                    await SseHelper.StreamChatCompletionAsync(context, scope.Model.ModelId, tokens, ct);
                 }
                 catch (Exception ex)
                 {
@@ -67,7 +67,7 @@ public static class ChatEndpoints
             // Non-streaming response
             try
             {
-                var generator = await manager.GetGeneratorAsync(request.Model, ct);
+                await using var scope = await manager.GetGeneratorAsync(request.Model, ct);
                 var messages = request.Messages.Select(m =>
                     new ChatMessage(Enum.Parse<ChatRole>(m.Role, ignoreCase: true), m.Content));
                 var options = new GenerationOptions
@@ -78,13 +78,13 @@ public static class ChatEndpoints
                     StopSequences = request.Stop?.ToList()
                 };
 
-                var result = await generator.GenerateChatWithUsageAsync(messages, options, ct);
+                var result = await scope.Model.GenerateChatWithUsageAsync(messages, options, ct);
                 var id = ApiHelper.GenerateId("chatcmpl");
 
                 await context.Response.WriteAsJsonAsync(new ChatCompletionResponse
                 {
                     Id = id,
-                    Model = generator.ModelId,
+                    Model = scope.Model.ModelId,
                     Choices =
                     [
                         new ChatCompletionChoice

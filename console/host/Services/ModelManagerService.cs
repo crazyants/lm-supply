@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using LMSupply.Captioner;
 using LMSupply.Detector;
 using LMSupply.Embedder;
@@ -25,11 +26,14 @@ namespace LMSupply.Console.Host.Services;
 /// </summary>
 public sealed partial class ModelManagerService : IAsyncDisposable
 {
-    private readonly ConcurrentDictionary<string, LoadedModelEntry> _loadedModels = new();
+    private readonly ConcurrentDictionary<string, LoadedModelEntry> _loadedModels = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly ILogger<ModelManagerService> _logger;
     private readonly CacheService _cacheService;
+    private readonly SystemMonitorService _systemMonitor;
     private readonly int _maxLoadedModels;
+    private readonly int _memoryPressureThreshold;
+    private readonly int _defaultEstimatedMemoryMB;
     private readonly TimeSpan _idleTimeout;
     private readonly Timer _cleanupTimer;
     private bool _disposed;
@@ -37,12 +41,16 @@ public sealed partial class ModelManagerService : IAsyncDisposable
     public ModelManagerService(
         IConfiguration configuration,
         CacheService cacheService,
+        SystemMonitorService systemMonitor,
         ILogger<ModelManagerService> logger)
     {
         _cacheService = cacheService;
+        _systemMonitor = systemMonitor;
         _logger = logger;
-        _maxLoadedModels = configuration.GetValue("ModelManager:MaxLoadedModels", 3);
+        _maxLoadedModels = configuration.GetValue("ModelManager:MaxLoadedModels", 20);
         _idleTimeout = TimeSpan.FromMinutes(configuration.GetValue("ModelManager:IdleTimeoutMinutes", 30));
+        _memoryPressureThreshold = configuration.GetValue("ModelManager:MemoryPressureThreshold", 80);
+        _defaultEstimatedMemoryMB = configuration.GetValue("ModelManager:DefaultEstimatedMemoryMB", 500);
 
         // 주기적 정리 타이머 (5분마다)
         _cleanupTimer = new Timer(CleanupIdleModels, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
@@ -53,188 +61,199 @@ public sealed partial class ModelManagerService : IAsyncDisposable
     /// <summary>
     /// Generator 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<IGeneratorModel> GetGeneratorAsync(
+    public async Task<ModelScope<IGeneratorModel>> GetGeneratorAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"generator:{modelId}";
-        return (IGeneratorModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (IGeneratorModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Generator", modelId);
-            var model = await LocalGenerator.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalGenerator.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "generator", modelId, cancellationToken);
+        return new ModelScope<IGeneratorModel>(this, key, model);
     }
 
     /// <summary>
     /// Embedder 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<IEmbeddingModel> GetEmbedderAsync(
+    public async Task<ModelScope<IEmbeddingModel>> GetEmbedderAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"embedder:{modelId}";
-        return (IEmbeddingModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (IEmbeddingModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Embedder", modelId);
-            var model = await LocalEmbedder.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalEmbedder.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "embedder", modelId, cancellationToken);
+        return new ModelScope<IEmbeddingModel>(this, key, model);
     }
 
     /// <summary>
     /// Reranker 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<IRerankerModel> GetRerankerAsync(
+    public async Task<ModelScope<IRerankerModel>> GetRerankerAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"reranker:{modelId}";
-        return (IRerankerModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (IRerankerModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Reranker", modelId);
-            var model = await LocalReranker.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalReranker.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "reranker", modelId, cancellationToken);
+        return new ModelScope<IRerankerModel>(this, key, model);
     }
 
     /// <summary>
     /// Transcriber 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<ITranscriberModel> GetTranscriberAsync(
+    public async Task<ModelScope<ITranscriberModel>> GetTranscriberAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"transcriber:{modelId}";
-        return (ITranscriberModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (ITranscriberModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Transcriber", modelId);
-            var model = await LocalTranscriber.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalTranscriber.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "transcriber", modelId, cancellationToken);
+        return new ModelScope<ITranscriberModel>(this, key, model);
     }
 
     /// <summary>
     /// Synthesizer 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<ISynthesizerModel> GetSynthesizerAsync(
+    public async Task<ModelScope<ISynthesizerModel>> GetSynthesizerAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"synthesizer:{modelId}";
-        return (ISynthesizerModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (ISynthesizerModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Synthesizer", modelId);
-            var model = await LocalSynthesizer.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalSynthesizer.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "synthesizer", modelId, cancellationToken);
+        return new ModelScope<ISynthesizerModel>(this, key, model);
     }
 
     /// <summary>
     /// Captioner 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<ICaptionerModel> GetCaptionerAsync(
+    public async Task<ModelScope<ICaptionerModel>> GetCaptionerAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"captioner:{modelId}";
-        return (ICaptionerModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (ICaptionerModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Captioner", modelId);
-            var model = await LocalCaptioner.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalCaptioner.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "captioner", modelId, cancellationToken);
+        return new ModelScope<ICaptionerModel>(this, key, model);
     }
 
     /// <summary>
     /// OCR 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<IOcr> GetOcrAsync(
+    public async Task<ModelScope<IOcr>> GetOcrAsync(
         string languageHint = "en",
         CancellationToken cancellationToken = default)
     {
         var key = $"ocr:{languageHint}";
-        return (IOcr)await GetOrLoadModelAsync(key, async () =>
+        var model = (IOcr)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingOcrModel(_logger, languageHint);
-            var model = await LocalOcr.LoadForLanguageAsync(languageHint, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalOcr.LoadForLanguageAsync(languageHint, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "ocr", languageHint, cancellationToken);
+        return new ModelScope<IOcr>(this, key, model);
     }
 
     /// <summary>
     /// Detector 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<IDetectorModel> GetDetectorAsync(
+    public async Task<ModelScope<IDetectorModel>> GetDetectorAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"detector:{modelId}";
-        return (IDetectorModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (IDetectorModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Detector", modelId);
-            var model = await LocalDetector.LoadAsync(modelId, cancellationToken: cancellationToken);
+            var m = await LocalDetector.LoadAsync(modelId, cancellationToken: cancellationToken);
             // LocalDetector.LoadAsync already calls WarmupAsync internally
-            return model;
+            return m;
         }, "detector", modelId, cancellationToken);
+        return new ModelScope<IDetectorModel>(this, key, model);
     }
 
     /// <summary>
     /// Segmenter 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<ISegmenterModel> GetSegmenterAsync(
+    public async Task<ModelScope<ISegmenterModel>> GetSegmenterAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"segmenter:{modelId}";
-        return (ISegmenterModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (ISegmenterModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Segmenter", modelId);
-            var model = await LocalSegmenter.LoadAsync(modelId, cancellationToken: cancellationToken);
+            var m = await LocalSegmenter.LoadAsync(modelId, cancellationToken: cancellationToken);
             // LocalSegmenter.LoadAsync already calls WarmupAsync internally
-            return model;
+            return m;
         }, "segmenter", modelId, cancellationToken);
+        return new ModelScope<ISegmenterModel>(this, key, model);
     }
 
     /// <summary>
     /// Translator 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<ITranslatorModel> GetTranslatorAsync(
+    public async Task<ModelScope<ITranslatorModel>> GetTranslatorAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"translator:{modelId}";
-        return (ITranslatorModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (ITranslatorModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "Translator", modelId);
-            var model = await LocalTranslator.LoadAsync(modelId, cancellationToken: cancellationToken);
+            var m = await LocalTranslator.LoadAsync(modelId, cancellationToken: cancellationToken);
             // LocalTranslator.LoadAsync already calls WarmupAsync internally
-            return model;
+            return m;
         }, "translator", modelId, cancellationToken);
+        return new ModelScope<ITranslatorModel>(this, key, model);
     }
 
     /// <summary>
     /// ImageGenerator 모델 조회 (없으면 로드)
     /// </summary>
-    public async Task<IImageGeneratorModel> GetImageGeneratorAsync(
+    public async Task<ModelScope<IImageGeneratorModel>> GetImageGeneratorAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         var key = $"imagegen:{modelId}";
-        return (IImageGeneratorModel)await GetOrLoadModelAsync(key, async () =>
+        var model = (IImageGeneratorModel)await GetOrLoadModelAsync(key, async () =>
         {
             LogLoadingModel(_logger, "ImageGenerator", modelId);
-            var model = await LocalImageGenerator.LoadAsync(modelId, cancellationToken: cancellationToken);
-            await model.WarmupAsync(cancellationToken);
-            return model;
+            var m = await LocalImageGenerator.LoadAsync(modelId, cancellationToken: cancellationToken);
+            await m.WarmupAsync(cancellationToken);
+            return m;
         }, "imagegen", modelId, cancellationToken);
+        return new ModelScope<IImageGeneratorModel>(this, key, model);
     }
 
     /// <summary>
@@ -486,7 +505,8 @@ public sealed partial class ModelManagerService : IAsyncDisposable
                 ModelType = modelType,
                 ModelId = modelId,
                 LoadedAt = DateTime.UtcNow,
-                LastUsedAt = DateTime.UtcNow
+                LastUsedAt = DateTime.UtcNow,
+                EstimatedMemoryMB = _defaultEstimatedMemoryMB
             };
 
             _loadedModels[key] = newEntry;
@@ -502,39 +522,68 @@ public sealed partial class ModelManagerService : IAsyncDisposable
 
     private async Task EnsureCapacityAsync()
     {
+        // Hard cap check
         while (_loadedModels.Count >= _maxLoadedModels)
         {
-            // LRU: 가장 오래 사용하지 않은 모델 제거
-            var oldest = _loadedModels.Values
-                .OrderBy(e => e.LastUsedAt)
-                .FirstOrDefault();
-
-            if (oldest != null)
-            {
-                await UnloadModelAsync(oldest.Key);
-            }
-            else
-            {
-                break;
-            }
+            if (!await EvictOldestUnusedAsync()) break;
         }
+
+        // Memory pressure check
+        var metrics = _systemMonitor.GetMemoryMetrics();
+        while (metrics.UsagePercent > _memoryPressureThreshold && !_loadedModels.IsEmpty)
+        {
+            if (!await EvictOldestUnusedAsync()) break;
+            metrics = _systemMonitor.GetMemoryMetrics();
+        }
+    }
+
+    private async Task<bool> EvictOldestUnusedAsync()
+    {
+        var candidate = _loadedModels.Values
+            .Where(e => !e.IsInUse)
+            .OrderBy(e => e.LastUsedAt)
+            .ThenByDescending(e => e.EstimatedMemoryMB)
+            .FirstOrDefault();
+
+        if (candidate == null) return false;
+
+        LogEvictingModel(_logger, candidate.Key, candidate.EstimatedMemoryMB);
+        await UnloadModelAsync(candidate.Key);
+        return true;
     }
 
     private void CleanupIdleModels(object? state)
     {
-        var threshold = DateTime.UtcNow - _idleTimeout;
-        var idleModels = _loadedModels.Values
-            .Where(e => !e.IsInUse && e.LastUsedAt < threshold)
-            .ToList();
+        _ = CleanupIdleModelsAsync();
+    }
 
-        foreach (var entry in idleModels)
+    private async Task CleanupIdleModelsAsync()
+    {
+        try
         {
-            _ = UnloadModelAsync(entry.Key);
+            var threshold = DateTime.UtcNow - _idleTimeout;
+            var idleModels = _loadedModels.Values
+                .Where(e => !e.IsInUse && e.LastUsedAt < threshold)
+                .ToList();
+
+            foreach (var entry in idleModels)
+            {
+                try
+                {
+                    await UnloadModelAsync(entry.Key);
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceInformation($"[ModelManagerService] Cleanup failed for {entry.Key}: {ex.Message}");
+                }
+            }
+
+            if (idleModels.Count > 0)
+                LogCleanedUpIdleModels(_logger, idleModels.Count);
         }
-
-        if (idleModels.Count > 0)
+        catch (Exception ex)
         {
-            LogCleanedUpIdleModels(_logger, idleModels.Count);
+            Trace.TraceInformation($"[ModelManagerService] Cleanup error: {ex.Message}");
         }
     }
 
@@ -557,6 +606,7 @@ public sealed partial class ModelManagerService : IAsyncDisposable
         public required DateTime LoadedAt { get; init; }
         public DateTime LastUsedAt { get; set; }
         public int ActiveUsageCount;
+        public double EstimatedMemoryMB { get; init; }
 
         public bool IsInUse => ActiveUsageCount > 0;
     }
@@ -581,4 +631,7 @@ public sealed partial class ModelManagerService : IAsyncDisposable
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Cleaned up {Count} idle models")]
     private static partial void LogCleanedUpIdleModels(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Evicting model {Key} (~{EstimatedMB:F0}MB) due to capacity/memory pressure")]
+    private static partial void LogEvictingModel(ILogger logger, string key, double estimatedMB);
 }

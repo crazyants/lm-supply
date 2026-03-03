@@ -33,16 +33,16 @@ public static class SegmentEndpoints
                 var model = form["model"].FirstOrDefault() ?? "default";
                 var includeMask = form["include_mask"].FirstOrDefault()?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
 
-                var segmenter = await manager.GetSegmenterAsync(model, ct);
+                await using var scope = await manager.GetSegmenterAsync(model, ct);
 
                 using var stream = file.OpenReadStream();
                 using var memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream, ct);
 
-                var result = await segmenter.SegmentAsync(memoryStream.ToArray(), ct);
+                var result = await scope.Model.SegmentAsync(memoryStream.ToArray(), ct);
 
                 // Get top segments using SDK method
-                var topSegments = result.GetTopSegments(10, segmenter.ClassLabels);
+                var topSegments = result.GetTopSegments(10, scope.Model.ClassLabels);
                 var segments = topSegments.Select(s => new Segment
                 {
                     Id = s.ClassId,
@@ -65,7 +65,7 @@ public static class SegmentEndpoints
                 return Results.Ok(new SegmentationResponse
                 {
                     Id = ApiHelper.GenerateId("seg"),
-                    Model = segmenter.ModelId,
+                    Model = scope.Model.ModelId,
                     Segments = segments,
                     MaskBase64 = maskBase64
                 });

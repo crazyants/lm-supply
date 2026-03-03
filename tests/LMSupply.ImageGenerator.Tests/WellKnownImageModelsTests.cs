@@ -188,51 +188,18 @@ public class WellKnownImageModelsTests
         def.RecommendedGuidanceScale.Should().Be(info.RecommendedGuidanceScale);
     }
 
-    // ===== Legacy WellKnownImageModels facade tests =====
-
-#pragma warning disable CS0618 // Obsolete
-    [Theory]
-    [InlineData("default")]
-    [InlineData("fast")]
-    [InlineData("quality")]
-    [InlineData("lcm-dreamshaper-v7")]
-    public void Legacy_Resolve_WithKnownAlias_ReturnsModelDefinition(string alias)
-    {
-        // Act
-        var result = WellKnownImageModels.Resolve(alias);
-
-        // Assert
-        result.RepoId.Should().NotBeNullOrEmpty();
-        result.RecommendedSteps.Should().BeInRange(1, 10);
-        result.RecommendedGuidanceScale.Should().BeInRange(0.5f, 5f);
-    }
-
-    [Fact]
-    public void Legacy_GetAliases_ReturnsNonEmptyCollection()
-    {
-        // Act
-        var aliases = WellKnownImageModels.GetAliases();
-
-        // Assert
-        aliases.Should().NotBeEmpty();
-        aliases.Should().Contain("default");
-        aliases.Should().Contain("fast");
-        aliases.Should().Contain("quality");
-    }
-
     [Theory]
     [InlineData("default", true)]
     [InlineData("fast", true)]
     [InlineData("quality", true)]
     [InlineData("unknown-model", false)]
     [InlineData("owner/repo", false)]
-    public void Legacy_IsAlias_ReturnsCorrectResult(string input, bool expected)
+    public void GetAliases_ContainsAlias_ReturnsExpected(string input, bool expected)
     {
-        // Act
-        var result = WellKnownImageModels.IsAlias(input);
+        var isAlias = ImageGeneratorModelRegistry.Default
+            .GetAliases()
+            .Any(a => string.Equals(a.Name, input, StringComparison.OrdinalIgnoreCase));
 
-        // Assert
-        result.Should().Be(expected);
+        isAlias.Should().Be(expected);
     }
-#pragma warning restore CS0618
 }

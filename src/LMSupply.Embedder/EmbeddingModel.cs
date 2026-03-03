@@ -16,6 +16,7 @@ internal sealed class EmbeddingModel : IEmbeddingModel
     private readonly IPoolingStrategy _poolingStrategy;
     private readonly EmbedderOptions _options;
     private readonly ModelInfo? _modelInfo;
+    private readonly string? _modelPath;
     private bool _disposed;
     private bool _warmedUp;
 
@@ -23,7 +24,9 @@ internal sealed class EmbeddingModel : IEmbeddingModel
     public int Dimensions => _engine.HiddenSize;
 
     /// <inheritdoc />
-    public long? EstimatedMemoryBytes => null; // TODO: Implement when ModelInfo has FileSizeBytes
+    public long? EstimatedMemoryBytes => _modelPath is not null && File.Exists(_modelPath)
+        ? new FileInfo(_modelPath).Length * 2
+        : null;
 
     /// <inheritdoc />
     public bool IsGpuActive => _engine.IsGpuActive;
@@ -40,7 +43,8 @@ internal sealed class EmbeddingModel : IEmbeddingModel
         ISequenceTokenizer tokenizer,
         IPoolingStrategy poolingStrategy,
         EmbedderOptions options,
-        ModelInfo? modelInfo = null)
+        ModelInfo? modelInfo = null,
+        string? modelPath = null)
     {
         ModelId = modelId;
         _engine = engine;
@@ -48,6 +52,7 @@ internal sealed class EmbeddingModel : IEmbeddingModel
         _poolingStrategy = poolingStrategy;
         _options = options;
         _modelInfo = modelInfo;
+        _modelPath = modelPath;
     }
 
     public async ValueTask<float[]> EmbedAsync(string text, CancellationToken cancellationToken = default)

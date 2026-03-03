@@ -31,62 +31,53 @@ public static class TranscribeEndpoints
                     return ApiHelper.Error("Audio file is required in 'file' field");
                 }
 
-                var model = form["model"].FirstOrDefault() ?? "default";
+                var modelId = form["model"].FirstOrDefault() ?? "default";
                 var language = form["language"].FirstOrDefault();
                 var responseFormat = form["response_format"].FirstOrDefault() ?? "json";
 
-                var modelKey = $"transcriber:{model}";
-                var transcriber = await manager.GetTranscriberAsync(model, ct);
-                
-                // Mark model as in-use to prevent cleanup during long transcription
-                manager.BeginUse(modelKey);
-                try
+                // ModelScope handles BeginUse/EndUse automatically — prevents cleanup during long transcription
+                await using var scope = await manager.GetTranscriberAsync(modelId, ct);
+
+                using var stream = file.OpenReadStream();
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream, ct);
+
+                // Create transcribe options with language if specified
+                var options = !string.IsNullOrEmpty(language)
+                    ? new TranscribeOptions { Language = language }
+                    : null;
+
+                var result = await scope.Model.TranscribeAsync(memoryStream.ToArray(), options, ct);
+
+                // Simple JSON format (default)
+                if (responseFormat == "json" || responseFormat == "text")
                 {
-                    using var stream = file.OpenReadStream();
-                    using var memoryStream = new MemoryStream();
-                    await stream.CopyToAsync(memoryStream, ct);
-
-                    // Create transcribe options with language if specified
-                    var options = !string.IsNullOrEmpty(language)
-                        ? new TranscribeOptions { Language = language }
-                        : null;
-
-                    var result = await transcriber.TranscribeAsync(memoryStream.ToArray(), options, ct);
-
-                    // Simple JSON format (default)
-                    if (responseFormat == "json" || responseFormat == "text")
+                    if (responseFormat == "text")
                     {
-                        if (responseFormat == "text")
-                        {
-                            return Results.Text(result.Text);
-                        }
-
-                        return Results.Ok(new TranscriptionResponse
-                        {
-                            Text = result.Text
-                        });
+                        return Results.Text(result.Text);
                     }
 
-                    // Verbose JSON format
-                    return Results.Ok(new VerboseTranscriptionResponse
+                    return Results.Ok(new TranscriptionResponse
                     {
-                        Task = "transcribe",
-                        Language = result.Language ?? "unknown",
-                        Duration = (float)(result.DurationSeconds ?? 0),
-                        Text = result.Text,
-                        Segments = result.Segments?.Select((s, i) => new Models.OpenAI.TranscriptionSegment
-                        {
-                            Id = i,
-                            Start = (float)s.Start,
-                            End = (float)s.End,
-                            Text = s.Text
-                        }).ToList()
+                        Text = result.Text
                     });
                 }
-                finally
+
+                // Verbose JSON format
+                return Results.Ok(new VerboseTranscriptionResponse
                 {
-                    manager.EndUse(modelKey);
-                }
+                    Task = "transcribe",
+                    Language = result.Language ?? "unknown",
+                    Duration = (float)(result.DurationSeconds ?? 0),
+                    Text = result.Text,
+                    Segments = result.Segments?.Select((s, i) => new Models.OpenAI.TranscriptionSegment
+                    {
+                        Id = i,
+                        Start = (float)s.Start,
+                        End = (float)s.End,
+                        Text = s.Text
+                    }).ToList()
+                });
             }
             catch (Exception ex)
             {

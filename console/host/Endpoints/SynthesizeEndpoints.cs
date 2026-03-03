@@ -22,8 +22,8 @@ public static class SynthesizeEndpoints
                     return ApiHelper.Error("'input' field is required");
                 }
 
-                var synthesizer = await manager.GetSynthesizerAsync(request.Model, ct);
-                var result = await synthesizer.SynthesizeAsync(request.Input, cancellationToken: ct);
+                await using var scope = await manager.GetSynthesizerAsync(request.Model, ct);
+                var result = await scope.Model.SynthesizeAsync(request.Input, cancellationToken: ct);
 
                 // Return audio file
                 var contentType = request.ResponseFormat switch

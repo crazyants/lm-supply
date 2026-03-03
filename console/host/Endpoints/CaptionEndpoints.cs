@@ -32,18 +32,18 @@ public static class CaptionEndpoints
 
                 var model = form["model"].FirstOrDefault() ?? "default";
 
-                var captioner = await manager.GetCaptionerAsync(model, ct);
+                await using var scope = await manager.GetCaptionerAsync(model, ct);
 
                 using var stream = file.OpenReadStream();
                 using var memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream, ct);
 
-                var result = await captioner.CaptionAsync(memoryStream.ToArray(), ct);
+                var result = await scope.Model.CaptionAsync(memoryStream.ToArray(), ct);
 
                 return Results.Ok(new CaptionResponse
                 {
                     Id = ApiHelper.GenerateId("caption"),
-                    Model = captioner.ModelId,
+                    Model = scope.Model.ModelId,
                     Caption = result.Caption,
                     Confidence = result.Confidence,
                     Alternatives = result.AlternativeCaptions
@@ -89,19 +89,19 @@ public static class CaptionEndpoints
 
                 var model = form["model"].FirstOrDefault() ?? "default";
 
-                var captioner = await manager.GetCaptionerAsync(model, ct);
+                await using var scope = await manager.GetCaptionerAsync(model, ct);
 
                 using var stream = file.OpenReadStream();
                 using var memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream, ct);
                 memoryStream.Position = 0;
 
-                var result = await captioner.AnswerAsync(memoryStream, question, ct);
+                var result = await scope.Model.AnswerAsync(memoryStream, question, ct);
 
                 return Results.Ok(new VqaResponse
                 {
                     Id = ApiHelper.GenerateId("vqa"),
-                    Model = captioner.ModelId,
+                    Model = scope.Model.ModelId,
                     Question = question,
                     Answer = result.Answer,
                     Confidence = result.Confidence

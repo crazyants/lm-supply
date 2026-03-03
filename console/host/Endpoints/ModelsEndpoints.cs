@@ -116,7 +116,7 @@ public static class ModelsEndpoints
         {
             var decodedKey = Uri.UnescapeDataString(key);
             var loadedModels = manager.GetLoadedModels();
-            var exists = loadedModels.Any(m => $"{m.ModelType}:{m.ModelId}" == decodedKey);
+            var exists = loadedModels.Any(m => string.Equals($"{m.ModelType}:{m.ModelId}", decodedKey, StringComparison.OrdinalIgnoreCase));
 
             if (!exists)
                 return ApiHelper.Error($"Model not loaded: {decodedKey}", "not_found", 404);
@@ -140,7 +140,7 @@ public static class ModelsEndpoints
 
                 var key = await manager.LoadModelAsync(request, ct);
                 var loadedModels = manager.GetLoadedModels();
-                var info = loadedModels.FirstOrDefault(m => $"{m.ModelType}:{m.ModelId}" == key);
+                var info = loadedModels.FirstOrDefault(m => string.Equals($"{m.ModelType}:{m.ModelId}", key, StringComparison.OrdinalIgnoreCase));
                 return Results.Ok(new { key, model = info });
             }
             catch (ArgumentException ex)

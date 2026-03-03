@@ -25,17 +25,17 @@ public static class TranslateEndpoints
                     return ApiHelper.Error("'input' field is required");
                 }
 
-                var translator = await manager.GetTranslatorAsync(request.Model, ct);
+                await using var scope = await manager.GetTranslatorAsync(request.Model, ct);
 
                 var id = ApiHelper.GenerateId("translate");
 
                 if (inputs.Count == 1)
                 {
-                    var result = await translator.TranslateAsync(inputs[0], ct);
+                    var result = await scope.Model.TranslateAsync(inputs[0], ct);
                     return Results.Ok(new TranslateResponse
                     {
                         Id = id,
-                        Model = translator.ModelId,
+                        Model = scope.Model.ModelId,
                         Translations =
                         [
                             new TranslationResult
@@ -51,11 +51,11 @@ public static class TranslateEndpoints
                 }
 
                 // Batch translation
-                var results = await translator.TranslateBatchAsync(inputs, ct);
+                var results = await scope.Model.TranslateBatchAsync(inputs, ct);
                 return Results.Ok(new TranslateResponse
                 {
                     Id = id,
-                    Model = translator.ModelId,
+                    Model = scope.Model.ModelId,
                     Translations = results.Select((r, i) => new TranslationResult
                     {
                         Index = i,

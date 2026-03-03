@@ -35,19 +35,19 @@ public static class DetectEndpoints
                 var thresholdStr = form["threshold"].FirstOrDefault();
                 var threshold = float.TryParse(thresholdStr, out var t) ? t : 0.5f;
 
-                var detector = await manager.GetDetectorAsync(model, ct);
+                await using var scope = await manager.GetDetectorAsync(model, ct);
 
                 using var stream = file.OpenReadStream();
                 using var memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream, ct);
 
                 // Use SDK extension method for threshold filtering
-                var results = await detector.DetectAsync(memoryStream.ToArray(), threshold, ct);
+                var results = await scope.Model.DetectAsync(memoryStream.ToArray(), threshold, ct);
 
                 return Results.Ok(new DetectionResponse
                 {
                     Id = ApiHelper.GenerateId("detect"),
-                    Model = detector.ModelId,
+                    Model = scope.Model.ModelId,
                     Objects = results.Select(r => new DetectedObject
                     {
                         Label = r.Label,

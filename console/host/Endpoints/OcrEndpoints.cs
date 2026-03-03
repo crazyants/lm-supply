@@ -32,18 +32,18 @@ public static class OcrEndpoints
 
                 var language = form["language"].FirstOrDefault() ?? "en";
 
-                var ocr = await manager.GetOcrAsync(language, ct);
+                await using var scope = await manager.GetOcrAsync(language, ct);
 
                 using var stream = file.OpenReadStream();
                 using var memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream, ct);
 
-                var result = await ocr.RecognizeAsync(memoryStream.ToArray(), ct);
+                var result = await scope.Model.RecognizeAsync(memoryStream.ToArray(), ct);
 
                 return Results.Ok(new OcrResponse
                 {
                     Id = ApiHelper.GenerateId("ocr"),
-                    Model = $"{ocr.DetectionModelId}+{ocr.RecognitionModelId}",
+                    Model = $"{scope.Model.DetectionModelId}+{scope.Model.RecognitionModelId}",
                     Text = result.FullText,
                     Blocks = result.Regions.Select(r => new OcrBlock
                     {

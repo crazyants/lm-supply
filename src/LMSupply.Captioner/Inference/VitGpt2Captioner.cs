@@ -19,6 +19,7 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
     private readonly ModelInfo _modelInfo;
     private readonly CaptionerOptions _options;
     private readonly ImagePreprocessor _preprocessor;
+    private readonly string _modelDir;
     private readonly bool _isGpuActive;
     private readonly IReadOnlyList<string> _activeProviders;
     private readonly ExecutionProvider _requestedProvider;
@@ -30,6 +31,7 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
         ITextTokenizer tokenizer,
         ModelInfo modelInfo,
         CaptionerOptions options,
+        string modelDir,
         bool isGpuActive,
         IReadOnlyList<string> activeProviders,
         ExecutionProvider requestedProvider)
@@ -39,6 +41,7 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
         _tokenizer = tokenizer;
         _modelInfo = modelInfo;
         _options = options;
+        _modelDir = modelDir;
         _preprocessor = ImagePreprocessor.Instance;
         _isGpuActive = isGpuActive;
         _activeProviders = activeProviders;
@@ -58,7 +61,9 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
     public ExecutionProvider RequestedProvider => _requestedProvider;
 
     /// <inheritdoc />
-    public long? EstimatedMemoryBytes => null; // Model size info not available without path tracking
+    public long? EstimatedMemoryBytes => Directory.Exists(_modelDir)
+        ? new DirectoryInfo(_modelDir).EnumerateFiles("*.onnx", SearchOption.AllDirectories).Sum(f => f.Length) * 2
+        : null;
 
     /// <inheritdoc />
     public bool SupportsVqa => _modelInfo.SupportsVqa;
@@ -108,6 +113,7 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
             tokenizer,
             modelInfo,
             options,
+            modelDir,
             encoderResult.IsGpuActive,
             encoderResult.ActiveProviders,
             encoderResult.RequestedProvider);
@@ -143,7 +149,6 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
         if (!SupportsVqa)
             throw new NotSupportedException($"Model '{ModelId}' does not support visual question answering.");
 
-        // TODO: Implement VQA for models that support it
         throw new NotImplementedException("VQA support is not yet implemented for this model.");
     }
 

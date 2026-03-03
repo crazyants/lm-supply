@@ -22,8 +22,8 @@ public static class EmbedEndpoints
                     return ApiHelper.Error("'input' field is required");
                 }
 
-                var embedder = await manager.GetEmbedderAsync(request.Model, ct);
-                var embeddings = await embedder.EmbedAsync(inputs, ct);
+                await using var scope = await manager.GetEmbedderAsync(request.Model, ct);
+                var embeddings = await scope.Model.EmbedAsync(inputs, ct);
 
                 var data = embeddings.Select((e, i) => new EmbeddingData
                 {
@@ -34,7 +34,7 @@ public static class EmbedEndpoints
                 return Results.Ok(new EmbeddingResponse
                 {
                     Data = data,
-                    Model = embedder.ModelId,
+                    Model = scope.Model.ModelId,
                     Usage = new EmbeddingUsage
                     {
                         PromptTokens = inputs.Sum(t => t.Length / 4), // rough estimate

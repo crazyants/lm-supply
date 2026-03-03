@@ -1718,4 +1718,32 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         ((int)response.StatusCode).Should().BeGreaterThanOrEqualTo(200);
     }
 
+    // ── Group L: Resource Management ──────────────────────────────
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_SystemStatus_IncludesMemoryMetrics()
+    {
+        var response = await _client.GetAsync("/api/system/status");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var status = json.GetProperty("status");
+
+        status.TryGetProperty("ramUsageMB", out _).Should().BeTrue();
+        status.TryGetProperty("ramTotalMB", out _).Should().BeTrue();
+        status.TryGetProperty("ramUsagePercent", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_SystemStatus_IncludesProcessMemory()
+    {
+        var response = await _client.GetAsync("/api/system/status");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var status = json.GetProperty("status");
+
+        status.TryGetProperty("processMemoryMB", out var procMem).Should().BeTrue();
+        procMem.GetDouble().Should().BeGreaterThan(0);
+    }
+
 }

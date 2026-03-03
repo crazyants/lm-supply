@@ -38,7 +38,7 @@ public static class ImageEndpoints
                 }
 
                 var modelId = request.Model ?? "default";
-                var generator = await manager.GetImageGeneratorAsync(modelId, ct);
+                await using var scope = await manager.GetImageGeneratorAsync(modelId, ct);
 
                 var options = new GenerationOptions
                 {
@@ -50,7 +50,7 @@ public static class ImageEndpoints
                     NegativePrompt = request.NegativePrompt
                 };
 
-                var result = await generator.GenerateAsync(request.Prompt, options, ct);
+                var result = await scope.Model.GenerateAsync(request.Prompt, options, ct);
 
                 // Convert to OpenAI-compatible response
                 var imageData = new GeneratedImageData
@@ -102,7 +102,7 @@ public static class ImageEndpoints
                 }
 
                 var modelId = request.Model ?? "default";
-                var generator = await manager.GetImageGeneratorAsync(modelId, ct);
+                await using var scope = await manager.GetImageGeneratorAsync(modelId, ct);
 
                 var options = new GenerationOptions
                 {
@@ -114,12 +114,12 @@ public static class ImageEndpoints
                     NegativePrompt = request.NegativePrompt
                 };
 
-                var result = await generator.GenerateAsync(request.Prompt, options, ct);
+                var result = await scope.Model.GenerateAsync(request.Prompt, options, ct);
 
                 return Results.Ok(new ImageGenerationExtendedResponse
                 {
                     Id = ApiHelper.GenerateId("img"),
-                    Model = generator.ModelId,
+                    Model = scope.Model.ModelId,
                     Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                     GenerationTimeMs = (long)result.GenerationTime.TotalMilliseconds,
                     Data =

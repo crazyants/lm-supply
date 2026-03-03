@@ -116,7 +116,12 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         var labels = json.GetProperty("labels");
-        labels.GetArrayLength().Should().BeGreaterThan(0, "should have COCO class labels");
+        labels.GetArrayLength().Should().Be(80, "COCO dataset has 80 class labels");
+
+        // Verify shape: each label has id and name
+        var first = labels[0];
+        first.TryGetProperty("id", out _).Should().BeTrue();
+        first.TryGetProperty("name", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -128,7 +133,12 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         var labels = json.GetProperty("labels");
-        labels.GetArrayLength().Should().BeGreaterThan(0, "should have ADE20K class labels");
+        labels.GetArrayLength().Should().Be(150, "ADE20K dataset has 150 class labels");
+
+        // Verify shape: each label has id and name
+        var first = labels[0];
+        first.TryGetProperty("id", out _).Should().BeTrue();
+        first.TryGetProperty("name", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -153,6 +163,10 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         var languages = json.GetProperty("languages");
         languages.GetArrayLength().Should().BeGreaterThan(0, "should have supported OCR languages");
+
+        // Verify English is always supported
+        var langList = languages.EnumerateArray().Select(l => l.GetString()).ToList();
+        langList.Should().Contain("en", "English should always be a supported OCR language");
     }
 
     [Fact]
@@ -165,6 +179,11 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         var models = json.GetProperty("models");
         models.GetArrayLength().Should().BeGreaterThan(0, "should have image generation models");
+
+        // Verify shape: each model has id and repo_id
+        var first = models[0];
+        first.TryGetProperty("id", out _).Should().BeTrue();
+        first.TryGetProperty("repo_id", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -190,6 +209,94 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         json.GetProperty("type").GetString().Should().Be("embedder");
         json.GetProperty("models").GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Registry_ContainsAll11Types()
+    {
+        var response = await _client.GetAsync("/api/registry/models");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var types = json.GetProperty("modelTypes")
+            .EnumerateArray()
+            .Select(t => t.GetProperty("type").GetString()!)
+            .ToHashSet();
+
+        var expectedTypes = new[]
+        {
+            "generator", "embedder", "reranker", "transcriber",
+            "synthesizer", "translator", "captioner", "ocr",
+            "detector", "segmenter", "imagegenerator"
+        };
+
+        foreach (var expected in expectedTypes)
+        {
+            types.Should().Contain(expected, $"registry should include '{expected}' type");
+        }
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Registry_EachTypeHasModels()
+    {
+        var response = await _client.GetAsync("/api/registry/models");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var types = json.GetProperty("modelTypes").EnumerateArray();
+
+        foreach (var modelType in types)
+        {
+            var typeName = modelType.GetProperty("type").GetString();
+            modelType.GetProperty("displayName").GetString().Should().NotBeNullOrEmpty(
+                $"{typeName} should have displayName");
+            modelType.GetProperty("description").GetString().Should().NotBeNullOrEmpty(
+                $"{typeName} should have description");
+            modelType.GetProperty("models").GetArrayLength().Should().BeGreaterThan(0,
+                $"{typeName} should have at least one model alias");
+        }
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Registry_EmbedderHasExpectedAliases()
+    {
+        var response = await _client.GetAsync("/api/registry/models/embedder");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var aliases = json.GetProperty("models")
+            .EnumerateArray()
+            .Select(m => m.GetProperty("aliasName").GetString()!)
+            .ToList();
+
+        aliases.Should().Contain("default");
+        aliases.Should().Contain("fast");
+        aliases.Should().Contain("quality");
+        aliases.Should().Contain("multilingual");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Registry_ModelAliasHasRepoId()
+    {
+        var response = await _client.GetAsync("/api/registry/models/embedder");
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var models = json.GetProperty("models").EnumerateArray();
+
+        foreach (var model in models)
+        {
+            model.GetProperty("repoId").GetString().Should().NotBeNullOrEmpty(
+                $"alias '{model.GetProperty("aliasName").GetString()}' should have repoId");
+            model.TryGetProperty("isCached", out _).Should().BeTrue(
+                "each model should have isCached field");
+        }
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_DownloadCheck_EmptyRepoId_Returns400()
+    {
+        var content = JsonContent.Create(new { repoId = "" });
+        var response = await _client.PostAsync("/api/download/check", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -232,6 +339,177 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         var response = await _client.GetAsync("/api/cache/loaded");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Swagger_Returns200()
+    {
+        var response = await _client.GetAsync("/swagger/v1/swagger.json");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("info").GetProperty("title").GetString()
+            .Should().Be("LMSupply Console API");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_SystemStatus_ReturnsExpectedShape()
+    {
+        var response = await _client.GetAsync("/api/system/status");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var status = json.GetProperty("status");
+        status.TryGetProperty("engineReady", out _).Should().BeTrue();
+        status.TryGetProperty("gpuAvailable", out _).Should().BeTrue();
+        status.TryGetProperty("gpuProvider", out _).Should().BeTrue();
+        status.TryGetProperty("cpuUsage", out _).Should().BeTrue();
+        status.TryGetProperty("ramUsageMB", out _).Should().BeTrue();
+        status.TryGetProperty("ramTotalMB", out _).Should().BeTrue();
+        status.TryGetProperty("processMemoryMB", out _).Should().BeTrue();
+        status.TryGetProperty("timestamp", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_GpuInfo_ReturnsExpectedShape()
+    {
+        var response = await _client.GetAsync("/api/system/gpu");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("isAvailable", out _).Should().BeTrue();
+        json.TryGetProperty("name", out _).Should().BeTrue();
+        json.TryGetProperty("provider", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_MemoryMetrics_ReturnsExpectedShape()
+    {
+        var response = await _client.GetAsync("/api/system/memory");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("totalMB", out _).Should().BeTrue();
+        json.TryGetProperty("usedMB", out _).Should().BeTrue();
+        json.TryGetProperty("usagePercent", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Version_ReturnsVersionAndRid()
+    {
+        var response = await _client.GetAsync("/api/system/version");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("version").GetString().Should().NotBeNullOrEmpty();
+        json.GetProperty("rid").GetString().Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_Update_ReturnsUpdateCheckResult()
+    {
+        var response = await _client.GetAsync("/api/system/update");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("currentVersion", out _).Should().BeTrue();
+        // updateAvailable, latestVersion, releaseUrl may be null if check fails
+    }
+
+    [Fact]
+    [Trait("Axis", "API-CORS")]
+    public async Task CORS_SSE_Endpoint_IncludesCorsHeaders()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/system/metrics/stream");
+        request.Headers.Add("Origin", "http://localhost:5173");
+        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.Headers.TryGetValues("Access-Control-Allow-Origin", out var values)
+                .Should().BeTrue("SSE endpoint should include CORS header");
+            values!.Should().Contain("http://localhost:5173");
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected — SSE streams indefinitely
+        }
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_CacheStats_ReturnsExpectedShape()
+    {
+        var response = await _client.GetAsync("/api/cache/stats");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("totalModels", out _).Should().BeTrue();
+        json.TryGetProperty("totalSizeMB", out _).Should().BeTrue();
+        json.TryGetProperty("cacheDirectory", out _).Should().BeTrue();
+        json.TryGetProperty("byType", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_CachedModels_ReturnsExpectedShape()
+    {
+        var response = await _client.GetAsync("/api/cache/models");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.TryGetProperty("models", out _).Should().BeTrue();
+        json.TryGetProperty("totalCount", out _).Should().BeTrue();
+        json.TryGetProperty("totalSizeMB", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task DELETE_CachedModel_NonExistent_Returns404()
+    {
+        var response = await _client.DeleteAsync("/api/cache/models/nonexistent%2Fmodel-xyz");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task DELETE_LoadedModel_NonExistent_Returns404()
+    {
+        var response = await _client.DeleteAsync("/api/cache/loaded/generator:nonexistent-xyz");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_LoadModel_InvalidType_Returns400Or500()
+    {
+        var content = JsonContent.Create(new { type = "invalid_type", modelId = "default" });
+        var response = await _client.PostAsync("/api/cache/load", content);
+
+        // Should fail with an error (ArgumentException → 400 or type error → 500)
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "loading with invalid type should fail");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_CacheModelsByType_InvalidType_Returns400()
+    {
+        var response = await _client.GetAsync("/api/cache/models/type/nonexistent");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ── Group B: Error Handling (no model loading) ────────────────
@@ -288,6 +566,16 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Error")]
+    public async Task POST_Vqa_NotFormData_IsRejected()
+    {
+        var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/images/vqa", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
     public async Task POST_Detect_NotFormData_IsRejected()
     {
         // Endpoint has .Accepts("multipart/form-data") constraint,
@@ -296,6 +584,17 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         var response = await _client.PostAsync("/v1/images/detect", content);
 
         response.IsSuccessStatusCode.Should().BeFalse();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Detect_FormData_MissingFile_Returns400()
+    {
+        using var formContent = new MultipartFormDataContent();
+        formContent.Add(new StringContent("default"), "model");
+        var response = await _client.PostAsync("/v1/images/detect", formContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -324,10 +623,31 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Error")]
+    public async Task POST_Segment_FormData_MissingFile_Returns400()
+    {
+        using var formContent = new MultipartFormDataContent();
+        formContent.Add(new StringContent("default"), "model");
+        var response = await _client.PostAsync("/v1/images/segment", formContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
     public async Task POST_ImageGeneration_MissingPrompt_Returns400()
     {
         var content = JsonContent.Create(new { prompt = "" });
         var response = await _client.PostAsync("/v1/images/generations", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_ImageGenerate_Extended_MissingPrompt_Returns400()
+    {
+        var content = JsonContent.Create(new { prompt = "" });
+        var response = await _client.PostAsync("/v1/images/generate", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -339,6 +659,39 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         using var formContent = new MultipartFormDataContent();
         formContent.Add(new StringContent("fast"), "model");
         var response = await _client.PostAsync("/v1/images/caption", formContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Vqa_FormData_MissingFile_Returns400()
+    {
+        using var formContent = new MultipartFormDataContent();
+        formContent.Add(new StringContent("What is this?"), "question");
+        var response = await _client.PostAsync("/v1/images/vqa", formContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Vqa_FormData_MissingQuestion_Returns400()
+    {
+        using var formContent = new MultipartFormDataContent();
+        formContent.Add(new ByteArrayContent([0xFF, 0xD8, 0xFF]), "file", "test.jpg");
+        var response = await _client.PostAsync("/v1/images/vqa", formContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Ocr_FormData_MissingFile_Returns400()
+    {
+        using var formContent = new MultipartFormDataContent();
+        formContent.Add(new StringContent("en"), "language");
+        var response = await _client.PostAsync("/v1/images/ocr", formContent);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -524,6 +877,60 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Error")]
+    public async Task POST_Embeddings_EmptyInput_ReturnsError()
+    {
+        var content = JsonContent.Create(new { input = "", model = "fast" });
+        var response = await _client.PostAsync("/v1/embeddings", content);
+
+        // Empty input should either succeed with empty embedding or return 400
+        // Either outcome is acceptable as long as no 500
+        ((int)response.StatusCode).Should().BeLessThan(500,
+            "empty input should not cause internal server error");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Inference")]
+    public async Task POST_Rerank_TopN_LimitsResults()
+    {
+        string[] docs = ["ML is AI", "Dogs bark", "AI trains models", "Weather is cold"];
+        var content = JsonContent.Create(new
+        {
+            query = "What is AI?",
+            documents = docs,
+            model = "fast",
+            top_n = 2
+        });
+        var response = await _client.PostAsync("/v1/rerank", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("results").GetArrayLength().Should().Be(2,
+            "top_n=2 should return exactly 2 results");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Inference")]
+    public async Task POST_Rerank_ReturnDocuments_IncludesText()
+    {
+        string[] docs = ["Machine learning intro"];
+        var content = JsonContent.Create(new
+        {
+            query = "What is ML?",
+            documents = docs,
+            model = "fast",
+            return_documents = true
+        });
+        var response = await _client.PostAsync("/v1/rerank", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var result = json.GetProperty("results")[0];
+        result.GetProperty("document").GetProperty("text").GetString()
+            .Should().Be("Machine learning intro");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
     public async Task POST_Embeddings_UnknownModel_ReturnsError()
     {
         // API-2: Wrong model name should return a clear error, not 500
@@ -609,12 +1016,84 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact]
     [Trait("Axis", "API-Error")]
+    public async Task POST_ChatCompletions_EmptyMessages_Returns400()
+    {
+        var content = JsonContent.Create(new
+        {
+            model = "default",
+            messages = Array.Empty<object>()
+        });
+        var response = await _client.PostAsync("/v1/chat/completions", content);
+
+        // Empty messages should be rejected or cause an error
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "empty messages array should not succeed");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_ChatCompletions_InvalidRole_ReturnsError()
+    {
+        var content = JsonContent.Create(new
+        {
+            model = "default",
+            messages = new[] { new { role = "invalid_role", content = "Hello" } }
+        });
+        var response = await _client.PostAsync("/v1/chat/completions", content);
+
+        // Invalid role should cause an error (enum parse failure)
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "invalid message role should cause an error");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
     public async Task POST_Translate_EmptyInput_Returns400()
     {
         var content = JsonContent.Create(new { input = "", model = "ko-en" });
         var response = await _client.PostAsync("/v1/translate", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task GET_TranslateLanguages_HasExpectedShape()
+    {
+        var response = await _client.GetAsync("/v1/translate/languages");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var languages = json.GetProperty("languages").EnumerateArray().ToList();
+        languages.Count.Should().BeGreaterThan(0);
+
+        var first = languages[0];
+        first.TryGetProperty("id", out _).Should().BeTrue();
+        first.TryGetProperty("source", out _).Should().BeTrue();
+        first.TryGetProperty("target", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Transcribe_NonFormData_Returns400()
+    {
+        var content = JsonContent.Create(new { file = "test", model = "default" });
+        var response = await _client.PostAsync("/v1/audio/transcriptions", content);
+
+        // JSON content-type doesn't match multipart/form-data expectation
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "transcription endpoint requires multipart/form-data");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Translate_NonJsonContent_IsRejected()
+    {
+        var content = new StringContent("plain text", Encoding.UTF8, "text/plain");
+        var response = await _client.PostAsync("/v1/translate", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "translate endpoint should reject non-JSON content");
     }
 
     [Fact]
@@ -641,6 +1120,52 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    // ── Group D2: Empty/Null Body Tests (test plan 7.3) ─────────────
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Embeddings_EmptyBody_IsRejected()
+    {
+        var content = new StringContent("", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/embeddings", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "empty JSON body should not be accepted");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_ChatCompletions_EmptyBody_IsRejected()
+    {
+        var content = new StringContent("", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/chat/completions", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "empty JSON body should not be accepted");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Translate_EmptyBody_IsRejected()
+    {
+        var content = new StringContent("", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/translate", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "empty JSON body should not be accepted");
+    }
+
+    [Fact]
+    [Trait("Axis", "API-Error")]
+    public async Task POST_Speech_EmptyBody_IsRejected()
+    {
+        var content = new StringContent("", Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/v1/audio/speech", content);
+
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "empty JSON body should not be accepted");
+    }
+
     [Fact]
     [Trait("Axis", "API-GET")]
     public async Task GET_MetricsStream_Returns200()
@@ -658,6 +1183,32 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
         catch (OperationCanceledException)
         {
             // Expected — SSE streams indefinitely, we just verify it starts
+        }
+    }
+
+    // ── Group D3: Concurrent Request Tests (test plan 6.3) ────────────
+
+    [Fact]
+    [Trait("Axis", "API-GET")]
+    public async Task ConcurrentGET_MultipleEndpoints_AllSucceed()
+    {
+        // Verify server handles concurrent requests to different endpoints
+        var tasks = new[]
+        {
+            _client.GetAsync("/health"),
+            _client.GetAsync("/api/system/status"),
+            _client.GetAsync("/api/system/version"),
+            _client.GetAsync("/v1/images/detect/labels"),
+            _client.GetAsync("/v1/images/segment/labels"),
+            _client.GetAsync("/v1/images/ocr/languages"),
+            _client.GetAsync("/v1/models"),
+        };
+
+        var responses = await Task.WhenAll(tasks);
+
+        foreach (var response in responses)
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
     }
 

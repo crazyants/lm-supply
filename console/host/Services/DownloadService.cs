@@ -256,8 +256,9 @@ public sealed partial class DownloadService : IDisposable
             var gcInfo = GC.GetGCMemoryInfo();
             return gcInfo.TotalAvailableMemoryBytes;
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Trace.TraceInformation($"[DownloadService] memory detection failed: {ex.Message}");
             return 0;
         }
     }
@@ -323,9 +324,10 @@ internal sealed class AsyncProgress<T> : IProgress<T>, IDisposable
         {
             // Cancelled - ignore
         }
-        catch
+        catch (Exception ex)
         {
             // Swallow exceptions in progress reporting to avoid disrupting download
+            System.Diagnostics.Trace.TraceInformation($"[AsyncProgress] progress report failed: {ex.Message}");
         }
     }
 }

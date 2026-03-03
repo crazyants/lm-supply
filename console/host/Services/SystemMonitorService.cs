@@ -76,8 +76,9 @@ public sealed partial class SystemMonitorService : IDisposable
 
             return 0;
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceInformation($"[SystemMonitorService] CPU usage measurement failed: {ex.Message}");
             return 0;
         }
     }
@@ -194,7 +195,10 @@ public sealed partial class SystemMonitorService : IDisposable
                 };
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Trace.TraceInformation($"[SystemMonitorService] Windows memory metrics failed: {ex.Message}");
+        }
 
         return new HostMemoryMetrics();
     }

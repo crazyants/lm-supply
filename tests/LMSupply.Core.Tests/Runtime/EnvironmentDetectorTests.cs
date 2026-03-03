@@ -71,4 +71,49 @@ public class EnvironmentDetectorTests
         // Assert
         providers.Should().OnlyHaveUniqueItems();
     }
+
+    [Fact]
+    public void DetectAllGpus_ShouldReturnNonEmptyList()
+    {
+        var gpus = EnvironmentDetector.DetectAllGpus();
+
+        gpus.Should().NotBeNull();
+        gpus.Should().HaveCountGreaterThanOrEqualTo(1, "at least one GPU or fallback entry should exist");
+    }
+
+    [Fact]
+    public void GetRecommendedProvider_ShouldReturnValidProvider()
+    {
+        var provider = EnvironmentDetector.GetRecommendedProvider();
+
+        provider.Should().BeDefined();
+    }
+
+    [Fact]
+    public void GetEnvironmentSummary_ShouldReturnNonEmptyString()
+    {
+        var summary = EnvironmentDetector.GetEnvironmentSummary();
+
+        summary.Should().NotBeNullOrWhiteSpace();
+        summary.Should().Contain("Platform:");
+        summary.Should().Contain("GPU:");
+        summary.Should().Contain("Recommended Provider:");
+        summary.Should().Contain("Available Providers:");
+    }
+
+    [Fact]
+    public void ClearCache_ShouldAllowRedetection()
+    {
+        // First detection
+        var gpu1 = EnvironmentDetector.DetectGpu();
+
+        // Clear and re-detect
+        EnvironmentDetector.ClearCache();
+        var gpu2 = EnvironmentDetector.DetectGpu();
+
+        // Both should be valid (may or may not be same instance after clearing)
+        gpu1.Should().NotBeNull();
+        gpu2.Should().NotBeNull();
+        gpu2.Vendor.Should().Be(gpu1.Vendor);
+    }
 }

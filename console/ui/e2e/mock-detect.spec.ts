@@ -18,8 +18,8 @@ test.describe('Detect — mock inference results', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Object Detection' })).toBeVisible();
   });
 
-  // Test plan: 10.3 — Upload & detect shows detected objects
-  test('uploading image shows detected objects list', async ({ page }) => {
+  // [4-77] Image upload triggers detection [4-78] Detection results summary
+  test('[4-77] uploading image shows detected objects list', async ({ page }) => {
     const mockResponse = mockDetectResponse();
     await mockJsonEndpoint(page, '**/v1/images/detect', mockResponse);
 
@@ -30,8 +30,8 @@ test.describe('Detect — mock inference results', () => {
     await expect(page.getByText(/Detected Objects \(3\)/)).toBeVisible({ timeout: 15_000 });
   });
 
-  // Test plan: 10.4 — Class summary pills group labels by count
-  test('class summary shows labels with counts', async ({ page }) => {
+  // [4-78] Class summary pills with label and count
+  test('[4-78] class summary shows labels with counts', async ({ page }) => {
     const mockResponse = mockDetectResponse();
     await mockJsonEndpoint(page, '**/v1/images/detect', mockResponse);
 
@@ -45,8 +45,8 @@ test.describe('Detect — mock inference results', () => {
     await expect(page.getByText('car: 1')).toBeVisible();
   });
 
-  // Test plan: 10.3 — Detection results show label, confidence, bounding box
-  test('detection results show confidence and bounding box', async ({ page }) => {
+  // [4-79] Detection items show confidence and bounding box
+  test('[4-79] detection results show confidence and bounding box', async ({ page }) => {
     const mockResponse = mockDetectResponse();
     await mockJsonEndpoint(page, '**/v1/images/detect', mockResponse);
 
@@ -62,8 +62,8 @@ test.describe('Detect — mock inference results', () => {
     await expect(page.getByText(/Box:/).first()).toBeVisible();
   });
 
-  // Elapsed time
-  test('elapsed time shown after detection', async ({ page }) => {
+  // [4-82] Elapsed time shown after detection
+  test('[4-82] elapsed time shown after detection', async ({ page }) => {
     const mockResponse = mockDetectResponse();
     await mockJsonEndpoint(page, '**/v1/images/detect', mockResponse);
 
@@ -74,8 +74,8 @@ test.describe('Detect — mock inference results', () => {
     await expect(page.getByText(/\d+ ms/)).toBeVisible();
   });
 
-  // Test plan: 10.6 — Empty result
-  test('no objects detected shows empty message', async ({ page }) => {
+  // [4-81] No objects detected shows empty message
+  test('[4-81] no objects detected shows empty message', async ({ page }) => {
     const emptyResponse = { id: 'detect-mock', model: 'mock', objects: [] };
     await mockJsonEndpoint(page, '**/v1/images/detect', emptyResponse);
 

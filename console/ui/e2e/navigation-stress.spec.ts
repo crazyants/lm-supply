@@ -31,7 +31,7 @@ test.describe('Rapid page switching', () => {
     }
   });
 
-  test('rapid sidebar clicks navigate correctly', async ({ page }) => {
+  test('[8-12] rapid sidebar clicks navigate correctly', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('main')).toBeVisible();
 
@@ -52,7 +52,7 @@ test.describe('Rapid page switching', () => {
 // ================================================================
 
 test.describe('Browser back/forward', () => {
-  test('back button returns to previous page', async ({ page }) => {
+  test('[8-11] back button returns to previous page', async ({ page }) => {
     await page.goto('/chat');
     await expect(page.locator('main').getByRole('heading', { name: 'Chat' })).toBeVisible();
 
@@ -63,7 +63,7 @@ test.describe('Browser back/forward', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Chat' })).toBeVisible();
   });
 
-  test('forward button after back works', async ({ page }) => {
+  test('[8-11] forward button after back works', async ({ page }) => {
     await page.goto('/chat');
     await expect(page.locator('main').getByRole('heading', { name: 'Chat' })).toBeVisible();
 
@@ -77,7 +77,7 @@ test.describe('Browser back/forward', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Machine Translation' })).toBeVisible();
   });
 
-  test('multiple back navigations work', async ({ page }) => {
+  test('[8-11] multiple back navigations work', async ({ page }) => {
     await page.goto('/chat');
     await page.goto('/embed');
     await page.goto('/rerank');
@@ -114,6 +114,32 @@ test.describe('State isolation', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Machine Translation' })).toBeVisible();
     const translateTextarea = page.locator('textarea');
     await expect(translateTextarea).toHaveValue('');
+  });
+
+  // Test plan: 6-08 — page model independence
+  test('[6-08] model selection is independent between pages', async ({ page }) => {
+    // Go to Embed — should have its own model state
+    await page.goto('/embed');
+    await expect(page.locator('main').getByRole('heading', { name: /Embed|Text Embedding/ })).toBeVisible();
+    const embedTextarea = page.locator('textarea');
+    await embedTextarea.fill('test embedding text');
+
+    // Go to Rerank — completely separate page state
+    await page.goto('/rerank');
+    await expect(page.locator('main').getByRole('heading', { name: 'Document Reranking' })).toBeVisible();
+    // Rerank input should be empty (not "test embedding text")
+    const rerankInput = page.locator('textarea').first();
+    await expect(rerankInput).toHaveValue('');
+
+    // Go back to Embed — should still be functional and independent
+    await page.goto('/embed');
+    await expect(page.locator('main').getByRole('heading', { name: /Embed|Text Embedding/ })).toBeVisible();
+    // Input resets on navigation (React state is component-scoped)
+    const embedTextarea2 = page.locator('textarea');
+    await expect(embedTextarea2).toHaveValue('');
+    // Can still type (page is functional)
+    await embedTextarea2.fill('new text');
+    await expect(embedTextarea2).toHaveValue('new text');
   });
 
   test('error state does not persist across page navigations', async ({ page }) => {

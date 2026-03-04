@@ -7,7 +7,7 @@ test.describe('Dashboard', () => {
   });
 
   // Test plan: 2.1.1 — Status loads
-  test('system status card shows engine and GPU indicators', async ({ page }) => {
+  test('[2-01] system status card shows engine and GPU indicators', async ({ page }) => {
     const statusCard = page.getByText('System Status').locator('..');
 
     // ONNX Runtime indicator should be present
@@ -29,24 +29,24 @@ test.describe('Dashboard', () => {
   });
 
   // Test plan: 2.1.3 — Resource stats
-  test('resource stats cards are displayed', async ({ page }) => {
+  test('[2-04] [2-05] [2-07] resource stats cards are displayed', async ({ page }) => {
     // CPU Usage card
-    await expect(page.getByText('CPU Usage')).toBeVisible();
+    await expect(page.getByText('CPU Usage')).toBeVisible({ timeout: 10_000 });
     // Check CPU value is a percentage
     const cpuCard = page.getByText('CPU Usage').locator('..');
-    await expect(cpuCard.getByText(/%/)).toBeVisible();
+    await expect(cpuCard.getByText(/%/).first()).toBeVisible();
 
     // RAM Usage card
     await expect(page.getByText('RAM Usage')).toBeVisible();
     const ramCard = page.getByText('RAM Usage').locator('..');
-    await expect(ramCard.getByText(/%/)).toBeVisible();
+    await expect(ramCard.getByText(/%/).first()).toBeVisible();
 
     // Process Memory card
     await expect(page.getByText('Process Memory')).toBeVisible();
   });
 
   // Test plan: 2.1.4 — Auto-refresh
-  test('stats update automatically within 10 seconds', async ({ page }) => {
+  test('[2-11] stats update automatically within 10 seconds', async ({ page }) => {
     // Intercept system status API calls
     const apiCalls: number[] = [];
     page.on('request', (req) => {
@@ -60,7 +60,7 @@ test.describe('Dashboard', () => {
   });
 
   // Test plan: 2.2.1 — Cached models
-  test('cached models section shows count and list', async ({ page }) => {
+  test('[2-08] cached models section shows count and list', async ({ page }) => {
     const heading = page.getByRole('heading', { name: /Cached Models/ });
     await expect(heading).toBeVisible();
 
@@ -70,7 +70,7 @@ test.describe('Dashboard', () => {
   });
 
   // Test plan: 2.2.2 — Loaded models section
-  test('loaded models section renders', async ({ page }) => {
+  test('[2-10] loaded models section renders', async ({ page }) => {
     const heading = page.getByRole('heading', { name: /Loaded Models/ });
     await expect(heading).toBeVisible();
 

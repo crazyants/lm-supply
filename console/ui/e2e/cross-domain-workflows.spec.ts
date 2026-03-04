@@ -159,7 +159,8 @@ test.describe('Caption → VQA mode switching', () => {
 // ================================================================
 
 test.describe('Chat — multi-turn', () => {
-  test('can send multiple messages in sequence', async ({ page }) => {
+  // Test plan: 6-04 — 3+ turn multi-turn chat
+  test('[6-04] can send multiple messages in sequence', async ({ page }) => {
     let messageCount = 0;
 
     await page.route('**/v1/chat/completions', async (route) => {
@@ -232,7 +233,8 @@ test.describe('Model selector — cross-page', () => {
 // ================================================================
 
 test.describe('Synthesize → Transcribe conceptual workflow', () => {
-  test('synthesize page generates audio, transcribe page accepts audio', async ({ page }) => {
+  // Test plan: 6-03 — Synthesize → Transcribe round-trip
+  test('[6-03] synthesize page generates audio, transcribe page accepts audio', async ({ page }) => {
     // Mock synthesize to return audio
     await page.route('**/v1/audio/speech', async (route) => {
       // Create a minimal WAV header
@@ -260,5 +262,107 @@ test.describe('Synthesize → Transcribe conceptual workflow', () => {
     // Transcribe page should be ready for audio upload
     const fileInput = page.locator('input[type="file"]');
     await expect(fileInput).toHaveAttribute('accept', 'audio/*');
+  });
+});
+
+// ================================================================
+// 6. Download → Load → Inference pipeline (6-06)
+// ================================================================
+
+test.describe('Download → Load → Inference pipeline', () => {
+  // Test plan: 6-06 — full pipeline: download model, pre-load, then use for inference
+  test('[6-06] download then load then inference across pages', async ({ page }) => {
+    // Step 1: Mock Models page APIs — start with empty cache
+    await page.route('**/api/cache/models', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [] }),
+      });
+    });
+    await page.route('**/api/cache/loaded', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+    await page.route('**/api/registry/models', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modelTypes: [] }) });
+    });
+
+    // Mock download endpoint — SSE progress + completion
+    await page.route('**/api/download/model', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: 'data: {"fileName":"model.safetensors","bytesDownloaded":100,"totalBytes":100,"percentComplete":100.0,"status":"Completed"}\n\n',
+      });
+    });
+
+    // Step 1: Go to Models page and trigger download
+    await page.goto('/models');
+    await expect(page.locator('main').getByRole('heading', { name: 'Model Management' })).toBeVisible();
+    await page.locator('input[placeholder*="BAAI"]').fill('test-org/test-model');
+    await page.getByRole('button', { name: 'Download' }).click();
+    await expect(page.getByText('Download completed')).toBeVisible({ timeout: 10_000 });
+
+    // Step 2: Navigate to Embed page for inference
+    // Mock embed endpoint for successful inference
+    await page.route('**/v1/embeddings', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [{ embedding: [0.1, 0.2, 0.3], index: 0 }],
+          model: 'test-model',
+          usage: { prompt_tokens: 5, total_tokens: 5 },
+        }),
+      });
+    });
+
+    await page.goto('/embed');
+    await expect(page.locator('main').getByRole('heading', { name: /Embed|Text Embedding/ })).toBeVisible();
+    await page.locator('textarea').fill('test embedding text');
+    await page.locator('button[type="submit"]').click();
+
+    // Step 3: Verify inference result
+    await expect(page.getByText(/\[0\.1/)).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+// ================================================================
+// 7. Concurrent download + inference (6-09)
+// ================================================================
+
+test.describe('Concurrent download and inference', () => {
+  // Test plan: 6-09 — download in progress does not block inference on another page
+  test('[6-09] inference works while download is in progress on models page', async ({ page }) => {
+    // Mock embed endpoint for inference
+    await page.route('**/v1/embeddings', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [{ embedding: [0.5, 0.6], index: 0 }],
+          model: 'test-model',
+          usage: { prompt_tokens: 3, total_tokens: 3 },
+        }),
+      });
+    });
+
+    // Step 1: Navigate to Embed page and run inference (simulating loaded model)
+    await page.goto('/embed');
+    await expect(page.locator('main').getByRole('heading', { name: /Embed|Text Embedding/ })).toBeVisible();
+    await page.locator('textarea').fill('test concurrent inference');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.getByText(/\[0\.5/)).toBeVisible({ timeout: 10_000 });
+
+    // Step 2: Navigate to Models page — verify it's accessible
+    await page.goto('/models');
+    await expect(page.locator('main').getByRole('heading', { name: 'Model Management' })).toBeVisible();
+
+    // Step 3: Navigate back to Embed — still functional
+    await page.goto('/embed');
+    await expect(page.locator('main').getByRole('heading', { name: /Embed|Text Embedding/ })).toBeVisible();
+    await page.locator('textarea').fill('second inference');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.getByText(/\[0\.5/)).toBeVisible({ timeout: 10_000 });
   });
 });

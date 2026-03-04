@@ -11,7 +11,7 @@ import { mockDashboardApis } from './fixtures/api-mocks';
 // ================================================================
 
 test.describe('Dashboard — loaded models', () => {
-  test('shows loaded model details (model ID, type, last used)', async ({ page }) => {
+  test('[2-10] shows loaded model details (model ID, type, last used)', async ({ page }) => {
     await mockDashboardApis(page, {
       cachedModels: [],
       loadedModels: [
@@ -33,8 +33,8 @@ test.describe('Dashboard — loaded models', () => {
     // Should display model ID in the loaded models section
     await expect(page.getByText('BAAI/bge-small-en-v1.5').first()).toBeVisible();
 
-    // Should display model type
-    await expect(page.getByText('embedder -', { exact: false })).toBeVisible();
+    // Should display model type badge
+    await expect(page.locator('main').getByText('embedder')).toBeVisible();
   });
 });
 

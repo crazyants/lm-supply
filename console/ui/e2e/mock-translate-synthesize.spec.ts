@@ -12,8 +12,8 @@ test.describe('Translate — mock inference results', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Machine Translation' })).toBeVisible();
   });
 
-  // Test plan: 12.3 — Translation appears in output area
-  test('translation result appears in output area', async ({ page }) => {
+  // [4-53] Translation result appears in output area
+  test('[4-53] translation result appears in output area', async ({ page }) => {
     const mockResponse = mockTranslateResponse('Hello world');
     await mockJsonEndpoint(page, '**/v1/translate', mockResponse);
 
@@ -25,27 +25,26 @@ test.describe('Translate — mock inference results', () => {
     await expect(page.getByText('Translated: Hello world')).toBeVisible({ timeout: 10_000 });
   });
 
-  // Test plan: 12.4 — Metadata shown: model name, source/target, elapsed time
-  test('translation metadata shows model and languages', async ({ page }) => {
+  // [4-55] Translation metadata shows model and elapsed time
+  test('[4-55] translation metadata shows model and languages', async ({ page }) => {
     const mockResponse = mockTranslateResponse('Test');
     await mockJsonEndpoint(page, '**/v1/translate', mockResponse);
 
     await page.locator('textarea').fill('Test');
     await page.getByRole('button', { name: /Translate/ }).click();
 
-    // Wait for result card
-    const resultCard = page.locator('.bg-card');
-    await expect(resultCard).toBeVisible({ timeout: 10_000 });
+    // Wait for result in main content area
+    const main = page.locator('main');
 
     // Model name
-    await expect(resultCard.getByText('Model: mock-translator')).toBeVisible();
+    await expect(main.getByText('Model: mock-translator')).toBeVisible({ timeout: 10_000 });
 
     // Source and target languages
-    await expect(resultCard.getByText('Source: en')).toBeVisible();
-    await expect(resultCard.getByText('Target: ko')).toBeVisible();
+    await expect(main.getByText('Source: en')).toBeVisible();
+    await expect(main.getByText('Target: ko')).toBeVisible();
 
     // Elapsed time
-    await expect(resultCard.getByText(/\d+ ms/)).toBeVisible();
+    await expect(main.getByText(/\d+ ms/)).toBeVisible();
   });
 
   // Error handling
@@ -71,8 +70,8 @@ test.describe('Synthesize — mock audio results', () => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
   });
 
-  // Test plan: 7.2 — Audio player appears after generation
-  test('audio player appears after speech generation', async ({ page }) => {
+  // [4-43] Audio player appears after speech generation
+  test('[4-43] audio player appears after speech generation', async ({ page }) => {
     const wavBuffer = mockWavBuffer();
     await mockBlobEndpoint(page, '**/v1/audio/speech', 'audio/wav', wavBuffer);
 
@@ -86,8 +85,8 @@ test.describe('Synthesize — mock audio results', () => {
     await expect(page.locator('audio')).toBeVisible();
   });
 
-  // Test plan: 7.3 — Play button visible
-  test('play button is visible after generation', async ({ page }) => {
+  // [4-44] Play button visible after generation
+  test('[4-44] play button is visible after generation', async ({ page }) => {
     const wavBuffer = mockWavBuffer();
     await mockBlobEndpoint(page, '**/v1/audio/speech', 'audio/wav', wavBuffer);
 
@@ -100,8 +99,8 @@ test.describe('Synthesize — mock audio results', () => {
     await expect(page.getByRole('button', { name: /Play/ })).toBeVisible();
   });
 
-  // Test plan: 7.4 — Download WAV button visible
-  test('download WAV button is visible after generation', async ({ page }) => {
+  // [4-45] Download WAV button visible after generation
+  test('[4-45] download WAV button is visible after generation', async ({ page }) => {
     const wavBuffer = mockWavBuffer();
     await mockBlobEndpoint(page, '**/v1/audio/speech', 'audio/wav', wavBuffer);
 
@@ -114,8 +113,8 @@ test.describe('Synthesize — mock audio results', () => {
     await expect(page.getByRole('button', { name: /Download WAV/ })).toBeVisible();
   });
 
-  // Test plan: 7.5 — Elapsed time shown
-  test('elapsed time shown after generation', async ({ page }) => {
+  // [4-46] Elapsed time shown after generation
+  test('[4-46] elapsed time shown after generation', async ({ page }) => {
     const wavBuffer = mockWavBuffer();
     await mockBlobEndpoint(page, '**/v1/audio/speech', 'audio/wav', wavBuffer);
 

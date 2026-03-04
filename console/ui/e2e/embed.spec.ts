@@ -6,8 +6,8 @@ test.describe('Embed page', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Text Embedding' })).toBeVisible();
   });
 
-  // Test plan: 4.1 — Model dropdown with correct aliases
-  test('model selector loads embedder models', async ({ page }) => {
+  // [4-15] Embedder model selector loads models
+  test('[4-15] model selector loads embedder models', async ({ page }) => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
     const select = page.locator('select');
     const optionCount = await select.locator('option').count();
@@ -20,8 +20,8 @@ test.describe('Embed page', () => {
     }
   });
 
-  // Test plan: 4.5 — Empty input disables submit
-  test('submit button is disabled when textarea is empty', async ({ page }) => {
+  // [4-16] Empty input disables submit
+  test('[4-16] submit button is disabled when textarea is empty', async ({ page }) => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
     const submitButton = page.getByRole('button', { name: /Generate Embeddings/ });
     await expect(submitButton).toBeDisabled();

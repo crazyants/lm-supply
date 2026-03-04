@@ -76,7 +76,11 @@ public sealed class HuggingFaceDownloader : IDisposable
         foreach (var file in discovery.GetAllFiles())
         {
             // Preserve the full relative path structure (e.g., "unet/model.onnx_data")
-            var localPath = Path.Combine(modelDir, file.Replace('/', Path.DirectorySeparatorChar));
+            var localPath = Path.GetFullPath(Path.Combine(modelDir, file.Replace('/', Path.DirectorySeparatorChar)));
+
+            // Validate against path traversal (e.g., "../../../etc/passwd")
+            if (!localPath.StartsWith(modelDir, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Path traversal detected in file path: {file}");
 
             // Ensure parent directory exists
             var parentDir = Path.GetDirectoryName(localPath);

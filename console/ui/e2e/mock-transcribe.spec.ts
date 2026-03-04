@@ -19,8 +19,8 @@ test.describe('Transcribe — mock inference results', () => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
   });
 
-  // Test plan: 6.3 — Upload triggers transcription, result appears
-  test('uploading audio shows transcription result', async ({ page }) => {
+  // [4-35] Audio upload triggers transcription result
+  test('[4-35] uploading audio shows transcription result', async ({ page }) => {
     const mockResponse = mockTranscribeResponse();
     await mockJsonEndpoint(page, '**/v1/audio/transcriptions', mockResponse);
 
@@ -36,8 +36,8 @@ test.describe('Transcribe — mock inference results', () => {
     await expect(resultCard.locator('p.whitespace-pre-wrap')).toContainText('Hello, this is a test transcription');
   });
 
-  // Test plan: 6.4 — Result shows metadata: language, duration, elapsed time
-  test('result shows language and duration metadata', async ({ page }) => {
+  // [4-36] Result shows language, duration, elapsed time
+  test('[4-36] result shows language and duration metadata', async ({ page }) => {
     const mockResponse = mockTranscribeResponse();
     await mockJsonEndpoint(page, '**/v1/audio/transcriptions', mockResponse);
 
@@ -57,8 +57,8 @@ test.describe('Transcribe — mock inference results', () => {
     await expect(page.getByText(/\d+ ms/).first()).toBeVisible();
   });
 
-  // Test plan: 6.5 — Segments table with timestamps
-  test('segments table shows timestamps and text', async ({ page }) => {
+  // [4-37] Segments table shows timestamps and text
+  test('[4-37] segments table shows timestamps and text', async ({ page }) => {
     const mockResponse = mockTranscribeResponse();
     await mockJsonEndpoint(page, '**/v1/audio/transcriptions', mockResponse);
 

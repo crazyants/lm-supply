@@ -425,6 +425,17 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
             _isInitialized = true;
         }
+        catch
+        {
+            // Dispose partially-created sessions to prevent resource leaks
+            _encoderSession?.Dispose();
+            _encoderSession = null;
+            _encoderSessionInfo = null;
+            _decoderSession?.Dispose();
+            _decoderSession = null;
+            _decoder = null;
+            throw;
+        }
         finally
         {
             _lock.Release();

@@ -61,8 +61,10 @@ public class WhisperConfigReaderTests
     }
 
     [Fact]
-    public void ParseConfig_MissingModelType_ShouldStillParse()
+    public void ParseConfig_MissingModelType_ShouldReturnNull()
     {
+        // Without explicit model_type: "whisper", config is rejected
+        // to prevent applying Whisper params to non-Whisper models
         var json = """
         {
             "num_mel_bins": 128,
@@ -72,9 +74,7 @@ public class WhisperConfigReaderTests
 
         var config = WhisperConfigReader.ParseConfig(json);
 
-        config.Should().NotBeNull();
-        config!.NumMelBins.Should().Be(128);
-        config.HiddenSize.Should().Be(1280);
+        config.Should().BeNull();
     }
 
     [Fact]

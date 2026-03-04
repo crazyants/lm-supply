@@ -10,21 +10,21 @@ test.describe('Caption page', () => {
     await expect(page.locator('main').getByRole('heading', { name: /Image Captioning/ })).toBeVisible();
   });
 
-  // Test plan: 8.1.1 — Mode toggle default state
-  test('caption mode is active by default', async ({ page }) => {
+  // [4-58] Caption mode is active by default
+  test('[4-58] caption mode is active by default', async ({ page }) => {
     const captionButton = page.getByRole('button', { name: /Caption/i }).first();
     await expect(captionButton).toHaveClass(/bg-primary/);
   });
 
-  // Test plan: 8.2.1 — Switch to VQA mode
-  test('can switch to Visual QA mode', async ({ page }) => {
+  // [4-59] VQA mode switch available
+  test('[4-59] can switch to Visual QA mode', async ({ page }) => {
     const vqaButton = page.getByRole('button', { name: /Visual QA/i });
     await vqaButton.click();
     await expect(vqaButton).toHaveClass(/bg-primary/);
   });
 
-  // Has image file upload
-  test('has image file upload zone', async ({ page }) => {
+  // [4-60] Caption image upload drop zone present
+  test('[4-60] has image file upload zone', async ({ page }) => {
     const fileInput = page.locator('input[type="file"]');
     await expect(fileInput).toHaveAttribute('accept', 'image/*');
   });
@@ -47,8 +47,8 @@ test.describe('OCR page', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Optical Character Recognition' })).toBeVisible();
   });
 
-  // Test plan: 9.1 — Language dropdown populated
-  test('language dropdown is populated from API', async ({ page }) => {
+  // [4-67] OCR language dropdown populated from API
+  test('[4-67] language dropdown is populated from API', async ({ page }) => {
     const select = page.locator('select');
     await expect(select).toBeVisible();
 
@@ -78,8 +78,8 @@ test.describe('OCR page', () => {
     await expect(fileInput).toHaveAttribute('accept', 'image/*');
   });
 
-  // Default language selection
-  test('default language is "en"', async ({ page }) => {
+  // [4-68] Default OCR language is "en"
+  test('[4-68] default language is "en"', async ({ page }) => {
     const select = page.locator('select');
     const value = await select.inputValue();
     expect(value).toBe('en');
@@ -96,15 +96,15 @@ test.describe('Detect page', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Object Detection' })).toBeVisible();
   });
 
-  // Test plan: 10.1 — Model input defaults to "default"
-  test('model ID input defaults to "default"', async ({ page }) => {
+  // [4-75] Detect model ID defaults to "default"
+  test('[4-75] model ID input defaults to "default"', async ({ page }) => {
     const modelInput = page.locator('input[type="text"]').first();
     const value = await modelInput.inputValue();
     expect(value).toBe('default');
   });
 
-  // Test plan: 10.2 — Threshold slider
-  test('has confidence threshold slider with label', async ({ page }) => {
+  // [4-76] Confidence threshold slider with range
+  test('[4-76] has confidence threshold slider with label', async ({ page }) => {
     await expect(page.getByText(/Confidence Threshold/i)).toBeVisible();
     const slider = page.locator('input[type="range"]');
     await expect(slider).toBeVisible();
@@ -137,8 +137,8 @@ test.describe('Segment page', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Image Segmentation' })).toBeVisible();
   });
 
-  // Test plan: 11.1 — Model input defaults to "default"
-  test('model ID input defaults to "default"', async ({ page }) => {
+  // [4-84] Segment model ID defaults to "default"
+  test('[4-84] model ID input defaults to "default"', async ({ page }) => {
     const modelInput = page.locator('input[type="text"]').first();
     const value = await modelInput.inputValue();
     expect(value).toBe('default');

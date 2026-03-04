@@ -42,13 +42,12 @@ internal static class WhisperConfigReader
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        // Verify this is a Whisper model
-        if (root.TryGetProperty("model_type", out var modelType))
-        {
-            var type = modelType.GetString();
-            if (type != null && !type.Equals("whisper", StringComparison.OrdinalIgnoreCase))
-                return null;
-        }
+        // Verify this is a Whisper model — require explicit model_type
+        if (!root.TryGetProperty("model_type", out var modelType))
+            return null;
+        var type = modelType.GetString();
+        if (type == null || !type.Equals("whisper", StringComparison.OrdinalIgnoreCase))
+            return null;
 
         int? numMelBins = null;
         int? hiddenSize = null;

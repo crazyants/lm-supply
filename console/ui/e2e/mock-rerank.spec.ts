@@ -13,8 +13,8 @@ test.describe('Rerank — mock inference results', () => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
   });
 
-  // Test plan: 5.2 — Results sorted by relevance score
-  test('rerank results show ranked documents', async ({ page }) => {
+  // [4-28] Rerank execution shows ranked results
+  test('[4-28] rerank results show ranked documents', async ({ page }) => {
     const docs = ['Machine learning basics', 'Deep learning for NLP', 'Cooking recipes'];
     const query = 'artificial intelligence';
     const mockResponse = mockRerankResponse(docs, query);
@@ -30,8 +30,8 @@ test.describe('Rerank — mock inference results', () => {
     await expect(page.getByText('Ranked Results')).toBeVisible({ timeout: 10_000 });
   });
 
-  // Test plan: 5.3 — Result display: position, score, text
-  test('results show position numbers and scores', async ({ page }) => {
+  // [4-29] Result items show position number, score, and text
+  test('[4-29] results show position numbers and scores', async ({ page }) => {
     const docs = ['Document A', 'Document B', 'Document C'];
     const mockResponse = mockRerankResponse(docs, 'test query');
 
@@ -52,8 +52,8 @@ test.describe('Rerank — mock inference results', () => {
     await expect(resultArea.getByText('Document A')).toBeVisible();
   });
 
-  // Test plan: 5.3 — Elapsed time shown
-  test('elapsed time shown after reranking', async ({ page }) => {
+  // [4-30] Elapsed time shown after reranking
+  test('[4-30] elapsed time shown after reranking', async ({ page }) => {
     const mockResponse = mockRerankResponse(['Doc 1'], 'query');
     await mockJsonEndpoint(page, '**/v1/rerank', mockResponse);
 

@@ -326,3 +326,29 @@ test.describe('Error recovery — Embed', () => {
     await expect(page.getByText(/\[0\.1/)).toBeVisible({ timeout: 10_000 });
   });
 });
+
+// ================================================================
+// Test plan: 5-45 — Inference with uncached/unloaded model
+// ================================================================
+
+test.describe('Uncached model inference error', () => {
+  test('[5-45] inference with uncached model shows error', async ({ page }) => {
+    // Mock embed endpoint to return model-not-found error
+    await page.route('**/v1/embeddings', async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Model not found: nonexistent/model' } }),
+      });
+    });
+
+    await page.goto('/embed');
+    await expect(page.locator('main').getByRole('heading', { name: /Embed|Text Embedding/ })).toBeVisible();
+
+    await page.locator('textarea').fill('test text');
+    await page.locator('button[type="submit"]').click();
+
+    // Should show error about model not found
+    await expect(page.getByText(/error|not found|fail/i)).toBeVisible({ timeout: 10_000 });
+  });
+});

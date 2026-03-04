@@ -6,8 +6,8 @@ test.describe('Translate page', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Machine Translation' })).toBeVisible();
   });
 
-  // Test plan: 12.1 — Model selector shows alias (source → target)
-  test('model selector is populated with language pairs', async ({ page }) => {
+  // [4-50] Language pair selector loads translation models
+  test('[4-50] model selector is populated with language pairs', async ({ page }) => {
     const select = page.locator('select');
     await expect(select).toBeVisible();
 
@@ -23,8 +23,8 @@ test.describe('Translate page', () => {
     }
   });
 
-  // Test plan: 12.2 — Language hint labels on text areas
-  test('shows source and target language labels', async ({ page }) => {
+  // [4-51] Source/target language direction labels shown
+  test('[4-51] shows source and target language labels', async ({ page }) => {
     // Source Text label should exist
     await expect(page.getByText('Source Text')).toBeVisible();
     // Translation label should exist (use exact label locator to avoid strict mode)
@@ -32,8 +32,8 @@ test.describe('Translate page', () => {
     await expect(translationLabel).toBeVisible();
   });
 
-  // Test plan: 12.5 — Disabled state
-  test('translate button is disabled when source text is empty', async ({ page }) => {
+  // [4-52] Translate button disabled when source empty
+  test('[4-52] translate button is disabled when source text is empty', async ({ page }) => {
     const submitButton = page.getByRole('button', { name: /Translate/i });
     await expect(submitButton).toBeDisabled();
   });

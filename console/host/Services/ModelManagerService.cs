@@ -539,17 +539,31 @@ public sealed partial class ModelManagerService : IAsyncDisposable
 
     private async Task<bool> EvictOldestUnusedAsync()
     {
-        var candidate = _loadedModels.Values
+        var candidates = _loadedModels.Values
             .Where(e => !e.IsInUse)
             .OrderBy(e => e.LastUsedAt)
             .ThenByDescending(e => e.EstimatedMemoryMB)
-            .FirstOrDefault();
+            .ToList();
 
-        if (candidate == null) return false;
+        foreach (var candidate in candidates)
+        {
+            // Atomically remove — if another thread marked it in-use, skip
+            if (_loadedModels.TryRemove(candidate.Key, out var removed))
+            {
+                // Re-check: if it became in-use between LINQ and TryRemove, re-add it
+                if (removed.IsInUse)
+                {
+                    _loadedModels.TryAdd(removed.Key, removed);
+                    continue;
+                }
 
-        LogEvictingModel(_logger, candidate.Key, candidate.EstimatedMemoryMB);
-        await UnloadModelAsync(candidate.Key);
-        return true;
+                LogEvictingModel(_logger, removed.Key, removed.EstimatedMemoryMB);
+                await removed.Model.DisposeAsync();
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void CleanupIdleModels(object? state)

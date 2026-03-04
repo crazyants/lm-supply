@@ -6,8 +6,8 @@ test.describe('Synthesize page', () => {
     await expect(page.locator('main').getByRole('heading', { name: 'Text to Speech' })).toBeVisible();
   });
 
-  // Test plan: 7.1 — Model dropdown
-  test('model selector loads synthesizer models', async ({ page }) => {
+  // [4-41] Synthesizer model selector loads Piper models
+  test('[4-41] model selector loads synthesizer models', async ({ page }) => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
     const select = page.locator('select');
     const optionCount = await select.locator('option').count();
@@ -20,8 +20,8 @@ test.describe('Synthesize page', () => {
     }
   });
 
-  // Test plan: 7.6 — Empty input disables submit
-  test('submit button is disabled when textarea is empty', async ({ page }) => {
+  // [4-42] Generate button disabled when text empty
+  test('[4-42] submit button is disabled when textarea is empty', async ({ page }) => {
     await expect(page.getByText('Loading models...')).toBeHidden({ timeout: 15_000 });
     const submitButton = page.getByRole('button', { name: /Generate Speech/ });
     await expect(submitButton).toBeDisabled();

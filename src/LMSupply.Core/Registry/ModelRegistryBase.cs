@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using LMSupply.Exceptions;
 
@@ -16,7 +17,7 @@ public abstract class ModelRegistryBase<TModelInfo> : IModelRegistry<TModelInfo>
     private readonly Dictionary<string, TModelInfo> _systemAliases
         = new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly Dictionary<string, string> _userAliases
+    private readonly ConcurrentDictionary<string, string> _userAliases
         = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Dictionary<string, TModelInfo> _modelsById
@@ -144,7 +145,7 @@ public abstract class ModelRegistryBase<TModelInfo> : IModelRegistry<TModelInfo>
         if (_systemAliases.ContainsKey(aliasName))
             return false;
 
-        return _userAliases.Remove(aliasName);
+        return _userAliases.TryRemove(aliasName, out _);
     }
 
     /// <inheritdoc />

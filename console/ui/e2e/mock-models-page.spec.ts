@@ -12,7 +12,7 @@ import { mockModelsPageApis } from './fixtures/api-mocks';
 // ================================================================
 
 test.describe('Models — empty cached state', () => {
-  test('shows empty state message when no models cached', async ({ page }) => {
+  test('[3-14] shows empty state message when no models cached', async ({ page }) => {
     await mockModelsPageApis(page, { cachedModels: [] });
 
     await page.goto('/models');
@@ -31,7 +31,7 @@ test.describe('Models — empty cached state', () => {
 // ================================================================
 
 test.describe('Models — GGUF selection', () => {
-  test('GGUF file dropdown appears after checking a GGUF repo', async ({ page }) => {
+  test('[3-11] GGUF file dropdown appears after checking a GGUF repo', async ({ page }) => {
     await mockModelsPageApis(page);
 
     // Mock check endpoint to return GGUF files
@@ -83,7 +83,7 @@ test.describe('Models — GGUF selection', () => {
 // ================================================================
 
 test.describe('Models — status badges', () => {
-  test('cached model shows Loaded badge when loaded', async ({ page }) => {
+  test('[3-18] cached model shows Loaded badge when loaded', async ({ page }) => {
     await mockModelsPageApis(page, {
       cachedModels: [
         {
@@ -111,7 +111,7 @@ test.describe('Models — status badges', () => {
     await expect(page.getByText('Loaded').first()).toBeVisible();
   });
 
-  test('cached model shows Ready badge when not loaded', async ({ page }) => {
+  test('[3-18] cached model shows Ready badge when not loaded', async ({ page }) => {
     await mockModelsPageApis(page, {
       cachedModels: [
         {
@@ -147,7 +147,7 @@ test.describe('Models — delete behavior', () => {
   };
 
   // Test plan: 14.1.3 — Delete model (click trash, confirm, model removed)
-  test('delete button removes model after confirmation', async ({ page }) => {
+  test('[3-15] delete button removes model after confirmation', async ({ page }) => {
     let deleteWasCalled = false;
     await mockModelsPageApis(page, {
       cachedModels: [mockModel],
@@ -190,7 +190,7 @@ test.describe('Models — delete behavior', () => {
   });
 
   // Test plan: 14.1.4 — Delete disabled when model is loaded
-  test('delete button is disabled when model is loaded', async ({ page }) => {
+  test('[3-16] delete button is disabled when model is loaded', async ({ page }) => {
     await mockModelsPageApis(page, {
       cachedModels: [mockModel],
       loadedModels: [
@@ -221,7 +221,7 @@ test.describe('Models — download progress', () => {
   // Test plan: 14.2.3 — Download button shows progress bar via SSE
   // Test plan: 14.2.4 — Download complete shows green message
   // Test plan: 14.2.6 — Active downloads section appears
-  test('download shows progress bar and completion via SSE', async ({ page }) => {
+  test('[3-08] [3-09] [3-10] download shows progress bar and completion via SSE', async ({ page }) => {
     await mockModelsPageApis(page);
 
     // Mock the download/model endpoint to return SSE progress events
@@ -247,5 +247,116 @@ test.describe('Models — download progress', () => {
 
     // Should show download completion message
     await expect(page.getByText('Download completed')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+// ================================================================
+// Test plan: 3-13 — Duplicate download prevention
+// ================================================================
+
+test.describe('Models — duplicate download prevention', () => {
+  test('[3-13] already-cached model shows cached status in registry', async ({ page }) => {
+    const cachedModel = {
+      repoId: 'BAAI/bge-small-en-v1.5',
+      detectedType: 'Embedder',
+      sizeBytes: 120_000_000,
+      fileCount: 5,
+      localPath: '/cache/models--BAAI--bge-small-en-v1.5',
+    };
+
+    await mockModelsPageApis(page, {
+      cachedModels: [cachedModel],
+      loadedModels: [],
+      registryTypes: [{
+        type: 'embedder',
+        displayName: 'Embedder',
+        description: 'Text embedding models',
+        models: [
+          {
+            aliasName: 'default',
+            repoId: 'BAAI/bge-small-en-v1.5',
+            description: 'Small English embedder',
+            isCached: true,
+          },
+        ],
+      }],
+    });
+
+    await page.goto('/models');
+    await expect(page.locator('main').getByRole('heading', { name: 'Model Management' })).toBeVisible();
+
+    // Registry section should note that cached models are marked
+    const registrySection = page.getByText('Cached models are marked with a checkmark');
+    await expect(registrySection).toBeVisible({ timeout: 5_000 });
+
+    // Expand Embedder type (scroll into view first)
+    const embedderBtn = page.locator('button.w-full', { hasText: 'Embedder' });
+    await embedderBtn.scrollIntoViewIfNeeded();
+    await embedderBtn.click();
+
+    // The cached model should NOT have a download button (duplicate download prevented)
+    const downloadBtn = page.locator('button[title*="Download BAAI"]');
+    await expect(downloadBtn).toHaveCount(0, { timeout: 5_000 });
+  });
+});
+
+// ================================================================
+// Test plan: 5-16 — DELETE /api/cache/models/{repoId}
+// ================================================================
+
+test.describe('Models — DELETE cache API', () => {
+  test('[5-16] delete cached model via API returns success', async ({ page }) => {
+    let deletedRepoId = '';
+
+    await mockModelsPageApis(page, {
+      cachedModels: [{
+        repoId: 'BAAI/bge-small-en-v1.5',
+        detectedType: 'Embedder',
+        sizeBytes: 120_000_000,
+        fileCount: 5,
+        localPath: '/cache/models--BAAI--bge-small-en-v1.5',
+      }],
+    });
+
+    // Override to track DELETE calls with URL pattern
+    await page.unroute('**/api/cache/models');
+    await page.route('**/api/cache/models**', async (route) => {
+      if (route.request().method() === 'DELETE') {
+        const url = route.request().url();
+        deletedRepoId = decodeURIComponent(url.split('/api/cache/models/')[1] || '');
+        await route.fulfill({ status: 200, body: '{}' });
+      } else if (route.request().method() === 'GET') {
+        const models = deletedRepoId ? [] : [{
+          repoId: 'BAAI/bge-small-en-v1.5',
+          detectedType: 'Embedder',
+          sizeBytes: 120_000_000,
+          fileCount: 5,
+          localPath: '/cache/models--BAAI--bge-small-en-v1.5',
+        }];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ models }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.goto('/models');
+    await expect(page.getByText('Cached Models (1)')).toBeVisible({ timeout: 5_000 });
+
+    // Accept confirmation dialog
+    page.on('dialog', dialog => dialog.accept());
+
+    // Click delete
+    const trashBtn = page.locator('button[title*="Delete"]');
+    await trashBtn.click();
+
+    // Verify DELETE was called with the correct repoId
+    expect(deletedRepoId).toContain('BAAI/bge-small-en-v1.5');
+
+    // Model should be removed
+    await expect(page.getByText('Cached Models (0)')).toBeVisible({ timeout: 5_000 });
   });
 });

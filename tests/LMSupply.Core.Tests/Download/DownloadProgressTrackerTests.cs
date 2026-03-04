@@ -20,6 +20,9 @@ public class DownloadProgressTrackerTests
         var tracker = new DownloadProgressTracker(sampleWindowSize: 5, sampleIntervalMs: 0);
         tracker.Start();
 
+        // macOS timer resolution requires a small delay for non-zero elapsed time
+        Thread.Sleep(16);
+
         // First call to seed a sample
         tracker.CreateProgress("file.bin", 1000, 10000);
         tracker.CurrentSpeed.Should().BeGreaterThan(0);

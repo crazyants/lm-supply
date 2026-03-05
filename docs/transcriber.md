@@ -242,6 +242,40 @@ var result = await transcriber.TranscribeAsync("audio.wav");
 await transcriber.DisposeAsync();
 ```
 
+### Named Pool (multi-model management)
+
+```csharp
+// Load and cache by name — reload returns cached instance
+var transcriber = await LocalTranscriber.Pool.GetOrLoadAsync("large");
+
+// Check what's loaded
+bool loaded = LocalTranscriber.Pool.IsLoaded("large");
+var allLoaded = LocalTranscriber.Pool.GetLoadedModels();
+
+// Explicit unload
+await LocalTranscriber.Pool.UnloadAsync("large");
+await LocalTranscriber.Pool.UnloadAllAsync();
+```
+
+The pool uses LRU eviction and memory safety margins to stay within available GPU/RAM.
+
+### ASP.NET Core Usage
+
+When loading large models (e.g., `large` ~3GB) inside a `BackgroundService`, use the pool or load before `WebApplication.Run()` to avoid Kestrel heartbeat warnings. The library internally uses `TaskCreationOptions.LongRunning` to prevent thread pool starvation during model initialization.
+
+```csharp
+// Recommended: load at startup before accepting requests
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+// Pre-warm the model before starting the server
+await using var transcriber = await LocalTranscriber.LoadAsync("large");
+// ...or use the pool for persistent access
+_ = await LocalTranscriber.Pool.GetOrLoadAsync("large");
+
+app.Run();
+```
+
 ## Interface Reference
 
 ### ITranscriberModel

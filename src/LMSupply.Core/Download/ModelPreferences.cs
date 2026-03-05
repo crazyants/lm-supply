@@ -1,3 +1,5 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Core.Download;
 
 /// <summary>
@@ -27,6 +29,48 @@ public sealed class ModelPreferences
         PreferLowMemory = false,
         QuantizationPriority = [Quantization.Default, Quantization.Fp16, Quantization.Quant8, Quantization.Quant4]
     };
+
+    /// <summary>
+    /// Creates preferences adapted to the given performance tier.
+    /// Ultra  → Default (FP32) first — maximum quality, ample VRAM
+    /// High   → FP16 first          — high quality, 8-16GB VRAM
+    /// Medium → Quant8 first        — balanced, 4-8GB VRAM
+    /// Low    → Quant4 first        — minimal footprint, under 4GB VRAM
+    /// </summary>
+    public static ModelPreferences ForTier(PerformanceTier tier) => tier switch
+    {
+        PerformanceTier.Ultra => new ModelPreferences
+        {
+            PreferLowMemory = false,
+            QuantizationPriority = [Quantization.Default, Quantization.Fp16,
+                                    Quantization.Quant8, Quantization.Quant4]
+        },
+        PerformanceTier.High => new ModelPreferences
+        {
+            PreferLowMemory = false,
+            QuantizationPriority = [Quantization.Fp16, Quantization.Default,
+                                    Quantization.Quant8, Quantization.Quant4]
+        },
+        PerformanceTier.Medium => new ModelPreferences
+        {
+            PreferLowMemory = false,
+            QuantizationPriority = [Quantization.Quant8, Quantization.Fp16,
+                                    Quantization.Quant4, Quantization.Default]
+        },
+        PerformanceTier.Low => new ModelPreferences
+        {
+            PreferLowMemory = true,
+            QuantizationPriority = [Quantization.Quant4, Quantization.Quant8,
+                                    Quantization.Fp16, Quantization.Default]
+        },
+        _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, null)
+    };
+
+    /// <summary>
+    /// Creates preferences optimized for the current machine's hardware.
+    /// </summary>
+    public static ModelPreferences ForCurrentHardware() =>
+        ForTier(HardwareProfile.Current.Tier);
 
     /// <summary>
     /// Whether to prefer smaller/quantized models for lower memory usage.

@@ -231,7 +231,7 @@ public sealed class ModelDiscoveryService : IDisposable
         string revision = "main",
         CancellationToken cancellationToken = default)
     {
-        preferences ??= ModelPreferences.Default;
+        preferences ??= ModelPreferences.ForCurrentHardware();
 
         var allFiles = await ListRepositoryFilesAsync(repoId, revision, cancellationToken);
 
@@ -655,6 +655,13 @@ public sealed class ModelDiscoveryService : IDisposable
     }
 
     /// <summary>
+    /// Test-accessible wrapper for SelectBestQuantizationVariants.
+    /// </summary>
+    internal static List<string> SelectBestVariantsForTest(
+        List<RepoFile> candidates, ModelPreferences preferences)
+        => SelectBestQuantizationVariants(candidates, preferences);
+
+    /// <summary>
     /// Selects the best quantization variants based on preferences.
     /// </summary>
     private static List<string> SelectBestQuantizationVariants(
@@ -689,6 +696,18 @@ public sealed class ModelDiscoveryService : IDisposable
 
                 if (bestVariant is not null)
                     break;
+            }
+
+            // 2차: 이름 매칭 실패 시 크기 기반 선택
+            // PreferLowMemory(Low tier) → 가장 작은 파일, 그 외 → 가장 큰 파일
+            // Size=0인 파일은 크기 미확인 항목이므로 우선 제외하고, 없으면 전체 사용
+            if (bestVariant is null && variants.Count > 0)
+            {
+                var withSize = variants.Where(v => v.Size > 0).ToList();
+                var pool = withSize.Count > 0 ? withSize : variants;
+                bestVariant = preferences.PreferLowMemory
+                    ? pool.MinBy(v => v.Size)
+                    : pool.MaxBy(v => v.Size);
             }
 
             // Fall back to first variant if no match

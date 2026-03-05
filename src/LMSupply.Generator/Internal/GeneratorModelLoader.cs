@@ -53,7 +53,7 @@ internal static class GeneratorModelLoader
         // Build preferences from registry info if available
         var preferences = modelInfo?.Subfolder != null
             ? new ModelPreferences { PreferredSubfolder = modelInfo.Subfolder }
-            : ModelPreferences.Default;
+            : ModelPreferences.ForCurrentHardware();
 
         // Use discovery-based download for all models
         // This handles dynamic ONNX file names (e.g., phi-3.5-mini-instruct-*.onnx)

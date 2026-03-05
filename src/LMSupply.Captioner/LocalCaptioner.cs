@@ -80,7 +80,7 @@ public static class LocalCaptioner
             // Use auto-discovery to find ONNX files and config
             var (downloadedDir, discovery) = await downloader.DownloadWithDiscoveryAsync(
                 modelIdOrPath,
-                preferences: ModelPreferences.Default,
+                preferences: ModelPreferences.ForCurrentHardware(),
                 progress: progress,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 

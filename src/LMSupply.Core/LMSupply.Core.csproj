@@ -31,4 +31,8 @@
     <EmbeddedResource Include="runtime-manifest.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LMSupply.Core.Tests" />
+  </ItemGroup>
+
 </Project>

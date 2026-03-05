@@ -1,6 +1,7 @@
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
+using LMSupply.Core.Download;
 using LMSupply.Download;
+using LMSupply.Exceptions;
+using LMSupply.Hardware;
 
 namespace LMSupply.Reranker.Utils;
 
@@ -10,19 +11,11 @@ namespace LMSupply.Reranker.Utils;
 internal sealed class GgufDownloader : IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly ModelDiscoveryService _discoveryService;
     private readonly string _cacheDirectory;
     private bool _disposed;
 
-    private const string HuggingFaceApiBase = "https://huggingface.co/api/models";
     private const string HuggingFaceFileBase = "https://huggingface.co";
-
-    /// <summary>
-    /// Default quantization preference order for reranker models.
-    /// </summary>
-    private static readonly string[] DefaultQuantizationPriority =
-    [
-        "Q4_K_M", "Q4_K_S", "Q5_K_M", "Q5_K_S", "Q8_0", "F16"
-    ];
 
     public GgufDownloader(string cacheDirectory)
     {
@@ -32,6 +25,7 @@ internal sealed class GgufDownloader : IDisposable
             Timeout = TimeSpan.FromMinutes(30)
         };
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "LMSupply/1.0");
+        _discoveryService = new ModelDiscoveryService(cacheDirectory);
     }
 
     /// <summary>
@@ -45,7 +39,7 @@ internal sealed class GgufDownloader : IDisposable
     {
         // List files in the repository
         var files = await ListRepoFilesAsync(repoId, cancellationToken);
-        var ggufFiles = files.Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)).ToList();
+        var ggufFiles = files.Where(f => f.IsFile && f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)).ToList();
 
         if (ggufFiles.Count == 0)
         {
@@ -86,36 +80,45 @@ internal sealed class GgufDownloader : IDisposable
         return cachePath;
     }
 
-    private async Task<List<RepoFile>> ListRepoFilesAsync(string repoId, CancellationToken cancellationToken)
+    private Task<IReadOnlyList<RepoFile>> ListRepoFilesAsync(string repoId, CancellationToken cancellationToken)
     {
-        var url = $"{HuggingFaceApiBase}/{repoId}";
-        var response = await _httpClient.GetFromJsonAsync<RepoInfo>(url, cancellationToken);
-
-        return response?.Siblings?.ToList() ?? [];
+        return _discoveryService.ListRepositoryFilesAsync(repoId, "main", cancellationToken);
     }
 
-    private static RepoFile SelectBestFile(List<RepoFile> files, string? preferredQuantization)
+    private static RepoFile SelectBestFile(IReadOnlyList<RepoFile> files, string? preferredQuantization)
     {
-        // If specific quantization requested, find it
-        if (!string.IsNullOrEmpty(preferredQuantization))
+        var rawFiles = files.Select(f => new GgufRawFile(Path.GetFileName(f.Path), f.Size));
+        var groups = GgufFileGroup.GroupFiles(rawFiles).ToList();
+
+        // Reranker only supports single-file download — exclude split groups
+        var nonSplitGroups = groups.Where(g => !g.IsSplit).ToList();
+
+        if (nonSplitGroups.Count > 0)
         {
-            var match = files.FirstOrDefault(f =>
-                f.Path.Contains(preferredQuantization, StringComparison.OrdinalIgnoreCase));
-            if (match != null)
-                return match;
+            var memory = GgufFileSelector.FromHardwareProfile(HardwareProfile.Current);
+
+            try
+            {
+                var selected = GgufFileSelector.Select(nonSplitGroups, memory, preferredQuantization);
+                return files.First(f =>
+                    Path.GetFileName(f.Path).Equals(selected.PrimaryFileName,
+                        StringComparison.OrdinalIgnoreCase));
+            }
+            catch (InvalidOperationException)
+            {
+                // Nothing fits memory: fall back to smallest non-split file
+                var smallestGroup = nonSplitGroups.MinBy(g => g.TotalSizeBytes)!;
+                return files.First(f =>
+                    Path.GetFileName(f.Path).Equals(smallestGroup.PrimaryFileName,
+                        StringComparison.OrdinalIgnoreCase));
+            }
         }
 
-        // Try default priority order
-        foreach (var quant in DefaultQuantizationPriority)
-        {
-            var match = files.FirstOrDefault(f =>
-                f.Path.Contains(quant, StringComparison.OrdinalIgnoreCase));
-            if (match != null)
-                return match;
-        }
-
-        // Fall back to smallest file (likely most quantized)
-        return files.OrderBy(f => f.Size).First();
+        // Split-only repo: single-file reranker cannot use split GGUF files.
+        throw new InvalidOperationException(
+            "No single-file GGUF model found in repository. " +
+            "The reranker does not support split GGUF files (e.g., -00001-of-00003.gguf). " +
+            "Please use a repository that provides a single-file GGUF model.");
     }
 
     private string GetCachePath(string repoId, string filename)
@@ -163,22 +166,8 @@ internal sealed class GgufDownloader : IDisposable
         if (!_disposed)
         {
             _httpClient.Dispose();
+            _discoveryService.Dispose();
             _disposed = true;
         }
-    }
-
-    private record RepoInfo
-    {
-        [JsonPropertyName("siblings")]
-        public RepoFile[]? Siblings { get; init; }
-    }
-
-    private record RepoFile
-    {
-        [JsonPropertyName("rfilename")]
-        public string Path { get; init; } = "";
-
-        [JsonPropertyName("size")]
-        public long Size { get; init; }
     }
 }

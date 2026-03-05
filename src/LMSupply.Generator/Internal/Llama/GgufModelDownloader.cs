@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
+using LMSupply.Core.Download;
+using LMSupply.Hardware;
 using LMSupply.Download;
 using LMSupply.Exceptions;
 
@@ -12,10 +12,10 @@ namespace LMSupply.Generator.Internal.Llama;
 public sealed class GgufModelDownloader : IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly ModelDiscoveryService _discoveryService;
     private readonly string _cacheDirectory;
     private bool _disposed;
 
-    private const string HuggingFaceApiBase = "https://huggingface.co/api/models";
     private const string HuggingFaceFileBase = "https://huggingface.co";
 
     /// <summary>
@@ -40,6 +40,7 @@ public sealed class GgufModelDownloader : IDisposable
             Timeout = TimeSpan.FromMinutes(30)
         };
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "LMSupply/1.0");
+        _discoveryService = new ModelDiscoveryService(_cacheDirectory);
     }
 
     /// <summary>
@@ -127,55 +128,52 @@ public sealed class GgufModelDownloader : IDisposable
         string repoId,
         CancellationToken cancellationToken = default)
     {
-        var files = await ListRepositoryFilesAsync(repoId, cancellationToken);
+        var groups = await ListGgufGroupsAsync(repoId, cancellationToken);
 
-        return files
-            .Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
-            .Select(f => new GgufFileInfo
-            {
-                FileName = Path.GetFileName(f.Path),
-                Path = f.Path,
-                SizeBytes = f.Size,
-                Quantization = ExtractQuantization(f.Path)
-            })
-            .OrderByDescending(f => GetQuantizationPriority(f.Quantization))
-            .ToList();
+        return groups.Select(g => new GgufFileInfo
+        {
+            FileName = g.PrimaryFileName,
+            Path = g.PrimaryFileName,
+            SizeBytes = g.TotalSizeBytes,
+            Quantization = null
+        }).ToList();
     }
 
     /// <summary>
-    /// Selects the best GGUF file based on quantization preference.
+    /// Lists available GGUF files in a repository, grouped for split-file support.
+    /// </summary>
+    public async Task<IReadOnlyList<GgufFileGroup>> ListGgufGroupsAsync(
+        string repoId,
+        CancellationToken cancellationToken = default)
+    {
+        var files = await ListRepositoryFilesAsync(repoId, cancellationToken);
+
+        var rawFiles = files
+            .Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
+            .Select(f => new GgufRawFile(Path.GetFileName(f.Path), f.Size))
+            .ToList();
+
+        return GgufFileGroup.GroupFiles(rawFiles).ToList();
+    }
+
+    /// <summary>
+    /// Selects the best GGUF file based on hardware memory constraints and quantization preference.
     /// </summary>
     private async Task<string> SelectBestGgufFileAsync(
         string repoId,
         string? preferredQuantization,
         CancellationToken cancellationToken)
     {
-        var ggufFiles = await ListGgufFilesAsync(repoId, cancellationToken);
+        var groups = await ListGgufGroupsAsync(repoId, cancellationToken);
 
-        if (ggufFiles.Count == 0)
-        {
+        if (groups.Count == 0)
             throw new ModelNotFoundException(
                 $"No GGUF files found in repository '{repoId}'.",
                 repoId);
-        }
 
-        // Build priority list
-        var priorities = string.IsNullOrEmpty(preferredQuantization)
-            ? DefaultQuantizationPriority
-            : new[] { preferredQuantization }.Concat(DefaultQuantizationPriority).ToArray();
-
-        // Find best match
-        foreach (var quant in priorities)
-        {
-            var match = ggufFiles.FirstOrDefault(f =>
-                f.FileName.Contains(quant, StringComparison.OrdinalIgnoreCase));
-
-            if (match != null)
-                return match.FileName;
-        }
-
-        // Fallback to first file
-        return ggufFiles[0].FileName;
+        var memory = GgufFileSelector.FromHardwareProfile(HardwareProfile.Current);
+        var selected = GgufFileSelector.Select(groups, memory, preferredQuantization);
+        return selected.PrimaryFileName;
     }
 
     /// <summary>
@@ -202,23 +200,13 @@ public sealed class GgufModelDownloader : IDisposable
     }
 
     /// <summary>
-    /// Lists all files in a HuggingFace repository.
+    /// Lists all files in a HuggingFace repository using the Tree API (includes file sizes).
     /// </summary>
-    private async Task<IReadOnlyList<HfFileEntry>> ListRepositoryFilesAsync(
+    private Task<IReadOnlyList<RepoFile>> ListRepositoryFilesAsync(
         string repoId,
         CancellationToken cancellationToken)
     {
-        var url = $"{HuggingFaceApiBase}/{repoId}";
-
-        try
-        {
-            var response = await _httpClient.GetFromJsonAsync<HfModelResponse>(url, cancellationToken);
-            return response?.Siblings?.ToList() ?? [];
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            throw new ModelNotFoundException($"Repository not found: {repoId}", repoId);
-        }
+        return _discoveryService.ListRepositoryFilesAsync(repoId, "main", cancellationToken);
     }
 
     /// <summary>
@@ -369,24 +357,9 @@ public sealed class GgufModelDownloader : IDisposable
         if (!_disposed)
         {
             _httpClient.Dispose();
+            _discoveryService.Dispose();
             _disposed = true;
         }
-    }
-
-    // HuggingFace API response types
-    private sealed class HfModelResponse
-    {
-        [JsonPropertyName("siblings")]
-        public List<HfFileEntry>? Siblings { get; set; }
-    }
-
-    private sealed class HfFileEntry
-    {
-        [JsonPropertyName("rfilename")]
-        public string Path { get; set; } = "";
-
-        [JsonPropertyName("size")]
-        public long Size { get; set; }
     }
 }
 

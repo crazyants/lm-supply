@@ -110,7 +110,7 @@ public sealed class ModelPathResolver : IDisposable
         }
 
         // Download from HuggingFace using discovery for proper subfolder handling
-        preferences ??= ModelPreferences.Default;
+        preferences ??= ModelPreferences.ForCurrentHardware();
 
         var (modelDir, discovery) = await _downloader.DownloadWithDiscoveryAsync(
             modelIdOrPath,
@@ -181,7 +181,7 @@ public sealed class ModelPathResolver : IDisposable
         }
 
         // Download from HuggingFace using discovery
-        preferences ??= ModelPreferences.Default;
+        preferences ??= ModelPreferences.ForCurrentHardware();
 
         var (modelDir, discovery) = await _downloader.DownloadWithDiscoveryAsync(
             modelIdOrPath,

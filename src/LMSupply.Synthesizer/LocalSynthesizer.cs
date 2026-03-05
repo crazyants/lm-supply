@@ -15,6 +15,12 @@ public static class LocalSynthesizer
     public static IModelRegistry<SynthesizerModelInfo> Registry => SynthesizerModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<ISynthesizerModel, SynthesizerOptions> Pool { get; }
+        = new(new Pool.SynthesizerLoader());
+
+    /// <summary>
     /// Loads a TTS model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">

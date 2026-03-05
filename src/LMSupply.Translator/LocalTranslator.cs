@@ -15,6 +15,12 @@ public static class LocalTranslator
     public static IModelRegistry<TranslatorModelInfo> Registry => TranslatorModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<ITranslatorModel, TranslatorOptions> Pool { get; }
+        = new(new Pool.TranslatorLoader());
+
+    /// <summary>
     /// Loads a translation model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">

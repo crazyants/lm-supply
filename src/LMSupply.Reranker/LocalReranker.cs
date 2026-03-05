@@ -24,6 +24,12 @@ public static class LocalReranker
     public static IModelRegistry<ModelInfo> Registry => RerankerModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<IRerankerModel, RerankerOptions> Pool { get; }
+        = new(new Pool.RerankerLoader());
+
+    /// <summary>
     /// Loads the default reranker model.
     /// </summary>
     /// <param name="options">Optional configuration options.</param>

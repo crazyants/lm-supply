@@ -15,6 +15,12 @@ public static class LocalTranscriber
     public static IModelRegistry<TranscriberModelInfo> Registry => TranscriberModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<ITranscriberModel, TranscriberOptions> Pool { get; }
+        = new(new Pool.TranscriberLoader());
+
+    /// <summary>
     /// Loads a transcription model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">

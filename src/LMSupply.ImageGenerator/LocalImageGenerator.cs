@@ -16,6 +16,12 @@ public static class LocalImageGenerator
     public static IModelRegistry<ImageGeneratorModelInfo> Registry => ImageGeneratorModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<IImageGeneratorModel, ImageGeneratorOptions> Pool { get; }
+        = new(new Pool.ImageGeneratorLoader());
+
+    /// <summary>
     /// Loads an image generator model.
     /// </summary>
     /// <param name="modelIdOrPath">

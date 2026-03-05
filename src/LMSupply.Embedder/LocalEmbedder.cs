@@ -25,6 +25,12 @@ public static class LocalEmbedder
     public static IModelRegistry<ModelInfo> Registry => EmbedderModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<IEmbeddingModel, EmbedderOptions> Pool { get; }
+        = new(new Pool.EmbedderLoader());
+
+    /// <summary>
     /// Loads the default embedding model.
     /// </summary>
     /// <param name="options">Optional configuration options.</param>

@@ -20,6 +20,11 @@ public static class LocalGenerator
     public static IModelRegistry<ModelInfo> Registry => GeneratorModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static GeneratorPool Pool { get; } = new(Internal.DefaultGeneratorFactory.Instance);
+
+    /// <summary>
     /// Loads a text generator from a HuggingFace model repository.
     /// Supports "auto" alias which selects optimal model based on hardware.
     /// </summary>

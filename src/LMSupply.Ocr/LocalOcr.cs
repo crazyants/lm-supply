@@ -18,6 +18,13 @@ public static class LocalOcr
     public static IModelRegistry<DetectionModelInfo> DetectionRegistry => OcrDetectionModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// The model ID is treated as the detection model ID; the default recognition model is used.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<IOcr, OcrOptions> Pool { get; }
+        = new(new Pool.OcrLoader());
+
+    /// <summary>
     /// Gets the recognition model registry.
     /// </summary>
     public static IModelRegistry<RecognitionModelInfo> RecognitionRegistry => OcrRecognitionModelRegistry.Default;

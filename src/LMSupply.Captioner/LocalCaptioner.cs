@@ -18,6 +18,12 @@ public static class LocalCaptioner
     public static IModelRegistry<ModelInfo> Registry => CaptionerModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<ICaptionerModel, CaptionerOptions> Pool { get; }
+        = new(new Pool.CaptionerLoader());
+
+    /// <summary>
     /// Loads a captioning model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">

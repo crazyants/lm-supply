@@ -15,6 +15,12 @@ public static class LocalSegmenter
     public static IModelRegistry<SegmenterModelInfo> Registry => SegmenterModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<ISegmenterModel, SegmenterOptions> Pool { get; }
+        = new(new Pool.SegmenterLoader());
+
+    /// <summary>
     /// Loads an image segmentation model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">

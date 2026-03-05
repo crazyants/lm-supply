@@ -15,6 +15,12 @@ public static class LocalDetector
     public static IModelRegistry<DetectorModelInfo> Registry => DetectorModelRegistry.Default;
 
     /// <summary>
+    /// Shared pool for named model management. Supports GetOrLoadAsync / UnloadAsync by model ID.
+    /// </summary>
+    public static LMSupply.Pool.ModelPool<IDetectorModel, DetectorOptions> Pool { get; }
+        = new(new Pool.DetectorLoader());
+
+    /// <summary>
     /// Loads an object detection model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">

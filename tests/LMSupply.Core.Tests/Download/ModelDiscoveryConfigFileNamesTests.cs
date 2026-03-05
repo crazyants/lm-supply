@@ -11,6 +11,7 @@ namespace LMSupply.Core.Tests.Download;
 public class ModelDiscoveryConfigFileNamesTests
 {
     [Fact]
+    [Trait("Category", "Integration")]
     public async Task DiscoverModel_OpusMtKoEn_ShouldIncludeSentencePieceFiles()
     {
         // Arrange - This tests the fix for GitHub Issue #7
@@ -27,6 +28,7 @@ public class ModelDiscoveryConfigFileNamesTests
     }
 
     [Fact]
+    [Trait("Category", "Integration")]
     public async Task DiscoverModel_OpusMtKoEn_ShouldPreserveSubfolderPath()
     {
         // Arrange - This tests path preservation for GitHub Issue #7
@@ -44,6 +46,7 @@ public class ModelDiscoveryConfigFileNamesTests
     }
 
     [Fact]
+    [Trait("Category", "Integration")]
     public async Task DiscoverModel_OpusMtKoEn_ShouldDetectConfigFilesFromRoot()
     {
         // Arrange

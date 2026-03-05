@@ -164,23 +164,25 @@ public sealed partial class UpdateService
                 var script = string.Join("\r\n",
                     "@echo off",
                     // 기존 프로세스 종료 대기
+                    // findstr /I "lm-supply.exe" 사용: PID 미존재 시 tasklist가 stdout에 출력하는
+                    // "INFO: No tasks are running..." 메시지도 ^[A-Za-z] 패턴에 매칭되어 무한루프 발생하는 버그 수정
                     ":wait",
-                    $"tasklist /FI \"PID eq {currentPid}\" /NH 2>NUL | findstr /R \"^[A-Za-z]\" >NUL",
+                    $"tasklist /FI \"PID eq {currentPid}\" /NH 2>NUL | findstr /I \"lm-supply.exe\" >NUL",
                     "if not errorlevel 1 (timeout /t 1 /nobreak >NUL & goto wait)",
                     // 파일 잠금 해제 대기
                     "timeout /t 1 /nobreak >NUL",
                     // 새 파일 복사 (프로세스 종료 후이므로 잠금 없음)
                     $"xcopy \"{extractDir}\\*\" \"{currentDir}\\\" /s /y /q >NUL",
-                    // 새 프로세스 시작
-                    $"start \"\" \"{currentExePath}\" {userArgs}");
+                    // 새 프로세스 시작 (/D로 작업 디렉토리 명시)
+                    $"start \"\" /D \"{currentDir}\" \"{currentExePath}\" {userArgs}");
                 await File.WriteAllTextAsync(scriptPath, script, ct);
 
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
                     Arguments = $"/c \"{scriptPath}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
                 });
             }
             else

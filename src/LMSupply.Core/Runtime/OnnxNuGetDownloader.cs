@@ -82,6 +82,31 @@ public sealed class OnnxNuGetDownloader : IDisposable
             return cachePath;
         }
 
+        // If specific version not cached, check any existing valid cached version before downloading.
+        // The requested version may not exist for this specific package (e.g. DirectML has fewer
+        // patch releases than the base OnnxRuntime assembly version).
+        var existingCache = FindExistingCache(packageType, provider, platform, config);
+        if (existingCache is not null)
+        {
+            Trace.TraceInformation($"[OnnxNuGetDownloader] Using existing cached version: {existingCache}");
+            ReportCacheHit(progress);
+            return existingCache;
+        }
+
+        // Resolve best available version from NuGet before downloading
+        var resolvedVersion = await ResolveVersionAsync(config.PackageId, cancellationToken);
+        if (resolvedVersion != version)
+        {
+            version = resolvedVersion;
+            cachePath = GetCachePath(packageType, provider, version, platform);
+            if (Directory.Exists(cachePath) && IsValidCache(cachePath, config, platform))
+            {
+                Trace.TraceInformation($"[OnnxNuGetDownloader] Using resolved version cache: {cachePath}");
+                ReportCacheHit(progress);
+                return cachePath;
+            }
+        }
+
         // Download and extract
         return await DownloadAndExtractAsync(
             config,
@@ -273,6 +298,31 @@ public sealed class OnnxNuGetDownloader : IDisposable
             provider.ToLowerInvariant(),
             version,
             platform.RuntimeIdentifier);
+    }
+
+    /// <summary>
+    /// Scans for any existing valid cached version of the package, returning the newest one found.
+    /// Used as a fallback when the requested version is not cached.
+    /// </summary>
+    private string? FindExistingCache(
+        string packageType,
+        string provider,
+        PlatformInfo platform,
+        RuntimePackageRegistry.PackageConfig config)
+    {
+        var providerCacheDir = Path.Combine(_cacheDirectory, packageType, provider.ToLowerInvariant());
+        if (!Directory.Exists(providerCacheDir))
+            return null;
+
+        // Prefer newest version (descending sort)
+        foreach (var versionDir in Directory.GetDirectories(providerCacheDir).OrderDescending())
+        {
+            var candidatePath = Path.Combine(versionDir, platform.RuntimeIdentifier);
+            if (Directory.Exists(candidatePath) && IsValidCache(candidatePath, config, platform))
+                return candidatePath;
+        }
+
+        return null;
     }
 
     private static bool IsValidCache(

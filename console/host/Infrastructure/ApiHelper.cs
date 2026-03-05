@@ -31,32 +31,48 @@ public static class ApiHelper
     }
 
     /// <summary>
-    /// Create an internal error response, returning 400 for known user-input errors.
+    /// Create an internal error response, returning 404 for model-not-found, 400 for known user-input errors, 500 otherwise.
     /// </summary>
     public static IResult InternalError(Exception ex)
     {
-        // ModelNotFoundException is a user-input error (bad model name), not a server error
+        // ModelNotFoundException is a client error (bad model name) → 404
         if (ex is ModelNotFoundException mnf)
         {
-            return Error(mnf.Message, "model_not_found");
+            return Results.Json(new ErrorResponse
+            {
+                Error = new ErrorDetail
+                {
+                    Message = mnf.Message,
+                    Type = "invalid_request_error",
+                    Code = "model_not_found"
+                }
+            }, statusCode: 404);
         }
 
-        // ArgumentException variants are also user-input errors
+        // ArgumentException variants are user-input errors → 400
         if (ex is ArgumentException argEx)
         {
-            return Error(argEx.Message);
+            return Results.Json(new ErrorResponse
+            {
+                Error = new ErrorDetail
+                {
+                    Message = argEx.Message,
+                    Type = "invalid_request_error",
+                    Code = "invalid_value"
+                }
+            }, statusCode: 400);
         }
 
-        var error = new ErrorResponse
+        // All other exceptions → 500 with opaque message (do not leak ex.Message)
+        return Results.Json(new ErrorResponse
         {
             Error = new ErrorDetail
             {
-                Message = ex.Message,
-                Type = "internal_error"
+                Message = "An internal server error occurred.",
+                Type = "api_error",
+                Code = "internal_error"
             }
-        };
-
-        return Results.Json(error, statusCode: 500);
+        }, statusCode: 500);
     }
 
     /// <summary>

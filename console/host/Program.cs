@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.FileProviders;
 using LMSupply.Console.Host.Endpoints;
+using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -55,6 +56,8 @@ builder.Services.AddSingleton<SystemMonitorService>();
 builder.Services.AddSingleton<ModelManagerService>();
 builder.Services.AddSingleton<DownloadService>();
 builder.Services.AddSingleton<UpdateService>();
+builder.Services.AddSingleton<TempFileService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TempFileService>());
 
 var app = builder.Build();
 
@@ -67,6 +70,8 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseCors();
+app.UseMiddleware<RequestIdMiddleware>();
+app.UseMiddleware<ErrorMiddleware>();
 
 // 임베디드 리소스에서 정적 파일 제공 (wwwroot가 빌드 시 없으면 매니페스트도 없음)
 var assembly = Assembly.GetExecutingAssembly();
@@ -96,6 +101,7 @@ app.MapDetectEndpoints();
 app.MapSegmentEndpoints();
 app.MapTranslateEndpoints();
 app.MapImageEndpoints();
+app.MapFileEndpoints();
 app.MapModelRegistryEndpoints();
 
 // Health check

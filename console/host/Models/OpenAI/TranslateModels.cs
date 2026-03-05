@@ -3,6 +3,37 @@ using System.Text.Json.Serialization;
 
 namespace LMSupply.Console.Host.Models.OpenAI;
 
+/// <summary>DeepL API v2 request format</summary>
+public sealed record DeepLTranslateRequest
+{
+    /// <summary>Text to translate — string or string array</summary>
+    public required System.Text.Json.JsonElement Text { get; init; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("source_lang")]
+    public string? SourceLang { get; init; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("target_lang")]
+    public required string TargetLang { get; init; }
+
+    public string? Formality { get; init; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("split_sentences")]
+    public string? SplitSentences { get; init; }
+}
+
+/// <summary>DeepL API v2 response format</summary>
+public sealed record DeepLTranslateResponse
+{
+    public required IReadOnlyList<DeepLTranslation> Translations { get; init; }
+}
+
+public sealed record DeepLTranslation
+{
+    [System.Text.Json.Serialization.JsonPropertyName("detected_source_language")]
+    public required string DetectedSourceLanguage { get; init; }
+    public required string Text { get; init; }
+}
+
 /// <summary>
 /// Translation request
 /// </summary>

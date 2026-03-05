@@ -31,7 +31,7 @@ public static class SegmentEndpoints
                 }
 
                 var model = form["model"].FirstOrDefault() ?? "default";
-                var includeMask = form["include_mask"].FirstOrDefault()?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+                var maskFormat = form["mask_format"].FirstOrDefault() ?? "none";
 
                 await using var scope = await manager.GetSegmenterAsync(model, ct);
 
@@ -43,31 +43,42 @@ public static class SegmentEndpoints
 
                 // Get top segments using SDK method
                 var topSegments = result.GetTopSegments(10, scope.Model.ClassLabels);
-                var segments = topSegments.Select(s => new Segment
+                var segments = topSegments.Select(s =>
                 {
-                    Id = s.ClassId,
-                    Label = s.Label,
-                    Score = s.CoverageRatio
-                }).ToList();
-
-                // Build mask if requested
-                string? maskBase64 = null;
-                if (includeMask)
-                {
-                    var classMapBytes = new byte[result.ClassMap.Length];
-                    for (int i = 0; i < result.ClassMap.Length; i++)
+                    SegmentMask? mask = null;
+                    if (maskFormat != "none")
                     {
-                        classMapBytes[i] = (byte)Math.Clamp(result.ClassMap[i], 0, 255);
+                        var counts = maskFormat switch
+                        {
+                            "rle" => Infrastructure.Vision.RleEncoder.Encode(result.ClassMap, s.ClassId),
+                            "raw" => Convert.ToBase64String(result.ClassMap.Select(v => (byte)Math.Clamp(v, 0, 255)).ToArray()),
+                            _ => null
+                        };
+                        if (counts != null)
+                        {
+                            mask = new SegmentMask
+                            {
+                                Format = maskFormat,
+                                Size = [result.Height, result.Width],
+                                Counts = counts
+                            };
+                        }
                     }
-                    maskBase64 = Convert.ToBase64String(classMapBytes);
-                }
+
+                    return new Segment
+                    {
+                        Id = s.ClassId,
+                        Label = s.Label,
+                        Score = s.CoverageRatio,
+                        Mask = mask
+                    };
+                }).ToList();
 
                 return Results.Ok(new SegmentationResponse
                 {
                     Id = ApiHelper.GenerateId("seg"),
                     Model = scope.Model.ModelId,
-                    Segments = segments,
-                    MaskBase64 = maskBase64
+                    Segments = segments
                 });
             }
             catch (Exception ex)
@@ -82,6 +93,7 @@ public static class SegmentEndpoints
         .Accepts<IFormFile>("multipart/form-data")
         .Produces<SegmentationResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
 
         // GET /v1/images/segment/labels - List ADE20K class labels

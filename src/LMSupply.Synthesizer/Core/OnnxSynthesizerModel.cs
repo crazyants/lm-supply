@@ -311,6 +311,7 @@ internal sealed class OnnxSynthesizerModel : ISynthesizerModel
 
         var modelPath = await downloader.DownloadModelAsync(
             _modelInfo.Id,
+            files: [_modelInfo.ModelFile, _modelInfo.ConfigFile],
             subfolder: _modelInfo.VoiceName,
             cancellationToken: cancellationToken);
 

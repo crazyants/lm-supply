@@ -44,9 +44,13 @@ public static class CaptionEndpoints
                 {
                     Id = ApiHelper.GenerateId("caption"),
                     Model = scope.Model.ModelId,
-                    Caption = result.Caption,
-                    Confidence = result.Confidence,
-                    Alternatives = result.AlternativeCaptions
+                    Choices = [new CaptionChoice
+                    {
+                        Index = 0,
+                        Caption = result.Caption,
+                        Confidence = result.Confidence
+                    }],
+                    Usage = new ImageTokenUsage()
                 });
             }
             catch (Exception ex)
@@ -61,6 +65,7 @@ public static class CaptionEndpoints
         .Accepts<IFormFile>("multipart/form-data")
         .Produces<CaptionResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
 
         // POST /v1/images/vqa - Visual Question Answering
@@ -119,6 +124,7 @@ public static class CaptionEndpoints
         .Accepts<IFormFile>("multipart/form-data")
         .Produces<VqaResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
     }
 }

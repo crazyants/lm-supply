@@ -25,6 +25,9 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
     private readonly ExecutionProvider _requestedProvider;
     private bool _disposed;
 
+    private static readonly bool[] UseCacheBranchFalse = [false];
+    private static readonly int[] UseCacheBranchDims = [1];
+
     private VitGpt2Captioner(
         InferenceSession encoder,
         InferenceSession decoder,
@@ -205,14 +208,39 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
 
         // Get embedding dimensions from encoder output
         // For ViT-GPT2, typical shape is [1, seq_len, hidden_size]
+        // Note: ONNX dynamic dimensions are represented as -1 in metadata, so we infer from actual data
         var embeddingDim = _encoder.OutputMetadata.First().Value.Dimensions;
         int seqLen = embeddingDim.Length > 1 ? embeddingDim[1] : 1;
         int hiddenSize = embeddingDim.Length > 2 ? embeddingDim[2] : embeddingDim[^1];
+
+        // Resolve dynamic dimensions from actual embedding array length (dynamic dims are -1 in ONNX metadata)
+        if (seqLen <= 0 && hiddenSize > 0)
+        {
+            seqLen = imageEmbeddings.Length / hiddenSize;
+        }
+        else if (hiddenSize <= 0 && seqLen > 0)
+        {
+            hiddenSize = imageEmbeddings.Length / seqLen;
+        }
+        else if (seqLen <= 0 && hiddenSize <= 0)
+        {
+            // Both dynamic: use ViT-GPT2 default hidden size of 768
+            hiddenSize = 768;
+            seqLen = imageEmbeddings.Length / hiddenSize;
+        }
 
         // Create encoder hidden states tensor
         var encoderHiddenStates = new DenseTensor<float>(
             imageEmbeddings,
             [1, seqLen, hiddenSize]);
+
+        // Pre-create tensors for optional inputs (check once, reuse per step)
+        bool needsAttentionMask = _decoder.InputMetadata.ContainsKey("attention_mask");
+        bool needsCacheBranch = _decoder.InputMetadata.ContainsKey("use_cache_branch");
+        // use_cache_branch=false: always use the non-cached decode path
+        DenseTensor<bool>? useCacheTensor = needsCacheBranch
+            ? new DenseTensor<bool>(UseCacheBranchFalse, UseCacheBranchDims)
+            : null;
 
         for (int step = 0; step < _options.MaxLength; step++)
         {
@@ -225,9 +253,18 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
             var inputs = new List<NamedOnnxValue>
             {
                 NamedOnnxValue.CreateFromTensor("input_ids", inputIdsTensor),
-                NamedOnnxValue.CreateFromTensor("attention_mask", attentionMask),
                 NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenStates)
             };
+
+            if (needsAttentionMask)
+            {
+                inputs.Add(NamedOnnxValue.CreateFromTensor("attention_mask", attentionMask));
+            }
+
+            if (needsCacheBranch)
+            {
+                inputs.Add(NamedOnnxValue.CreateFromTensor("use_cache_branch", useCacheTensor!));
+            }
 
             // Run decoder
             using var results = _decoder.Run(inputs);

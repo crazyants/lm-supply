@@ -43,6 +43,8 @@
     <!-- OpenAPI/Swagger -->
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Audio conversion -->
+    <PackageReference Include="NAudio.Lame" />
     <!-- 임베디드 정적 파일 제공 (Web SDK에 포함되어 별도 참조 불필요) -->
   </ItemGroup>
 

@@ -15,8 +15,10 @@ public static class ImageEndpoints
 
         // POST /v1/images/generations - OpenAI compatible
         group.MapPost("/generations", async (
+            HttpContext context,
             ImageGenerationRequest request,
             ModelManagerService manager,
+            TempFileService tempFiles,
             CancellationToken ct) =>
         {
             try
@@ -40,29 +42,46 @@ public static class ImageEndpoints
                 var modelId = request.Model ?? "default";
                 await using var scope = await manager.GetImageGeneratorAsync(modelId, ct);
 
-                var options = new GenerationOptions
-                {
-                    Width = width,
-                    Height = height,
-                    Steps = request.Steps ?? 4,
-                    GuidanceScale = request.GuidanceScale ?? 1.0f,
-                    Seed = request.Seed,
-                    NegativePrompt = request.NegativePrompt
-                };
+                var n = Math.Clamp(request.N, 1, 4);
+                var useUrl = string.Equals(request.ResponseFormat, "url", StringComparison.OrdinalIgnoreCase);
 
-                var result = await scope.Model.GenerateAsync(request.Prompt, options, ct);
-
-                // Convert to OpenAI-compatible response
-                var imageData = new GeneratedImageData
+                var imageDataList = new List<GeneratedImageData>();
+                for (int i = 0; i < n; i++)
                 {
-                    B64Json = Convert.ToBase64String(result.ImageData),
-                    RevisedPrompt = result.Prompt
-                };
+                    var options = new GenerationOptions
+                    {
+                        Width = width,
+                        Height = height,
+                        Steps = request.Steps ?? 4,
+                        GuidanceScale = request.GuidanceScale ?? 1.0f,
+                        Seed = request.Seed.HasValue ? request.Seed.Value + i : (int?)null,
+                        NegativePrompt = request.NegativePrompt
+                    };
+
+                    var result = await scope.Model.GenerateAsync(request.Prompt, options, ct);
+
+                    GeneratedImageData imageData;
+                    if (useUrl)
+                    {
+                        var id = tempFiles.Save(result.ImageData, "png");
+                        var url = $"{context.Request.Scheme}://{context.Request.Host}/v1/images/files/{id}";
+                        imageData = new GeneratedImageData { Url = url, RevisedPrompt = result.Prompt };
+                    }
+                    else
+                    {
+                        imageData = new GeneratedImageData
+                        {
+                            B64Json = Convert.ToBase64String(result.ImageData),
+                            RevisedPrompt = result.Prompt
+                        };
+                    }
+                    imageDataList.Add(imageData);
+                }
 
                 return Results.Ok(new ImageGenerationResponse
                 {
                     Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                    Data = [imageData]
+                    Data = imageDataList
                 });
             }
             catch (Exception ex)
@@ -75,6 +94,7 @@ public static class ImageEndpoints
         .WithDescription("Creates an image given a text prompt using Latent Consistency Models for fast generation.")
         .Produces<ImageGenerationResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
 
         // POST /v1/images/generate - Extended API with metadata
@@ -146,7 +166,139 @@ public static class ImageEndpoints
         .WithDescription("Creates an image with detailed generation metadata including seed, steps, and timing.")
         .Produces<ImageGenerationExtendedResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
+
+        // POST /v1/images/edits - OpenAI compatible (best-effort: uses prompt, ignores image)
+        group.MapPost("/edits", async (
+            HttpContext context,
+            ModelManagerService manager,
+            TempFileService tempFiles,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var form = await context.Request.ReadFormAsync(ct);
+                var prompt = form["prompt"].FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(prompt))
+                    return ApiHelper.Error("'prompt' field is required");
+
+                var modelId = form["model"].FirstOrDefault() ?? "default";
+                var responseFormat = form["response_format"].FirstOrDefault() ?? "b64_json";
+                var sizeStr = form["size"].FirstOrDefault();
+                var (width, height) = ParseSize(sizeStr);
+
+                await using var scope = await manager.GetImageGeneratorAsync(modelId, ct);
+
+                var options = new GenerationOptions
+                {
+                    Width = width,
+                    Height = height,
+                    Steps = 4,
+                    GuidanceScale = 1.0f
+                };
+
+                var result = await scope.Model.GenerateAsync(prompt, options, ct);
+
+                GeneratedImageData imageData;
+                if (string.Equals(responseFormat, "url", StringComparison.OrdinalIgnoreCase))
+                {
+                    var id = tempFiles.Save(result.ImageData, "png");
+                    var url = $"{context.Request.Scheme}://{context.Request.Host}/v1/images/files/{id}";
+                    imageData = new GeneratedImageData { Url = url, RevisedPrompt = result.Prompt };
+                }
+                else
+                {
+                    imageData = new GeneratedImageData
+                    {
+                        B64Json = Convert.ToBase64String(result.ImageData),
+                        RevisedPrompt = result.Prompt
+                    };
+                }
+
+                return Results.Ok(new ImageGenerationResponse
+                {
+                    Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    Data = [imageData]
+                });
+            }
+            catch (Exception ex)
+            {
+                return ApiHelper.InternalError(ex);
+            }
+        })
+        .WithName("EditImage")
+        .WithSummary("Edit images with a text prompt (OpenAI compatible)")
+        .WithDescription("Best-effort image editing: generates a new image from the prompt. Local LCM models do not support true img2img.")
+        .Produces<ImageGenerationResponse>()
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
+        .Produces<ErrorResponse>(500)
+        .DisableAntiforgery();
+
+        // POST /v1/images/variations - OpenAI compatible (best-effort: ignores source image)
+        group.MapPost("/variations", async (
+            HttpContext context,
+            ModelManagerService manager,
+            TempFileService tempFiles,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var form = await context.Request.ReadFormAsync(ct);
+                var prompt = form["prompt"].FirstOrDefault() ?? "a variation of the provided image";
+                var modelId = form["model"].FirstOrDefault() ?? "default";
+                var responseFormat = form["response_format"].FirstOrDefault() ?? "b64_json";
+                var sizeStr = form["size"].FirstOrDefault();
+                var (width, height) = ParseSize(sizeStr);
+
+                await using var scope = await manager.GetImageGeneratorAsync(modelId, ct);
+
+                var options = new GenerationOptions
+                {
+                    Width = width,
+                    Height = height,
+                    Steps = 4,
+                    GuidanceScale = 1.0f
+                };
+
+                var result = await scope.Model.GenerateAsync(prompt, options, ct);
+
+                GeneratedImageData imageData;
+                if (string.Equals(responseFormat, "url", StringComparison.OrdinalIgnoreCase))
+                {
+                    var id = tempFiles.Save(result.ImageData, "png");
+                    var url = $"{context.Request.Scheme}://{context.Request.Host}/v1/images/files/{id}";
+                    imageData = new GeneratedImageData { Url = url, RevisedPrompt = result.Prompt };
+                }
+                else
+                {
+                    imageData = new GeneratedImageData
+                    {
+                        B64Json = Convert.ToBase64String(result.ImageData),
+                        RevisedPrompt = result.Prompt
+                    };
+                }
+
+                return Results.Ok(new ImageGenerationResponse
+                {
+                    Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    Data = [imageData]
+                });
+            }
+            catch (Exception ex)
+            {
+                return ApiHelper.InternalError(ex);
+            }
+        })
+        .WithName("CreateImageVariation")
+        .WithSummary("Create image variations (OpenAI compatible)")
+        .WithDescription("Best-effort image variation: generates a new image from a prompt. Local LCM models do not support true img2img.")
+        .Produces<ImageGenerationResponse>()
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
+        .Produces<ErrorResponse>(500)
+        .DisableAntiforgery();
 
         // GET /v1/images/models - List available models
         group.MapGet("/models", () =>

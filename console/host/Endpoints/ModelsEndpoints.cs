@@ -1,8 +1,21 @@
+using LMSupply;
+using LMSupply.Captioner;
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Models.OpenAI;
 using LMSupply.Console.Host.Models.Requests;
 using LMSupply.Console.Host.Services;
+using LMSupply.Detector;
 using LMSupply.Download;
+using LMSupply.Embedder;
+using LMSupply.Generator;
+using LMSupply.ImageGenerator;
+using LMSupply.Ocr;
+using LMSupply.Reranker;
+using LMSupply.Segmenter;
+using LMSupply.Synthesizer;
+using LMSupply.Transcriber;
+using LMSupply.Translator;
+
 
 namespace LMSupply.Console.Host.Endpoints;
 
@@ -15,56 +28,172 @@ public static class ModelsEndpoints
             .WithTags("Models");
 
         // GET /v1/models - List available models (OpenAI compatible)
-        v1Group.MapGet("/models", (ModelManagerService manager) =>
+        v1Group.MapGet("/models", () =>
         {
-            var loadedModels = manager.GetLoadedModels();
-            var models = loadedModels.Select(m => new ModelInfo
+            var models = new List<Models.OpenAI.ModelInfo>();
+
+            // Embedder — text embedding
+            foreach (var m in LocalEmbedder.Registry.GetAvailableModels())
             {
-                Id = $"{m.ModelType.ToString().ToLowerInvariant()}:{m.ModelId}",
-                OwnedBy = "lmsupply"
-            }).ToList();
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["embeddings"]
+                });
+            }
 
-            // Add well-known model aliases
-            var aliases = new[]
+            // Reranker — semantic reranking
+            foreach (var m in LocalReranker.Registry.GetAvailableModels())
             {
-                new ModelInfo { Id = "generator:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "embedder:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "reranker:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "transcriber:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "synthesizer:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "translator:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "captioner:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "ocr:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "detector:default", OwnedBy = "lmsupply" },
-                new ModelInfo { Id = "segmenter:default", OwnedBy = "lmsupply" }
-            };
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["reranking"]
+                });
+            }
 
-            // Merge loaded models with aliases (avoid duplicates)
-            var allModels = aliases
-                .Where(a => !models.Any(m => m.Id == a.Id))
-                .Concat(models)
-                .ToList();
+            // Generator — text generation / chat completions
+            foreach (var m in LocalGenerator.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["chat.completions", "text.generation"]
+                });
+            }
 
-            return Results.Ok(new ModelListResponse { Data = allModels });
+            // Translator — neural machine translation
+            foreach (var m in LocalTranslator.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["translation"]
+                });
+            }
+
+            // Transcriber — speech-to-text
+            foreach (var m in LocalTranscriber.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["transcription"]
+                });
+            }
+
+            // Synthesizer — text-to-speech
+            foreach (var m in LocalSynthesizer.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["speech.synthesis"]
+                });
+            }
+
+            // Captioner — image-to-text captioning
+            foreach (var m in LocalCaptioner.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["image.captioning"]
+                });
+            }
+
+            // Detector — object detection
+            foreach (var m in LocalDetector.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["object.detection"]
+                });
+            }
+
+            // Segmenter — image segmentation
+            foreach (var m in LocalSegmenter.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["image.segmentation"]
+                });
+            }
+
+            // ImageGenerator — text-to-image generation
+            foreach (var m in LocalImageGenerator.Registry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["image.generation"]
+                });
+            }
+
+            // OCR — separate detection and recognition registries (no unified Registry property)
+            foreach (var m in LocalOcr.DetectionRegistry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["ocr.detection"]
+                });
+            }
+            foreach (var m in LocalOcr.RecognitionRegistry.GetAvailableModels())
+            {
+                models.Add(new Models.OpenAI.ModelInfo
+                {
+                    Id = m.AliasName,
+                    Capabilities = ["ocr.recognition"]
+                });
+            }
+
+            return Results.Ok(new ModelList { Data = models });
         })
         .WithName("ListModels")
-        .WithSummary("List available models (OpenAI compatible)")
-        .WithDescription("Returns a list of models available in the local cache and loaded models.")
-        .Produces<ModelListResponse>();
+        .WithSummary("List all available models (OpenAI compatible)")
+        .WithDescription("Returns all available model aliases across all domains.")
+        .Produces<ModelList>()
+        .Produces<ErrorResponse>(400);
 
         // GET /v1/models/{model} - Get model info (OpenAI compatible)
         v1Group.MapGet("/models/{*model}", (string model) =>
         {
-            return Results.Ok(new ModelInfo
+            // Search all registries for the model alias
+            var allModels = Enumerable.Empty<IModelInfoBase>()
+                .Concat(LocalEmbedder.Registry.GetAvailableModels())
+                .Concat(LocalReranker.Registry.GetAvailableModels())
+                .Concat(LocalGenerator.Registry.GetAvailableModels())
+                .Concat(LocalTranslator.Registry.GetAvailableModels())
+                .Concat(LocalTranscriber.Registry.GetAvailableModels())
+                .Concat(LocalSynthesizer.Registry.GetAvailableModels())
+                .Concat(LocalCaptioner.Registry.GetAvailableModels())
+                .Concat(LocalDetector.Registry.GetAvailableModels())
+                .Concat(LocalSegmenter.Registry.GetAvailableModels())
+                .Concat(LocalImageGenerator.Registry.GetAvailableModels())
+                .Concat(LocalOcr.DetectionRegistry.GetAvailableModels())
+                .Concat(LocalOcr.RecognitionRegistry.GetAvailableModels());
+
+            var found = allModels.FirstOrDefault(m =>
+                string.Equals(m.AliasName, model, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(m.Id, model, StringComparison.OrdinalIgnoreCase));
+
+            if (found is null)
+                return ApiHelper.Error($"Model '{model}' not found", "model_not_found", 404);
+
+            return Results.Ok(new Models.OpenAI.ModelInfo
             {
-                Id = model,
-                OwnedBy = "lmsupply"
+                Id = found.AliasName,
+                Capabilities = []
             });
         })
         .WithName("GetModel")
         .WithSummary("Get model information (OpenAI compatible)")
         .WithDescription("Returns information about a specific model.")
-        .Produces<ModelInfo>();
+        .Produces<Models.OpenAI.ModelInfo>()
+        .Produces<ErrorResponse>(404);
 
         // Cache management endpoints (LMSupply-specific)
         var cacheGroup = app.MapGroup("/api/cache")

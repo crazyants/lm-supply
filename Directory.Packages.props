@@ -17,6 +17,7 @@
 
     <!-- Audio Dependencies -->
     <PackageVersion Include="NAudio" Version="2.2.1" />
+    <PackageVersion Include="NAudio.Lame" Version="2.1.0" />
 
     <!-- ONNX Runtime GenAI for LLM Inference -->
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI" Version="0.12.1" />

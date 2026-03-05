@@ -1,6 +1,7 @@
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Models.OpenAI;
 using LMSupply.Console.Host.Services;
+using SixLabors.ImageSharp;
 
 namespace LMSupply.Console.Host.Endpoints;
 
@@ -38,25 +39,46 @@ public static class OcrEndpoints
                 using var memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream, ct);
 
-                var result = await scope.Model.RecognizeAsync(memoryStream.ToArray(), ct);
+                var imageBytes = memoryStream.ToArray();
+                var result = await scope.Model.RecognizeAsync(imageBytes, ct);
 
-                return Results.Ok(new OcrResponse
+                // Get image dimensions for page metadata
+                var imageInfo = Image.Identify(imageBytes);
+                int imageWidth = imageInfo?.Width ?? 0;
+                int imageHeight = imageInfo?.Height ?? 0;
+
+                var blocks = result.Regions.Select(r => new Infrastructure.Vision.OcrBlock
                 {
-                    Id = ApiHelper.GenerateId("ocr"),
-                    Model = $"{scope.Model.DetectionModelId}+{scope.Model.RecognitionModelId}",
-                    Text = result.FullText,
-                    Blocks = result.Regions.Select(r => new OcrBlock
+                    Text = r.Text,
+                    Confidence = r.Confidence,
+                    BoundingBox = new Infrastructure.Vision.OcrBoundingBox
+                    {
+                        X = r.BoundingBox.X,
+                        Y = r.BoundingBox.Y,
+                        Width = r.BoundingBox.Width,
+                        Height = r.BoundingBox.Height
+                    },
+                    Lines = [new Infrastructure.Vision.OcrLine
                     {
                         Text = r.Text,
                         Confidence = r.Confidence,
-                        BoundingBox = new BoundingBox
+                        BoundingBox = new Infrastructure.Vision.OcrBoundingBox
                         {
                             X = r.BoundingBox.X,
                             Y = r.BoundingBox.Y,
                             Width = r.BoundingBox.Width,
                             Height = r.BoundingBox.Height
                         }
-                    }).ToList()
+                    }]
+                }).ToList();
+
+                return Results.Ok(new OcrResponse
+                {
+                    Id = ApiHelper.GenerateId("ocr"),
+                    Model = $"{scope.Model.DetectionModelId}+{scope.Model.RecognitionModelId}",
+                    FullText = result.FullText,
+                    Pages = [new Infrastructure.Vision.OcrPage { Width = imageWidth, Height = imageHeight, Blocks = blocks }],
+                    DetectedLanguages = [new DetectedLanguage { LanguageCode = language, Confidence = 1.0f }]
                 });
             }
             catch (Exception ex)
@@ -71,6 +93,7 @@ public static class OcrEndpoints
         .Accepts<IFormFile>("multipart/form-data")
         .Produces<OcrResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
 
         // GET /v1/images/ocr/languages - List supported OCR languages

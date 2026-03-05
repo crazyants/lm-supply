@@ -82,6 +82,66 @@ public static class TranslateEndpoints
         .Produces<ErrorResponse>(400)
         .Produces<ErrorResponse>(500);
 
+        // POST /v2/translate — DeepL API v2 compatible
+        app.MapPost("/v2/translate", async (DeepLTranslateRequest request, ModelManagerService manager, CancellationToken ct) =>
+        {
+            try
+            {
+                // Parse text: string or string[]
+                var texts = new List<string>();
+                if (request.Text.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    texts.Add(request.Text.GetString()!);
+                }
+                else if (request.Text.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var el in request.Text.EnumerateArray())
+                        if (el.ValueKind == System.Text.Json.JsonValueKind.String)
+                            texts.Add(el.GetString()!);
+                }
+
+                if (texts.Count == 0)
+                    return ApiHelper.Error("'text' field is required");
+
+                // Normalize language codes (DeepL uppercase "EN" → "ko", "KO" etc.)
+                var targetLang = request.TargetLang.ToLowerInvariant();
+                var sourceLang = request.SourceLang?.ToLowerInvariant();
+
+                // Find appropriate model: try "default-{targetLang}" alias, fallback to "default"
+                var modelAlias = $"default-{targetLang}";
+
+                await using var scope = await manager.GetTranslatorAsync(modelAlias, ct);
+
+                var translations = new List<DeepLTranslation>();
+                foreach (var text in texts)
+                {
+                    var result = await scope.Model.TranslateAsync(text, ct);
+                    translations.Add(new DeepLTranslation
+                    {
+                        DetectedSourceLanguage = (result.SourceLanguage ?? sourceLang ?? "auto").ToUpperInvariant(),
+                        Text = result.TranslatedText
+                    });
+                }
+
+                return Results.Ok(new DeepLTranslateResponse { Translations = translations });
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiHelper.Error(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiHelper.InternalError(ex);
+            }
+        })
+        .WithName("DeepLTranslate")
+        .WithSummary("Translate text (DeepL API v2 compatible)")
+        .WithDescription("DeepL-compatible translation. Uses ISO 639-1 language codes (case-insensitive).")
+        .WithTags("Translate")
+        .Produces<DeepLTranslateResponse>()
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404);
+
         // GET /v1/translate/languages - List available translation directions
         group.MapGet("/translate/languages", () =>
         {

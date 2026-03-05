@@ -34,6 +34,7 @@ public static class DetectEndpoints
                 var model = form["model"].FirstOrDefault() ?? "default";
                 var thresholdStr = form["threshold"].FirstOrDefault();
                 var threshold = float.TryParse(thresholdStr, out var t) ? t : 0.5f;
+                var outputFormat = form["output_format"].FirstOrDefault() ?? "default";
 
                 await using var scope = await manager.GetDetectorAsync(model, ct);
 
@@ -43,6 +44,17 @@ public static class DetectEndpoints
 
                 // Use SDK extension method for threshold filtering
                 var results = await scope.Model.DetectAsync(memoryStream.ToArray(), threshold, ct);
+
+                if (string.Equals(outputFormat, "coco", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cocoResult = Infrastructure.Vision.CocoFormatter.Format(
+                        results,
+                        r => r.Label,
+                        r => r.Confidence,
+                        r => (r.Box.X1, r.Box.Y1, r.Box.Width, r.Box.Height)
+                    );
+                    return Results.Ok(cocoResult);
+                }
 
                 return Results.Ok(new DetectionResponse
                 {
@@ -74,6 +86,7 @@ public static class DetectEndpoints
         .Accepts<IFormFile>("multipart/form-data")
         .Produces<DetectionResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
 
         // GET /v1/images/detect/labels - List COCO class labels

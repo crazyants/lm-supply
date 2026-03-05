@@ -215,6 +215,15 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
         if (IsValidModelDirectory(snapshotPath))
             return snapshotPath;
 
+        // Check registry subfolder directly — handles 2-level paths like cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4
+        GeneratorModelRegistry.Default.TryResolve(modelId, out var registryInfo);
+        if (registryInfo?.Subfolder != null)
+        {
+            var registrySubfolderPath = Path.Combine(snapshotPath, registryInfo.Subfolder);
+            if (IsValidModelDirectory(registrySubfolderPath))
+                return registrySubfolderPath;
+        }
+
         // Check for variant subdirectories within snapshot (cpu-int4, cuda-int4, etc.)
         var foundPath = FindVariantSubfolder(snapshotPath);
         if (foundPath != null)

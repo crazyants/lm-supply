@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace LMSupply.Console.Host.Models.OpenAI;
@@ -18,9 +19,9 @@ public sealed record RerankRequest
     public required string Query { get; init; }
 
     /// <summary>
-    /// Documents to rerank
+    /// Documents to rerank. Can be string[] or object[] (for structured documents with rank_fields).
     /// </summary>
-    public required IReadOnlyList<string> Documents { get; init; }
+    public required JsonElement Documents { get; init; }
 
     /// <summary>
     /// Number of top results to return
@@ -33,6 +34,18 @@ public sealed record RerankRequest
     /// </summary>
     [JsonPropertyName("return_documents")]
     public bool ReturnDocuments { get; init; } = true;
+
+    /// <summary>
+    /// Fields to use for ranking when documents are objects. Multiple fields are joined with a space.
+    /// </summary>
+    [JsonPropertyName("rank_fields")]
+    public IReadOnlyList<string>? RankFields { get; init; }
+
+    /// <summary>
+    /// Maximum number of chunks per document for long-document reranking.
+    /// </summary>
+    [JsonPropertyName("max_chunks_per_doc")]
+    public int? MaxChunksPerDoc { get; init; }
 }
 
 /// <summary>
@@ -43,6 +56,37 @@ public sealed record RerankResponse
     public required string Id { get; init; }
     public required string Model { get; init; }
     public required IReadOnlyList<RerankResult> Results { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RerankMeta? Meta { get; init; }
+}
+
+/// <summary>
+/// Rerank metadata (Cohere-compatible)
+/// </summary>
+public sealed record RerankMeta
+{
+    [JsonPropertyName("api_version")]
+    public RerankApiVersion ApiVersion { get; init; } = new();
+    [JsonPropertyName("billed_units")]
+    public RerankBilledUnits BilledUnits { get; init; } = new();
+    public RerankTokens Tokens { get; init; } = new();
+}
+
+public sealed record RerankApiVersion
+{
+    public string Version { get; init; } = "2";
+}
+
+public sealed record RerankBilledUnits
+{
+    [JsonPropertyName("search_units")]
+    public int SearchUnits { get; init; } = 1;
+}
+
+public sealed record RerankTokens
+{
+    [JsonPropertyName("input_tokens")]
+    public int InputTokens { get; init; }
 }
 
 /// <summary>

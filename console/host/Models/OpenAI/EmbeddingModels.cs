@@ -55,7 +55,11 @@ public sealed record EmbeddingData
     [JsonPropertyName("object")]
     public string ObjectType { get; init; } = "embedding";
     public int Index { get; init; }
-    public required float[] Embedding { get; init; }
+    /// <summary>
+    /// The embedding vector. Either float[] (for "float" encoding) or string (for "base64" encoding).
+    /// OpenAI uses the same "embedding" key for both formats.
+    /// </summary>
+    public required object Embedding { get; init; }
 }
 
 /// <summary>

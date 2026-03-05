@@ -121,7 +121,7 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         var inputTensor = PreprocessImage(image, inputSize);
 
         // Run inference
-        var outputs = await RunInferenceAsync(inputTensor, cancellationToken);
+        var outputs = await RunInferenceAsync(inputTensor, originalWidth, originalHeight, cancellationToken);
 
         // Parse detections based on model architecture
         var detections = _modelInfo.RequiresNms
@@ -169,6 +169,8 @@ internal sealed class OnnxDetectorModel : IDetectorModel
 
     private async Task<IDisposableReadOnlyCollection<DisposableNamedOnnxValue>> RunInferenceAsync(
         DenseTensor<float> inputTensor,
+        int originalWidth,
+        int originalHeight,
         CancellationToken cancellationToken)
     {
         await _sessionLock.WaitAsync(cancellationToken);
@@ -180,6 +182,15 @@ internal sealed class OnnxDetectorModel : IDetectorModel
                 NamedOnnxValue.CreateFromTensor(inputName, inputTensor)
             };
 
+            // RT-DETR v2 models with inline postprocessor require original image dimensions
+            if (_session.InputMetadata.ContainsKey("orig_target_sizes"))
+            {
+                var origSizes = new DenseTensor<long>(
+                    new long[] { originalHeight, originalWidth },
+                    new int[] { 1, 2 });
+                inputs.Add(NamedOnnxValue.CreateFromTensor("orig_target_sizes", origSizes));
+            }
+
             return _session.Run(inputs);
         }
         finally
@@ -190,7 +201,9 @@ internal sealed class OnnxDetectorModel : IDetectorModel
 
     /// <summary>
     /// Parses RT-DETR style output (NMS-free, direct detections).
-    /// Output shape: [1, num_queries, 4+num_classes] or [1, num_queries, 6]
+    /// Handles two formats:
+    /// - Postprocessed (orig_target_sizes used): named outputs "labels" (int64), "boxes" (float32 x1y1x2y2 in pixel coords), "scores" (float32)
+    /// - Standard RT-DETR: "logits" [1, N, num_classes] + "boxes" [1, N, 4] (normalized cx,cy,w,h)
     /// </summary>
     private List<DetectionResult> ParseNmsFree(
         IDisposableReadOnlyCollection<DisposableNamedOnnxValue> outputs,
@@ -200,51 +213,92 @@ internal sealed class OnnxDetectorModel : IDetectorModel
     {
         var results = new List<DetectionResult>();
 
-        // RT-DETR outputs: logits [1, 300, num_classes] and boxes [1, 300, 4]
         var outputList = outputs.ToList();
 
         if (outputList.Count >= 2)
         {
-            // Standard RT-DETR format: separate logits and boxes
-            var logits = outputList[0].AsTensor<float>();
-            var boxes = outputList[1].AsTensor<float>();
+            // Check for postprocessed RT-DETR v2 output (inline postprocessor with orig_target_sizes)
+            // Outputs: labels [int64], boxes [float32 x1,y1,x2,y2 in pixel coords], scores [float32]
+            var labelsOutput = outputList.FirstOrDefault(o => o.Name == "labels");
+            var boxesOutput = outputList.FirstOrDefault(o => o.Name == "boxes");
+            var scoresOutput = outputList.FirstOrDefault(o => o.Name == "scores");
 
-            var numQueries = (int)logits.Dimensions[1];
-            var numClasses = (int)logits.Dimensions[2];
-
-            for (int i = 0; i < numQueries; i++)
+            if (labelsOutput is not null && boxesOutput is not null && scoresOutput is not null)
             {
-                // Find best class (softmax already applied or use sigmoid)
-                float maxScore = float.MinValue;
-                int bestClass = 0;
+                var labels = labelsOutput.AsTensor<long>();
+                var boxes = boxesOutput.AsTensor<float>();
+                var scores = scoresOutput.AsTensor<float>();
 
-                for (int c = 0; c < numClasses; c++)
+                // Support both [N] and [1, N] shaped outputs
+                bool hasBatch = scores.Rank > 1;
+                int numDetections = hasBatch ? (int)scores.Dimensions[1] : (int)scores.Dimensions[0];
+
+                for (int i = 0; i < numDetections; i++)
                 {
-                    var score = Sigmoid(logits[0, i, c]);
-                    if (score > maxScore)
-                    {
-                        maxScore = score;
-                        bestClass = c;
-                    }
+                    float score = hasBatch ? scores[0, i] : scores[i];
+                    if (score < _options.ConfidenceThreshold)
+                        continue;
+
+                    int classId = (int)(hasBatch ? labels[0, i] : labels[i]);
+
+                    // Boxes are already in original pixel coords: x1, y1, x2, y2
+                    float x1 = hasBatch ? boxes[0, i, 0] : boxes[i, 0];
+                    float y1 = hasBatch ? boxes[0, i, 1] : boxes[i, 1];
+                    float x2 = hasBatch ? boxes[0, i, 2] : boxes[i, 2];
+                    float y2 = hasBatch ? boxes[0, i, 3] : boxes[i, 3];
+
+                    var box = new BoundingBox(x1, y1, x2, y2)
+                        .Clamp(originalWidth, originalHeight);
+
+                    results.Add(new DetectionResult(
+                        ClassId: classId,
+                        Label: CocoLabels.GetLabel(classId),
+                        Confidence: score,
+                        Box: box));
                 }
+            }
+            else
+            {
+                // Standard RT-DETR format: separate logits and boxes
+                var logits = outputList[0].AsTensor<float>();
+                var boxes = outputList[1].AsTensor<float>();
 
-                if (maxScore < _options.ConfidenceThreshold)
-                    continue;
+                var numQueries = (int)logits.Dimensions[1];
+                var numClasses = (int)logits.Dimensions[2];
 
-                // Parse box [cx, cy, w, h] in normalized coordinates
-                var cx = boxes[0, i, 0] * originalWidth;
-                var cy = boxes[0, i, 1] * originalHeight;
-                var w = boxes[0, i, 2] * originalWidth;
-                var h = boxes[0, i, 3] * originalHeight;
+                for (int i = 0; i < numQueries; i++)
+                {
+                    float maxScore = float.MinValue;
+                    int bestClass = 0;
 
-                var box = BoundingBox.FromCenterSize(cx, cy, w, h)
-                    .Clamp(originalWidth, originalHeight);
+                    for (int c = 0; c < numClasses; c++)
+                    {
+                        var score = Sigmoid(logits[0, i, c]);
+                        if (score > maxScore)
+                        {
+                            maxScore = score;
+                            bestClass = c;
+                        }
+                    }
 
-                results.Add(new DetectionResult(
-                    ClassId: bestClass,
-                    Label: CocoLabels.GetLabel(bestClass),
-                    Confidence: maxScore,
-                    Box: box));
+                    if (maxScore < _options.ConfidenceThreshold)
+                        continue;
+
+                    // Parse box [cx, cy, w, h] in normalized coordinates
+                    var cx = boxes[0, i, 0] * originalWidth;
+                    var cy = boxes[0, i, 1] * originalHeight;
+                    var w = boxes[0, i, 2] * originalWidth;
+                    var h = boxes[0, i, 3] * originalHeight;
+
+                    var box = BoundingBox.FromCenterSize(cx, cy, w, h)
+                        .Clamp(originalWidth, originalHeight);
+
+                    results.Add(new DetectionResult(
+                        ClassId: bestClass,
+                        Label: CocoLabels.GetLabel(bestClass),
+                        Confidence: maxScore,
+                        Box: box));
+                }
             }
         }
         else if (outputList.Count == 1)
@@ -440,8 +494,14 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         // Use centralized ModelPathResolver for consistent subfolder handling
         using var resolver = new ModelPathResolver(_options.CacheDirectory);
 
+        // Strip variant suffix (e.g. "xnorpx/rt-detr2-onnx:s" → "xnorpx/rt-detr2-onnx")
+        // The variant is captured in OnnxFile; the repo ID is the part before ':'
+        var repoId = _modelInfo.Id.Contains(':')
+            ? _modelInfo.Id[.._modelInfo.Id.IndexOf(':')]
+            : _modelInfo.Id;
+
         var result = await resolver.ResolveModelAsync(
-            _modelInfo.Id,
+            repoId,
             expectedOnnxFile: _modelInfo.OnnxFile,
             cancellationToken: cancellationToken);
 

@@ -25,11 +25,33 @@ public static class EmbedEndpoints
                 await using var scope = await manager.GetEmbedderAsync(request.Model, ct);
                 var embeddings = await scope.Model.EmbedAsync(inputs, ct);
 
-                var data = embeddings.Select((e, i) => new EmbeddingData
+                var isBase64 = string.Equals(request.EncodingFormat, "base64", StringComparison.OrdinalIgnoreCase);
+                var dims = request.Dimensions;
+
+                var data = embeddings.Select((vec, i) =>
                 {
-                    Index = i,
-                    Embedding = e
+                    // Apply optional dimensions truncation
+                    var finalVec = dims.HasValue && dims.Value > 0 && dims.Value < vec.Length
+                        ? vec[..dims.Value]
+                        : vec;
+
+                    object embeddingValue;
+                    if (isBase64)
+                    {
+                        // Encode raw float bytes as base64 (same as OpenAI: little-endian IEEE 754)
+                        var bytes = System.Runtime.InteropServices.MemoryMarshal.Cast<float, byte>(finalVec).ToArray();
+                        embeddingValue = Convert.ToBase64String(bytes);
+                    }
+                    else
+                    {
+                        embeddingValue = finalVec;
+                    }
+
+                    return new EmbeddingData { Index = i, Embedding = embeddingValue };
                 }).ToList();
+
+                // Token count: rough estimate (no CountTokens on IEmbeddingModel)
+                var totalTokens = inputs.Sum(t => t.Length / 4);
 
                 return Results.Ok(new EmbeddingResponse
                 {
@@ -37,8 +59,8 @@ public static class EmbedEndpoints
                     Model = scope.Model.ModelId,
                     Usage = new EmbeddingUsage
                     {
-                        PromptTokens = inputs.Sum(t => t.Length / 4), // rough estimate
-                        TotalTokens = inputs.Sum(t => t.Length / 4)
+                        PromptTokens = totalTokens,
+                        TotalTokens = totalTokens
                     }
                 });
             }
@@ -56,6 +78,7 @@ public static class EmbedEndpoints
         .WithDescription("Creates embeddings for the given text input. Compatible with OpenAI's embedding API.")
         .Produces<EmbeddingResponse>()
         .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(404)
         .Produces<ErrorResponse>(500);
     }
 }

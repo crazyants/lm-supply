@@ -3,15 +3,32 @@ using System.Text.Json.Serialization;
 namespace LMSupply.Console.Host.Models.OpenAI;
 
 /// <summary>
-/// Image caption response
+/// Image caption response using choices[] pattern
 /// </summary>
 public sealed record CaptionResponse
 {
     public required string Id { get; init; }
+    [JsonPropertyName("object")]
+    public string ObjectType { get; init; } = "image.caption";
+    public long Created { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public required string Model { get; init; }
+    public required IReadOnlyList<CaptionChoice> Choices { get; init; }
+    public ImageTokenUsage? Usage { get; init; }
+}
+
+public sealed record CaptionChoice
+{
+    public int Index { get; init; }
     public required string Caption { get; init; }
     public float? Confidence { get; init; }
-    public IReadOnlyList<string>? Alternatives { get; init; }
+    [JsonPropertyName("finish_reason")]
+    public string FinishReason { get; init; } = "stop";
+}
+
+public sealed record ImageTokenUsage
+{
+    [JsonPropertyName("image_tokens")]
+    public int ImageTokens { get; init; } = 196;
 }
 
 /// <summary>
@@ -27,24 +44,25 @@ public sealed record VqaResponse
 }
 
 /// <summary>
-/// OCR response
+/// OCR response with block/line/word hierarchy
 /// </summary>
 public sealed record OcrResponse
 {
     public required string Id { get; init; }
     public required string Model { get; init; }
-    public required string Text { get; init; }
-    public IReadOnlyList<OcrBlock>? Blocks { get; init; }
+    [JsonPropertyName("full_text")]
+    public required string FullText { get; init; }
+    public required IReadOnlyList<Infrastructure.Vision.OcrPage> Pages { get; init; }
+    [JsonPropertyName("detected_languages")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<DetectedLanguage>? DetectedLanguages { get; init; }
 }
 
-/// <summary>
-/// OCR text block
-/// </summary>
-public sealed record OcrBlock
+public sealed record DetectedLanguage
 {
-    public required string Text { get; init; }
-    public float Confidence { get; init; }
-    public BoundingBox? BoundingBox { get; init; }
+    [JsonPropertyName("language_code")]
+    public required string LanguageCode { get; init; }
+    public float Confidence { get; init; } = 1.0f;
 }
 
 /// <summary>
@@ -87,7 +105,6 @@ public sealed record SegmentationResponse
     public required string Id { get; init; }
     public required string Model { get; init; }
     public required IReadOnlyList<Segment> Segments { get; init; }
-    public string? MaskBase64 { get; init; }
 }
 
 /// <summary>
@@ -99,6 +116,19 @@ public sealed record Segment
     public string? Label { get; init; }
     public float? Score { get; init; }
     [JsonPropertyName("bounding_box")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BoundingBox? BoundingBox { get; init; }
-    public string? MaskBase64 { get; init; }
+    [JsonPropertyName("mask")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SegmentMask? Mask { get; init; }
+}
+
+/// <summary>
+/// RLE or raw segment mask
+/// </summary>
+public sealed record SegmentMask
+{
+    public required string Format { get; init; }
+    public required int[] Size { get; init; }
+    public required string Counts { get; init; }
 }

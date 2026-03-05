@@ -23,8 +23,11 @@ public sealed record ErrorDetail
 /// </summary>
 public sealed record Usage
 {
+    [JsonPropertyName("prompt_tokens")]
     public int PromptTokens { get; init; }
+    [JsonPropertyName("completion_tokens")]
     public int CompletionTokens { get; init; }
+    [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; init; }
 }
 
@@ -36,14 +39,18 @@ public sealed record ModelInfo
     public required string Id { get; init; }
     [JsonPropertyName("object")]
     public string ObjectType { get; init; } = "model";
-    public long Created { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    public string OwnedBy { get; init; } = "lmsupply";
+    public long Created { get; init; } = 1700000000;
+    [JsonPropertyName("owned_by")]
+    public string OwnedBy { get; init; } = "lm-supply";
+    public required IReadOnlyList<string> Capabilities { get; init; }
+    [JsonPropertyName("context_length")]
+    public int? ContextLength { get; init; }
 }
 
 /// <summary>
 /// Model list response (OpenAI /v1/models compatible)
 /// </summary>
-public sealed record ModelListResponse
+public sealed record ModelList
 {
     [JsonPropertyName("object")]
     public string ObjectType { get; init; } = "list";

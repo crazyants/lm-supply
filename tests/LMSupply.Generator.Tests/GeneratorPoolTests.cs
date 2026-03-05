@@ -99,7 +99,7 @@ public class GeneratorPoolTests : IAsyncDisposable
     {
         // Arrange
         var model1Id = "microsoft/Phi-3.5-mini-instruct-onnx";
-        var model2Id = "onnx-community/Llama-3.2-1B-Instruct-ONNX";
+        var model2Id = "onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX";
 
         var mockModel1 = CreateMockModel(model1Id);
         var mockModel2 = CreateMockModel(model2Id);

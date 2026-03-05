@@ -77,7 +77,7 @@ await foreach (var token in generator.GenerateAsync("Write a short story about a
 ```csharp
 // Use any ONNX model from HuggingFace
 .WithHuggingFaceModel("microsoft/Phi-3.5-mini-instruct-onnx")
-.WithHuggingFaceModel("onnx-community/Llama-3.2-1B-Instruct-ONNX")
+.WithHuggingFaceModel("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX")
 ```
 
 ### Local Models

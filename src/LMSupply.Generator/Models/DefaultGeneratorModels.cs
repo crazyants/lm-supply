@@ -87,7 +87,7 @@ public static class DefaultGeneratorModels
     /// </summary>
     public static ModelInfo Llama321B { get; } = new()
     {
-        ModelId = "onnx-community/Llama-3.2-1B-Instruct-ONNX",
+        ModelId = "onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX",
         AliasName = "fast",
         DisplayName = "Llama 3.2 1B",
         Description = "Fast: Llama 3.2 1B, fast inference, Llama license",
@@ -100,7 +100,7 @@ public static class DefaultGeneratorModels
         RecommendedContextLength = 4096,
         NumLayers = 16,
         HiddenSize = 2048,
-        Subfolder = "onnx"
+        Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
     };
 
     /// <summary>
@@ -110,7 +110,7 @@ public static class DefaultGeneratorModels
     /// </summary>
     public static ModelInfo Llama323B { get; } = new()
     {
-        ModelId = "onnx-community/Llama-3.2-3B-Instruct-ONNX",
+        ModelId = "onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX",
         AliasName = "llama-3.2-3b",
         DisplayName = "Llama 3.2 3B",
         Description = "Llama 3.2 3B, good accuracy, Llama license",
@@ -123,7 +123,7 @@ public static class DefaultGeneratorModels
         RecommendedContextLength = 4096,
         NumLayers = 28,
         HiddenSize = 3072,
-        Subfolder = "onnx"
+        Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
     };
 
     /// <summary>

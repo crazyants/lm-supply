@@ -23,7 +23,7 @@ public static class WellKnownModels
         /// 1B parameters, fast inference, good for simple tasks.
         /// Note: Llama Community License (700M MAU limit).
         /// </summary>
-        public const string Fast = "onnx-community/Llama-3.2-1B-Instruct-ONNX";
+        public const string Fast = "onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX";
 
         /// <summary>
         /// Small model - same as Fast, alias for clarity.
@@ -49,7 +49,7 @@ public static class WellKnownModels
         /// Best accuracy among Llama models, excellent for complex reasoning.
         /// Note: Llama Community License (700M MAU limit).
         /// </summary>
-        public const string Large = "onnx-community/Llama-3.2-3B-Instruct-ONNX";
+        public const string Large = "onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX";
 
         /// <summary>
         /// Multilingual model - Alibaba Qwen 2.5 3B.

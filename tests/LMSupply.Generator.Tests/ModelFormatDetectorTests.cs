@@ -40,7 +40,7 @@ public class ModelFormatDetectorTests
     [Theory]
     [InlineData("microsoft/Phi-4-mini-instruct-onnx", ModelFormat.Onnx)]
     [InlineData("microsoft/phi-4-onnx", ModelFormat.Onnx)]
-    [InlineData("onnx-community/Llama-3.2-1B-Instruct-ONNX", ModelFormat.Onnx)]
+    [InlineData("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX", ModelFormat.Onnx)]
     public void Detect_OnnxInRepoName_ReturnsOnnx(string repoId, ModelFormat expected)
     {
         var result = ModelFormatDetector.Detect(repoId);

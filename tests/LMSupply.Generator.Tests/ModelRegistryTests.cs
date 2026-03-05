@@ -26,7 +26,7 @@ public class ModelRegistryTests
 
         // Assert
         model.Should().NotBeNull();
-        model.ModelId.Should().Be("onnx-community/Llama-3.2-1B-Instruct-ONNX");
+        model.ModelId.Should().Be("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX");
     }
 
     [Fact]
@@ -276,8 +276,8 @@ public class ModelRegistryTests
     [Theory]
     [InlineData("microsoft/Phi-3.5-mini-instruct-onnx", LicenseTier.MIT)]
     [InlineData("microsoft/phi-4-onnx", LicenseTier.MIT)]
-    [InlineData("onnx-community/Llama-3.2-1B-Instruct-ONNX", LicenseTier.Conditional)]
-    [InlineData("onnx-community/Llama-3.2-3B-Instruct-ONNX", LicenseTier.Conditional)]
+    [InlineData("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX", LicenseTier.Conditional)]
+    [InlineData("onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX", LicenseTier.Conditional)]
     public void TryResolve_KnownModel_HasCorrectLicense(string modelId, LicenseTier expectedLicense)
     {
         var result = GeneratorModelRegistry.Default.TryResolve(modelId, out var model);

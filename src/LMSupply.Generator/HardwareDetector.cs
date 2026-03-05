@@ -108,13 +108,13 @@ public static class HardwareDetector
         // Add Llama-3.2-1B for smaller systems
         if (maxParams >= 1_000_000_000)
         {
-            models.Add("onnx-community/Llama-3.2-1B-Instruct-ONNX");
+            models.Add("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX");
         }
 
         // Add Llama-3.2-3B for medium systems
         if (maxParams >= 3_000_000_000)
         {
-            models.Add("onnx-community/Llama-3.2-3B-Instruct-ONNX");
+            models.Add("onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX");
         }
 
         // Add Phi-4 for larger systems

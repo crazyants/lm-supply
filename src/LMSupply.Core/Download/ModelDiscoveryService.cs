@@ -299,11 +299,18 @@ public sealed class ModelDiscoveryService : IDisposable
             }
         }
 
+        // For encoder-decoder models, download only the selected encoder+decoder pair,
+        // not all quantization variants discovered by SelectOnnxFiles.
+        var onnxFilesForDownload = architecture == ModelArchitecture.EncoderDecoder &&
+                                   (encoderFiles.Count > 0 || decoderFiles.Count > 0)
+            ? encoderFiles.Concat(decoderFiles).ToList()
+            : selectedOnnxFiles;
+
         return new ModelDiscoveryResult
         {
             RepoId = repoId,
             Subfolder = subfolder,
-            OnnxFiles = selectedOnnxFiles,
+            OnnxFiles = onnxFilesForDownload,
             ExternalDataFiles = externalDataFiles,
             ConfigFiles = configFiles,
             AvailableVariants = variants,
@@ -725,8 +732,8 @@ public sealed class ModelDiscoveryService : IDisposable
     {
         var name = Path.GetFileNameWithoutExtension(fileName);
 
-        // Remove common suffixes
-        foreach (var suffix in new[] { "_int4", "_int8", "_fp16", "_uint8", "_quantized", "_q4", "_q8" })
+        // Remove common quantization suffixes (longer suffixes must come first to avoid partial matches)
+        foreach (var suffix in new[] { "_q4f16", "_bnb4", "_int4", "_int8", "_fp16", "_uint8", "_quantized", "_q4", "_q8" })
         {
             if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 return name[..^suffix.Length];
@@ -740,7 +747,7 @@ public sealed class ModelDiscoveryService : IDisposable
     /// </summary>
     private static bool HasQuantizationSuffix(string fileName)
     {
-        var suffixes = new[] { "_int4", "_int8", "_fp16", "_uint8", "_quantized", "_q4", "_q8" };
+        var suffixes = new[] { "_int4", "_int8", "_fp16", "_uint8", "_quantized", "_q4", "_q8", "_bnb4", "_q4f16" };
         return suffixes.Any(s => fileName.Contains(s, StringComparison.OrdinalIgnoreCase));
     }
 

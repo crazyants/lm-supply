@@ -108,8 +108,13 @@ public static class OnnxSessionFactory
             progress: progress,
             cancellationToken: cancellationToken);
 
-        // Create session and get active providers
-        var session = Create(modelPath, provider, configureOptions);
+        // Create session on a dedicated thread to avoid thread pool starvation.
+        // InferenceSession construction blocks for several seconds on large models.
+        var session = await Task.Factory.StartNew(
+            () => Create(modelPath, provider, configureOptions),
+            cancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         var activeProviders = GetActiveProviders(session);
 
         // Log warning if GPU was requested but not active
@@ -182,8 +187,13 @@ public static class OnnxSessionFactory
                     progress: progress,
                     cancellationToken: cancellationToken);
 
-                // Try to create session with this provider
-                var session = Create(modelPath, providerToTry, configureOptions);
+                // Create session on a dedicated thread to avoid thread pool starvation.
+                // InferenceSession construction blocks for several seconds on large models.
+                var session = await Task.Factory.StartNew(
+                    () => Create(modelPath, providerToTry, configureOptions),
+                    cancellationToken,
+                    TaskCreationOptions.LongRunning,
+                    TaskScheduler.Default);
 
                 // Determine active providers based on what was requested
                 var activeProviders = new List<string>();

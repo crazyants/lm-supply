@@ -1,17 +1,17 @@
 # Memory Requirements Guide
 
-> LMSupply 모델 메모리 요구사항 및 OOM 예방 가이드
+> LMSupply model memory requirements and OOM prevention guide
 
 ---
 
 ## Overview
 
-LMSupply의 모델은 ONNX Runtime을 통해 실행됩니다. 메모리 사용량은 다음 요소에 의해 결정됩니다:
+LMSupply models run via ONNX Runtime. Memory usage is determined by:
 
-- **모델 가중치(Weights)**: 모델 파일 크기의 ~1.5-2배
-- **입력/출력 텐서**: 배치 크기와 시퀀스 길이에 비례
-- **중간 활성화(Activations)**: 추론 중 생성되는 임시 데이터
-- **런타임 오버헤드**: ONNX Runtime 내부 버퍼
+- **Model Weights**: ~1.5–2× the model file size
+- **Input/Output Tensors**: Proportional to batch size and sequence length
+- **Intermediate Activations**: Temporary data generated during inference
+- **Runtime Overhead**: Internal ONNX Runtime buffers
 
 ### Memory Estimation Formula
 
@@ -19,13 +19,13 @@ LMSupply의 모델은 ONNX Runtime을 통해 실행됩니다. 메모리 사용�
 EstimatedMemory = ModelFileSize × 2
 ```
 
-이 공식은 모델 가중치 로딩과 런타임 오버헤드를 포함한 대략적인 추정치입니다.
+This formula is a rough estimate that includes model weight loading and runtime overhead.
 
 ---
 
 ## Memory by Domain
 
-### Embedder (텍스트 임베딩)
+### Embedder (Text Embedding)
 
 | Model | Parameters | ONNX Size | Est. Memory | Context |
 |-------|------------|-----------|-------------|---------|
@@ -40,14 +40,14 @@ EstimatedMemory = ModelFileSize × 2
 | gte-large-en-v1.5 | 434M | ~1.7GB | ~3.4GB | 8K tokens |
 | multilingual-e5-large | 560M | ~2.2GB | ~4.4GB | 512 tokens |
 
-**권장 선택**:
+**Recommended:**
 - 💡 **Low Memory (< 4GB)**: `fast` (all-MiniLM-L6-v2)
 - ⚖️ **Balanced (4-8GB)**: `default` (bge-small-en-v1.5)
 - 🚀 **Quality (8GB+)**: `quality` (gte-base-en-v1.5) or `large`
 
 ---
 
-### Reranker (재순위화)
+### Reranker (Semantic Reranking)
 
 | Model | Parameters | ONNX Size | Est. Memory | Context |
 |-------|------------|-----------|-------------|---------|
@@ -58,16 +58,16 @@ EstimatedMemory = ModelFileSize × 2
 | bge-reranker-large | 560M | ~1.1GB | ~2.2GB | 512 tokens |
 | bge-reranker-v2-m3 | 568M | ~1.1GB | ~2.2GB | 8K tokens |
 
-**권장 선택**:
-- 💡 **Fast**: `ms-marco-TinyBERT-L-2` (초경량)
-- ⚖️ **Default**: `ms-marco-MiniLM-L-6` (균형)
+**Recommended:**
+- 💡 **Fast**: `ms-marco-TinyBERT-L-2` (ultra-lightweight)
+- ⚖️ **Default**: `ms-marco-MiniLM-L-6` (balanced)
 - 🚀 **Quality**: `bge-reranker-large`
 
 ---
 
-### Generator (텍스트 생성)
+### Generator (Text Generation)
 
-Generator 모델은 다른 도메인보다 훨씬 큰 메모리를 요구합니다.
+Generator models require significantly more memory than other domains.
 
 | Model | Parameters | ONNX Size | Est. Memory | Context |
 |-------|------------|-----------|-------------|---------|
@@ -78,9 +78,9 @@ Generator 모델은 다른 도메인보다 훨씬 큰 메모리를 요구합니�
 | Phi-4-mini-instruct | 3.8B | ~7.5GB | ~15GB | 16K tokens |
 | Phi-4 | 14B | ~28GB | ~56GB | 16K tokens |
 
-**GGUF 포맷 (양자화)**:
+**GGUF Format (Quantized):**
 
-양자화된 GGUF 모델은 크게 줄어든 메모리를 사용합니다:
+Quantized GGUF models use significantly less memory:
 
 | Quantization | Memory Reduction | Quality Impact |
 |--------------|-----------------|----------------|
@@ -91,22 +91,22 @@ Generator 모델은 다른 도메인보다 훨씬 큰 메모리를 요구합니�
 | Q3_K_M | ~80% | Noticeable |
 | Q2_K | ~87% | Significant |
 
-**자동 양자화 선택 (v0.16.0+)**:
+**Automatic Quantization Selection (v0.16.0+):**
 
-LMSupply는 GGUF 레포에서 여러 양자화 파일 중 **현재 하드웨어에 맞는 최적 파일을 자동 선택**합니다:
+LMSupply automatically selects the **best quantization file that fits your available memory** from a GGUF repository:
 
-- 사용 가능한 VRAM과 RAM을 측정 (VRAM - 2GB 오버헤드, RAM - 4GB 오버헤드)
-- 메모리에 맞는 파일 중 가장 품질이 높은 양자화를 선택 (Q8 > Q6 > Q5 > Q4 ...)
-- 특정 파일을 직접 지정하려면: `new GeneratorOptions { GgufFileName = "model-Q4_K_M.gguf" }`
+- Measures available VRAM and RAM (subtracts 2GB GPU overhead and 4GB OS overhead)
+- Among files that fit in memory, picks the highest-quality quantization (Q8 > Q6 > Q5 > Q4 …)
+- To specify a file explicitly: `new GeneratorOptions { GgufFileName = "model-Q4_K_M.gguf" }`
 
-**권장 선택**:
-- 💡 **Low Memory (4-8GB)**: `Llama-3.2-1B` or GGUF Q4_K_M (자동 선택)
+**Recommended:**
+- 💡 **Low Memory (4-8GB)**: `Llama-3.2-1B` or GGUF Q4_K_M (auto-selected)
 - ⚖️ **Balanced (8-16GB)**: `Phi-3.5-mini` or `Phi-4-mini`
-- 🚀 **Quality (16GB+)**: `Phi-4-mini` ONNX or larger GGUF (자동 선택)
+- 🚀 **Quality (16GB+)**: `Phi-4-mini` ONNX or larger GGUF (auto-selected)
 
 ---
 
-### Transcriber (음성 인식)
+### Transcriber (Speech Recognition)
 
 | Model | Parameters | ONNX Size | Est. Memory | Languages |
 |-------|------------|-----------|-------------|-----------|
@@ -117,14 +117,14 @@ LMSupply는 GGUF 레포에서 여러 양자화 파일 중 **현재 하드웨어�
 | Whisper Large V3 | 1.5B | ~6GB | ~12GB | Multi |
 | Whisper Large V3 Turbo | 809M | ~3.2GB | ~6.4GB | Multi |
 
-**권장 선택**:
-- 💡 **Fast**: `whisper-tiny-en` (영어 전용, 초고속)
+**Recommended:**
+- 💡 **Fast**: `whisper-tiny-en` (English-only, ultra-fast)
 - ⚖️ **Default**: `whisper-base` or `whisper-small`
-- 🚀 **Quality**: `whisper-large-v3-turbo` (품질/속도 최적)
+- 🚀 **Quality**: `whisper-large-v3-turbo` (best quality/speed balance)
 
 ---
 
-### Detector (객체 검출)
+### Detector (Object Detection)
 
 | Model | Parameters | ONNX Size | Est. Memory | Input Size |
 |-------|------------|-----------|-------------|------------|
@@ -134,14 +134,14 @@ LMSupply는 GGUF 레포에서 여러 양자화 파일 중 **현재 하드웨어�
 | RT-DETR-R50 | - | ~200MB | ~400MB | 640×640 |
 | RT-DETR-R101 | - | ~300MB | ~600MB | 640×640 |
 
-**권장 선택**:
-- 💡 **Fast**: `efficientdet-lite0` (모바일/엣지)
+**Recommended:**
+- 💡 **Fast**: `efficientdet-lite0` (mobile/edge)
 - ⚖️ **Default**: `rt-detr-r34`
 - 🚀 **Quality**: `rt-detr-r101`
 
 ---
 
-### Segmenter (이미지 분할)
+### Segmenter (Image Segmentation)
 
 | Model | Parameters | ONNX Size | Est. Memory | Classes |
 |-------|------------|-----------|-------------|---------|
@@ -152,16 +152,16 @@ LMSupply는 GGUF 레포에서 여러 양자화 파일 중 **현재 하드웨어�
 | SegFormer-B4 | 64.1M | ~256MB | ~512MB | 150 |
 | SegFormer-B5 | 84.7M | ~340MB | ~680MB | 150 |
 
-**권장 선택**:
+**Recommended:**
 - 💡 **Fast**: `segformer-b0`
 - ⚖️ **Default**: `segformer-b2`
 - 🚀 **Quality**: `segformer-b5`
 
 ---
 
-### Synthesizer (음성 합성)
+### Synthesizer (Text-to-Speech)
 
-Piper TTS 모델은 경량입니다:
+Piper TTS models are lightweight:
 
 | Voice | Quality | Size | Est. Memory |
 |-------|---------|------|-------------|
@@ -170,11 +170,11 @@ Piper TTS 모델은 경량입니다:
 | en_US-amy-low | Low | ~16MB | ~32MB |
 | en_US-lessac-high | High | ~64MB | ~128MB |
 
-**모든 Piper 음성은 경량이며 메모리 제약이 거의 없습니다.**
+**All Piper voices are lightweight with virtually no memory constraints.**
 
 ---
 
-### Translator (번역)
+### Translator (Machine Translation)
 
 | Model | Size | Est. Memory | Direction |
 |-------|------|-------------|-----------|
@@ -185,9 +185,9 @@ Piper TTS 모델은 경량입니다:
 
 ---
 
-### OCR (광학 문자 인식)
+### OCR (Optical Character Recognition)
 
-OCR은 두 개의 모델을 조합합니다:
+OCR combines two models:
 
 | Component | Model | Est. Memory |
 |-----------|-------|-------------|
@@ -197,7 +197,7 @@ OCR은 두 개의 모델을 조합합니다:
 
 ---
 
-### Captioner (이미지 캡셔닝)
+### Captioner (Image Captioning)
 
 | Model | Architecture | Est. Memory |
 |-------|--------------|-------------|
@@ -207,7 +207,7 @@ OCR은 두 개의 모델을 조합합니다:
 
 ## GPU VRAM vs System RAM
 
-### GPU 사용 시 (CUDA/DirectML/CoreML)
+### With GPU (CUDA/DirectML/CoreML)
 
 | VRAM | Recommended Models |
 |------|-------------------|
@@ -215,66 +215,64 @@ OCR은 두 개의 모델을 조합합니다:
 | 6GB | Embedder (base), Transcriber (small), Segmenter (B2) |
 | 8GB | Embedder (large), Generator (1-3B), Transcriber (medium) |
 | 12GB | Generator (3-4B), Transcriber (large-turbo) |
-| 16GB+ | Generator (7B+), 동시 다중 모델 |
+| 16GB+ | Generator (7B+), multiple models simultaneously |
 
-### CPU 사용 시 (System RAM)
-
-CPU 추론 시 System RAM을 사용합니다:
+### CPU-only (System RAM)
 
 | RAM | Recommended Usage |
 |-----|-------------------|
-| 8GB | 소형 모델 1개 (Embedder/Reranker) |
-| 16GB | 중형 모델 1개 또는 소형 모델 여러 개 |
-| 32GB | 대형 모델 또는 다중 모델 동시 사용 |
-| 64GB+ | Generator 대형 모델 + 다른 도메인 조합 |
+| 8GB | One small model (Embedder/Reranker) |
+| 16GB | One medium model or multiple small models |
+| 32GB | Large model or multiple models simultaneously |
+| 64GB+ | Large Generator + other domains combined |
 
 ---
 
 ## OOM Prevention Strategies
 
-### 1. 올바른 모델 선택
+### 1. Choose the Right Model
 
 ```csharp
-// 하드웨어에 맞는 자동 선택 사용
+// Use "auto" alias for hardware-optimized selection
 var embedder = await LocalEmbedder.LoadAsync("auto");
 var generator = await LocalGenerator.LoadAsync("auto");
 ```
 
-`"auto"` 별칭은 `HardwareProfile`을 기반으로 최적 모델을 자동 선택합니다.
+The `"auto"` alias automatically selects the optimal model based on `HardwareProfile`.
 
-### 2. Lazy Loading 활용
+### 2. Use Lazy Loading
 
-모델은 `LoadAsync` 호출 시 로딩됩니다. 필요할 때만 로드하세요:
+Models load when `LoadAsync` is called. Only load when needed:
 
 ```csharp
-// ❌ 모든 모델을 미리 로드
+// ❌ Pre-load all models at startup
 var embedder = await LocalEmbedder.LoadAsync("default");
 var reranker = await LocalReranker.LoadAsync("default");
-var generator = await LocalGenerator.LoadAsync("default"); // OOM 위험!
+var generator = await LocalGenerator.LoadAsync("default"); // OOM risk!
 
-// ✅ 필요할 때 로드
+// ✅ Load on demand
 await using var embedder = await LocalEmbedder.LoadAsync("default");
-// ... embedder 사용 후 자동 해제
+// ... use embedder, then automatically released
 
 await using var reranker = await LocalReranker.LoadAsync("default");
-// ... reranker 사용 후 자동 해제
+// ... use reranker, then automatically released
 ```
 
-### 3. 명시적 해제
+### 3. Explicit Disposal
 
-`DisposeAsync`로 메모리를 명시적으로 해제합니다:
+Free memory explicitly with `DisposeAsync`:
 
 ```csharp
 await using (var model = await LocalEmbedder.LoadAsync("large"))
 {
     var embeddings = await model.EmbedAsync(texts);
-} // 여기서 자동 해제
+} // automatically released here
 
-// 또는 수동 해제
+// Or manual disposal
 var model = await LocalEmbedder.LoadAsync("large");
 try
 {
-    // 사용
+    // use
 }
 finally
 {
@@ -282,15 +280,15 @@ finally
 }
 ```
 
-### 4. 배치 크기 조절
+### 4. Control Batch Size
 
-큰 입력은 작은 배치로 분할하세요:
+Split large inputs into smaller batches:
 
 ```csharp
-// ❌ 대량 데이터 한번에 처리
+// ❌ Process large dataset at once
 var embeddings = await embedder.EmbedAsync(thousandDocuments);
 
-// ✅ 배치 분할
+// ✅ Split into batches
 var results = new List<float[]>();
 foreach (var batch in thousandDocuments.Chunk(32))
 {
@@ -299,21 +297,21 @@ foreach (var batch in thousandDocuments.Chunk(32))
 }
 ```
 
-### 5. Generator 특수 고려사항
+### 5. Generator Special Considerations
 
-Generator는 메모리 집약적입니다:
+Generator is memory-intensive:
 
 ```csharp
-// GGUF 양자화 모델 사용
+// Use GGUF quantized model (auto-selects best fit for your hardware)
 var generator = await LocalGenerator.LoadAsync("model-q4_k_m.gguf");
 
-// 또는 작은 ONNX 모델
+// Or use a small ONNX model
 var generator = await LocalGenerator.LoadAsync("microsoft/Phi-4-mini-instruct-onnx");
 ```
 
-### 6. Memory 확인
+### 6. Check Estimated Memory
 
-`EstimatedMemoryBytes`로 예상 메모리를 확인합니다:
+Use `EstimatedMemoryBytes` to verify expected memory usage:
 
 ```csharp
 var model = await LocalEmbedder.LoadAsync("large");
@@ -325,14 +323,14 @@ Console.WriteLine($"Estimated memory: {memoryMB}MB");
 
 ## Performance Tiers Reference
 
-LMSupply는 `HardwareProfile.Current.Tier`를 기반으로 자동 모델 선택합니다:
+LMSupply auto-selects models based on `HardwareProfile.Current.Tier`:
 
 | Tier | GPU VRAM | System RAM | Recommended |
 |------|----------|------------|-------------|
-| Low | < 4GB or CPU only | < 16GB | 경량 모델만 |
-| Medium | 4-8GB | 16GB+ | 기본 모델 |
-| High | 8-16GB | 32GB+ | 대형 모델 |
-| Ultra | 16GB+ | 64GB+ | 최대 품질 |
+| Low | < 4GB or CPU only | < 16GB | Lightweight models only |
+| Medium | 4-8GB | 16GB+ | Base models |
+| High | 8-16GB | 32GB+ | Large models |
+| Ultra | 16GB+ | 64GB+ | Maximum quality |
 
 ```csharp
 var profile = HardwareProfile.Current;
@@ -348,27 +346,27 @@ Console.WriteLine($"Recommended Provider: {profile.RecommendedProvider}");
 
 ### Out of Memory Error
 
-1. **더 작은 모델 사용**: `"default"` → `"fast"`
-2. **Provider 변경**: `ExecutionProvider.Cpu` (System RAM 사용)
-3. **다른 모델 해제**: `await otherModel.DisposeAsync()`
-4. **배치 크기 감소**: 한 번에 처리하는 데이터량 줄이기
+1. **Use a smaller model**: `"default"` → `"fast"`
+2. **Change provider**: `ExecutionProvider.Cpu` (uses system RAM)
+3. **Release other models**: `await otherModel.DisposeAsync()`
+4. **Reduce batch size**: Process smaller amounts of data at once
 
 ### CUDA Out of Memory
 
 ```csharp
-// DirectML로 대체 (Windows)
+// Switch to DirectML (Windows)
 var options = new EmbedderOptions { Provider = ExecutionProvider.DirectML };
 
-// 또는 CPU 사용
+// Or use CPU
 var options = new EmbedderOptions { Provider = ExecutionProvider.Cpu };
 ```
 
-### Memory Leak 의심 시
+### Suspected Memory Leak
 
-모델을 반드시 `DisposeAsync`로 해제하세요:
+Always release models with `DisposeAsync`:
 
 ```csharp
-// ✅ using 문 사용 권장
+// ✅ Prefer the using statement
 await using var model = await LocalEmbedder.LoadAsync("default");
 ```
 
@@ -376,6 +374,6 @@ await using var model = await LocalEmbedder.LoadAsync("default");
 
 ## Related Documentation
 
-- [GPU Providers Guide](GPU_PROVIDERS.md) - GPU 프로바이더 선택
-- [Model Lifecycle Guide](MODEL_LIFECYCLE.md) - 모델 생명주기
-- [Troubleshooting Guide](TROUBLESHOOTING.md) - 문제 해결
+- [GPU Providers Guide](GPU_PROVIDERS.md) - GPU provider selection
+- [Model Lifecycle Guide](MODEL_LIFECYCLE.md) - Model lifecycle management
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Problem resolution

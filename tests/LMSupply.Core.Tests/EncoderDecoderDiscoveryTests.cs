@@ -10,6 +10,7 @@ namespace LMSupply.Core.Tests;
 public class EncoderDecoderDiscoveryTests
 {
     [Fact]
+    [Trait("Category", "Integration")]
     public async Task DiscoverModel_OpusMtKoEn_ShouldDetectEncoderDecoderArchitecture()
     {
         // Arrange - This tests the fix for GitHub Issue #6

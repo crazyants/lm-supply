@@ -87,6 +87,8 @@ var reranker = await LocalReranker.LoadAsync("BAAI/bge-reranker-large");
 
 GGUF reranker models are auto-detected by repo name patterns (`-GGUF`, `_gguf`). LMSupply automatically downloads and manages llama-server binaries for GPU-accelerated inference.
 
+When a GGUF repository contains multiple quantization files, LMSupply selects the **largest quantization that fits in available memory** (VRAM + RAM), automatically choosing the best quality for your hardware.
+
 ```csharp
 using LMSupply.Reranker;
 

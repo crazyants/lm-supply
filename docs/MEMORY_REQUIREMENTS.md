@@ -91,10 +91,18 @@ Generator 모델은 다른 도메인보다 훨씬 큰 메모리를 요구합니�
 | Q3_K_M | ~80% | Noticeable |
 | Q2_K | ~87% | Significant |
 
+**자동 양자화 선택 (v0.16.0+)**:
+
+LMSupply는 GGUF 레포에서 여러 양자화 파일 중 **현재 하드웨어에 맞는 최적 파일을 자동 선택**합니다:
+
+- 사용 가능한 VRAM과 RAM을 측정 (VRAM - 2GB 오버헤드, RAM - 4GB 오버헤드)
+- 메모리에 맞는 파일 중 가장 품질이 높은 양자화를 선택 (Q8 > Q6 > Q5 > Q4 ...)
+- 특정 파일을 직접 지정하려면: `new GeneratorOptions { GgufFileName = "model-Q4_K_M.gguf" }`
+
 **권장 선택**:
-- 💡 **Low Memory (4-8GB)**: `Llama-3.2-1B` or GGUF Q4_K_M
+- 💡 **Low Memory (4-8GB)**: `Llama-3.2-1B` or GGUF Q4_K_M (자동 선택)
 - ⚖️ **Balanced (8-16GB)**: `Phi-3.5-mini` or `Phi-4-mini`
-- 🚀 **Quality (16GB+)**: `Phi-4-mini` ONNX or larger GGUF
+- 🚀 **Quality (16GB+)**: `Phi-4-mini` ONNX or larger GGUF (자동 선택)
 
 ---
 

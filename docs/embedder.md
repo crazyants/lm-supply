@@ -66,6 +66,8 @@ The system automatically discovers the ONNX files in the repository.
 
 GGUF embedding models are auto-detected by repo name patterns (`-GGUF`, `_gguf`) or `.gguf` extension. LMSupply automatically downloads and manages llama-server binaries for GPU-accelerated inference.
 
+When a GGUF repository contains multiple quantization files, LMSupply selects the **largest quantization that fits in available memory** (VRAM + RAM). Only single-file GGUF models are supported for embedding (split multi-part files are excluded).
+
 ```csharp
 using LMSupply.Embedder;
 

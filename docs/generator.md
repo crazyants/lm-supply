@@ -343,8 +343,10 @@ await using var model = await LocalGenerator.LoadAsync(
 
 The system automatically:
 - Detects GGUF repositories by `-GGUF` or `_gguf` suffix in repo name
-- Selects the optimal quantization file (Q4_K_M by default)
+- Selects the optimal quantization file based on available memory (VRAM + RAM), choosing the largest quantization that fits
 - Downloads and caches the model for reuse
+
+> **Hardware-aware selection:** LMSupply measures available VRAM and RAM, then picks the highest-quality quantization (e.g., Q8 over Q4) that fits in memory. Use `GeneratorOptions.GgufFileName` to override with a specific file.
 
 ### GGUF Configuration Options
 

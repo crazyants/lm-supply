@@ -32,6 +32,9 @@ import type {
   VersionInfo,
   UpdateCheckResult,
   UpdateProgress,
+  ApiKeyResponse,
+  ApiKeyCreatedResponse,
+  ApiKeyStats,
 } from './types';
 
 const API_BASE = '/api';
@@ -519,5 +522,33 @@ export const api = {
         }
       }
     }
+  },
+
+  // ─── API Keys ──────────────────────────────────────────────────────────────
+  listApiKeys: async (): Promise<ApiKeyResponse[]> => {
+    const res = await fetch(`${API_BASE}/keys`);
+    if (!res.ok) throw new Error('Failed to list API keys');
+    return res.json();
+  },
+
+  createApiKey: async (name: string): Promise<ApiKeyCreatedResponse> => {
+    const res = await fetch(`${API_BASE}/keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error('Failed to create API key');
+    return res.json();
+  },
+
+  deleteApiKey: async (id: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/keys/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete API key');
+  },
+
+  getApiKeyStats: async (days = 7): Promise<ApiKeyStats> => {
+    const res = await fetch(`${API_BASE}/keys/stats?days=${days}`);
+    if (!res.ok) throw new Error('Failed to fetch API key stats');
+    return res.json();
   },
 };

@@ -451,3 +451,40 @@ export interface UpdateProgress {
   percent: number;
   error?: string;
 }
+
+// ─── API Keys ────────────────────────────────────────────────────────────────
+
+export interface ApiKeyResponse {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  totalRequests: number;
+}
+
+export interface ApiKeyCreatedResponse {
+  id: string;
+  name: string;
+  key: string;          // full key — shown once
+  keyPrefix: string;
+  createdAt: string;
+}
+
+export interface RequestsByDay {
+  date: string;
+  count: number;
+}
+
+export interface RequestsByEndpoint {
+  path: string;
+  count: number;
+}
+
+export interface ApiKeyStats {
+  totalRequests: number;
+  errorRate: number;
+  avgDurationMs: number;
+  requestsByDay: RequestsByDay[];
+  requestsByEndpoint: RequestsByEndpoint[];
+}

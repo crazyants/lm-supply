@@ -14,6 +14,7 @@ namespace LMSupply.Ocr.Recognition;
 internal sealed class CrnnRecognizer : IDisposable
 {
     private readonly InferenceSession _session;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly RecognitionModelInfo _modelInfo;
     private readonly CharacterDictionary _dictionary;
     private readonly float _confidenceThreshold;
@@ -131,8 +132,16 @@ internal sealed class CrnnRecognizer : IDisposable
             {
                 NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
             };
-            var results = _session.Run(inputs);
-            return ExtractLogits(results[0].AsTensor<float>());
+            _sessionLock.Wait(cancellationToken);
+            try
+            {
+                var results = _session.Run(inputs);
+                return ExtractLogits(results[0].AsTensor<float>());
+            }
+            finally
+            {
+                _sessionLock.Release();
+            }
         }, cancellationToken).ConfigureAwait(false);
 
         // CTC decode
@@ -235,6 +244,7 @@ internal sealed class CrnnRecognizer : IDisposable
     {
         if (_disposed) return;
         _session.Dispose();
+        _sessionLock.Dispose();
         _disposed = true;
     }
 }

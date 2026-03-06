@@ -11,6 +11,7 @@ namespace LMSupply.ImageGenerator.Pipeline;
 internal sealed class VaeDecoder : IAsyncDisposable
 {
     private readonly InferenceSession _session;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly string _inputName;
     private readonly string _outputName;
     private readonly float _scalingFactor;
@@ -72,11 +73,19 @@ internal sealed class VaeDecoder : IAsyncDisposable
 
         var imageBytes = await Task.Run(() =>
         {
-            using var outputs = _session.Run(inputs);
-            var output = outputs[0];
+            _sessionLock.Wait(cancellationToken);
+            try
+            {
+                using var outputs = _session.Run(inputs);
+                var output = outputs[0];
 
-            var outputTensor = output.AsTensor<float>();
-            return TensorToImage(outputTensor);
+                var outputTensor = output.AsTensor<float>();
+                return TensorToImage(outputTensor);
+            }
+            finally
+            {
+                _sessionLock.Release();
+            }
         }, cancellationToken);
 
         return imageBytes;
@@ -166,6 +175,7 @@ internal sealed class VaeDecoder : IAsyncDisposable
         _disposed = true;
 
         _session.Dispose();
+        _sessionLock.Dispose();
         return ValueTask.CompletedTask;
     }
 }

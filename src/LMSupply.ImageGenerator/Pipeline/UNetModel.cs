@@ -9,6 +9,7 @@ namespace LMSupply.ImageGenerator.Pipeline;
 internal sealed class UNetModel : IAsyncDisposable
 {
     private readonly InferenceSession _session;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly string _sampleInput;
     private readonly string _timestepInput;
     private readonly string _encoderHiddenStatesInput;
@@ -127,14 +128,22 @@ internal sealed class UNetModel : IAsyncDisposable
 
         var result = await Task.Run(() =>
         {
-            using var outputs = _session.Run(inputs);
-            var output = outputs[0];
+            _sessionLock.Wait(cancellationToken);
+            try
+            {
+                using var outputs = _session.Run(inputs);
+                var output = outputs[0];
 
-            var outputTensor = output.AsTensor<float>();
-            var dims = outputTensor.Dimensions.ToArray();
-            var data = outputTensor.ToArray();
+                var outputTensor = output.AsTensor<float>();
+                var dims = outputTensor.Dimensions.ToArray();
+                var data = outputTensor.ToArray();
 
-            return new DenseTensor<float>(data, dims);
+                return new DenseTensor<float>(data, dims);
+            }
+            finally
+            {
+                _sessionLock.Release();
+            }
         }, cancellationToken);
 
         return result;
@@ -190,6 +199,7 @@ internal sealed class UNetModel : IAsyncDisposable
         _disposed = true;
 
         _session.Dispose();
+        _sessionLock.Dispose();
         return ValueTask.CompletedTask;
     }
 }

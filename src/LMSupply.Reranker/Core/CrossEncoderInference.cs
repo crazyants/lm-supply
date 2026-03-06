@@ -15,6 +15,7 @@ internal sealed class CrossEncoderInference : IDisposable
     private static readonly string[] s_cpuProvider = ["CPUExecutionProvider"];
 
     private readonly InferenceSession _session;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly string[] _inputNames;
     private readonly string _outputName;
     private readonly OutputShape _outputShape;
@@ -212,6 +213,7 @@ internal sealed class CrossEncoderInference : IDisposable
             inputs.Add(NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIds));
         }
 
+        _sessionLock.Wait();
         try
         {
             using var results = _session.Run(inputs);
@@ -222,6 +224,10 @@ internal sealed class CrossEncoderInference : IDisposable
         catch (Exception ex)
         {
             throw new InferenceException("Model inference failed", ex);
+        }
+        finally
+        {
+            _sessionLock.Release();
         }
     }
 
@@ -247,6 +253,7 @@ internal sealed class CrossEncoderInference : IDisposable
             inputs.Add(NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIds));
         }
 
+        _sessionLock.Wait();
         try
         {
             using var results = _session.Run(inputs);
@@ -257,6 +264,10 @@ internal sealed class CrossEncoderInference : IDisposable
         catch (Exception ex)
         {
             throw new InferenceException("Model inference failed", ex);
+        }
+        finally
+        {
+            _sessionLock.Release();
         }
     }
 
@@ -322,6 +333,7 @@ internal sealed class CrossEncoderInference : IDisposable
     {
         if (_disposed) return;
         _session.Dispose();
+        _sessionLock.Dispose();
         _disposed = true;
     }
 }

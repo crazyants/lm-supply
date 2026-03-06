@@ -15,6 +15,7 @@ namespace LMSupply.Ocr.Detection;
 internal sealed class DbNetDetector : IDisposable
 {
     private readonly InferenceSession _session;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly DetectionModelInfo _modelInfo;
     private readonly DbNetPostProcessor _postProcessor;
     private readonly string _inputName;
@@ -110,7 +111,15 @@ internal sealed class DbNetDetector : IDisposable
             {
                 NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
             };
-            return _session.Run(inputs);
+            _sessionLock.Wait(cancellationToken);
+            try
+            {
+                return _session.Run(inputs);
+            }
+            finally
+            {
+                _sessionLock.Release();
+            }
         }, cancellationToken).ConfigureAwait(false);
 
         // Get output tensor
@@ -257,6 +266,7 @@ internal sealed class DbNetDetector : IDisposable
     {
         if (_disposed) return;
         _session.Dispose();
+        _sessionLock.Dispose();
         _disposed = true;
     }
 }

@@ -14,7 +14,7 @@ internal sealed class OnnxInferenceEngine : IDisposable
     private readonly bool _hasTokenTypeIds;
     private readonly string _outputName;
     private readonly bool _isGpuProvider;
-    private readonly object _sessionLock = new();
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
     public int HiddenSize { get; }
 
@@ -180,23 +180,31 @@ internal sealed class OnnxInferenceEngine : IDisposable
             inputs.Add(NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIdsTensor));
         }
 
-        // Run inference
-        using var results = _session.Run(inputs);
-        var output = results[0].AsTensor<float>();
-
-        // Output shape: [1, seqLength, hiddenSize]
-        // Copy to flat array
-        var outputArray = new float[seqLength * HiddenSize];
-        int idx = 0;
-        for (int seq = 0; seq < seqLength; seq++)
+        // Serialize access to InferenceSession (not thread-safe for concurrent Run calls)
+        _sessionLock.Wait();
+        try
         {
-            for (int dim = 0; dim < HiddenSize; dim++)
-            {
-                outputArray[idx++] = output[0, seq, dim];
-            }
-        }
+            using var results = _session.Run(inputs);
+            var output = results[0].AsTensor<float>();
 
-        return outputArray;
+            // Output shape: [1, seqLength, hiddenSize]
+            // Copy to flat array
+            var outputArray = new float[seqLength * HiddenSize];
+            int idx = 0;
+            for (int seq = 0; seq < seqLength; seq++)
+            {
+                for (int dim = 0; dim < HiddenSize; dim++)
+                {
+                    outputArray[idx++] = output[0, seq, dim];
+                }
+            }
+
+            return outputArray;
+        }
+        finally
+        {
+            _sessionLock.Release();
+        }
     }
 
     /// <summary>
@@ -216,36 +224,17 @@ internal sealed class OnnxInferenceEngine : IDisposable
     }
 
     /// <summary>
-    /// Runs batch inference with parallel processing for CPU-bound workloads.
-    /// GPU providers use sequential processing since ONNX Runtime sessions are not thread-safe
-    /// for GPU execution providers like DirectML and CUDA.
+    /// Runs batch inference sequentially. InferenceSession is not thread-safe for concurrent
+    /// Run() calls, so all batch items are processed serially under the session lock.
     /// </summary>
     public float[][] RunBatchInferenceParallel(long[][] inputIds, long[][] attentionMasks)
     {
         int batchSize = inputIds.Length;
         var results = new float[batchSize][];
 
-        // GPU providers: use sequential processing (session is not thread-safe for GPU)
-        // CPU provider with small batches: also use sequential (avoid parallel overhead)
-        if (_isGpuProvider || batchSize <= 4)
+        for (int i = 0; i < batchSize; i++)
         {
-            for (int i = 0; i < batchSize; i++)
-            {
-                results[i] = RunInference(inputIds[i], attentionMasks[i]);
-            }
-        }
-        else
-        {
-            // CPU provider with large batches: use parallel processing
-            var parallelOptions = new ParallelOptions
-            {
-                MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, batchSize)
-            };
-
-            Parallel.For(0, batchSize, parallelOptions, i =>
-            {
-                results[i] = RunInference(inputIds[i], attentionMasks[i]);
-            });
+            results[i] = RunInference(inputIds[i], attentionMasks[i]);
         }
 
         return results;
@@ -254,5 +243,6 @@ internal sealed class OnnxInferenceEngine : IDisposable
     public void Dispose()
     {
         _session?.Dispose();
+        _sessionLock.Dispose();
     }
 }

@@ -11,6 +11,7 @@ namespace LMSupply.ImageGenerator.Encoders;
 internal sealed class ClipTextEncoder : IAsyncDisposable
 {
     private readonly InferenceSession _session;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly ClipTokenizer _tokenizer;
     private readonly string _inputName;
     private readonly string _outputName;
@@ -105,15 +106,23 @@ internal sealed class ClipTextEncoder : IAsyncDisposable
 
         var result = await Task.Run(() =>
         {
-            using var outputs = _session.Run(inputs);
-            var output = outputs[0];
+            _sessionLock.Wait(cancellationToken);
+            try
+            {
+                using var outputs = _session.Run(inputs);
+                var output = outputs[0];
 
-            // Copy to our own tensor
-            var outputTensor = output.AsTensor<float>();
-            var dims = outputTensor.Dimensions.ToArray();
-            var data = outputTensor.ToArray();
+                // Copy to our own tensor
+                var outputTensor = output.AsTensor<float>();
+                var dims = outputTensor.Dimensions.ToArray();
+                var data = outputTensor.ToArray();
 
-            return new DenseTensor<float>(data, dims);
+                return new DenseTensor<float>(data, dims);
+            }
+            finally
+            {
+                _sessionLock.Release();
+            }
         }, cancellationToken);
 
         return result;
@@ -159,14 +168,22 @@ internal sealed class ClipTextEncoder : IAsyncDisposable
 
         var result = await Task.Run(() =>
         {
-            using var outputs = _session.Run(inputs);
-            var output = outputs[0];
+            _sessionLock.Wait(cancellationToken);
+            try
+            {
+                using var outputs = _session.Run(inputs);
+                var output = outputs[0];
 
-            var outputTensor = output.AsTensor<float>();
-            var dims = outputTensor.Dimensions.ToArray();
-            var data = outputTensor.ToArray();
+                var outputTensor = output.AsTensor<float>();
+                var dims = outputTensor.Dimensions.ToArray();
+                var data = outputTensor.ToArray();
 
-            return new DenseTensor<float>(data, dims);
+                return new DenseTensor<float>(data, dims);
+            }
+            finally
+            {
+                _sessionLock.Release();
+            }
         }, cancellationToken);
 
         return result;
@@ -205,6 +222,7 @@ internal sealed class ClipTextEncoder : IAsyncDisposable
 
         _tokenizer.Dispose();
         _session.Dispose();
+        _sessionLock.Dispose();
 
         await Task.CompletedTask;
     }

@@ -50,7 +50,14 @@ public static class ChatEndpoints
                         MaxTokens = maxTokens,
                         Temperature = request.Temperature ?? 0.7f,
                         TopP = request.TopP ?? 0.9f,
-                        StopSequences = request.Stop?.ToList()
+                        FrequencyPenalty = request.FrequencyPenalty ?? 0f,
+                        PresencePenalty = request.PresencePenalty ?? 0f,
+                        Seed = request.Seed ?? -1,
+                        StopSequences = request.Stop?.ToList(),
+                        JsonSchema = request.ResponseFormat?.Type == "json_schema" &&
+                                     request.ResponseFormat.JsonSchema?.Schema.HasValue == true
+                            ? System.Text.Json.JsonSerializer.Serialize(request.ResponseFormat.JsonSchema.Schema.Value)
+                            : null
                     };
 
                     var tokens = scope.Model.GenerateChatAsync(messages, options, ct);
@@ -81,7 +88,14 @@ public static class ChatEndpoints
                     MaxTokens = maxTokens,
                     Temperature = request.Temperature ?? 0.7f,
                     TopP = request.TopP ?? 0.9f,
-                    StopSequences = request.Stop?.ToList()
+                    FrequencyPenalty = request.FrequencyPenalty ?? 0f,
+                    PresencePenalty = request.PresencePenalty ?? 0f,
+                    Seed = request.Seed ?? -1,
+                    StopSequences = request.Stop?.ToList(),
+                    JsonSchema = request.ResponseFormat?.Type == "json_schema" &&
+                                 request.ResponseFormat.JsonSchema?.Schema.HasValue == true
+                        ? System.Text.Json.JsonSerializer.Serialize(request.ResponseFormat.JsonSchema.Schema.Value)
+                        : null
                 };
 
                 var id = ApiHelper.GenerateId("chatcmpl");

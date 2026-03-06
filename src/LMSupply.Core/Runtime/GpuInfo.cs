@@ -21,6 +21,18 @@ public sealed record GpuInfo
     public long? TotalMemoryBytes { get; init; }
 
     /// <summary>
+    /// Gets the free (available) GPU memory in bytes at detection time, if available.
+    /// Only populated when NVML is available (NVIDIA GPUs).
+    /// </summary>
+    public long? FreeMemoryBytes { get; init; }
+
+    /// <summary>
+    /// Gets the best estimate of available VRAM for model loading.
+    /// Returns FreeMemoryBytes if detected, otherwise TotalMemoryBytes.
+    /// </summary>
+    public long? EffectiveAvailableBytes => FreeMemoryBytes ?? TotalMemoryBytes;
+
+    /// <summary>
     /// Gets the CUDA compute capability major version (NVIDIA only).
     /// </summary>
     public int? CudaComputeCapabilityMajor { get; init; }

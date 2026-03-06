@@ -248,6 +248,108 @@ public class GgufFileSelectorTests
         memory.RamBytes.Should().BeGreaterThan(0);
     }
 
+    // ─── KV Cache 예산 포함 테스트 ───
+
+    [Theory]
+    [InlineData(1L * 1024 * 1024 * 1024, 4096)]   // 1GB file, 4K context
+    [InlineData(3L * 1024 * 1024 * 1024, 4096)]   // 3GB file
+    [InlineData(8L * 1024 * 1024 * 1024, 4096)]   // 8GB file
+    [InlineData(15L * 1024 * 1024 * 1024, 4096)]  // 15GB file
+    public void EstimateKvCacheBytes_ReturnsPositive(long fileSize, int contextLength)
+    {
+        var kvCache = AvailableMemory.EstimateKvCacheBytes(fileSize, contextLength);
+        kvCache.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void EstimateKvCacheBytes_ScalesWithContext()
+    {
+        var fileSize = 5L * 1024 * 1024 * 1024;
+        var kv4k = AvailableMemory.EstimateKvCacheBytes(fileSize, 4096);
+        var kv8k = AvailableMemory.EstimateKvCacheBytes(fileSize, 8192);
+
+        kv8k.Should().Be(kv4k * 2, "KV cache scales linearly with context length");
+    }
+
+    [Fact]
+    public void EstimateKvCacheBytes_LargerModels_HaveLargerKvCache()
+    {
+        var kvSmall = AvailableMemory.EstimateKvCacheBytes(1L * 1024 * 1024 * 1024, 4096);
+        var kvLarge = AvailableMemory.EstimateKvCacheBytes(15L * 1024 * 1024 * 1024, 4096);
+
+        kvLarge.Should().BeGreaterThan(kvSmall);
+    }
+
+    [Fact]
+    public void FitsInGpu_WithKvCache_TighterBudget()
+    {
+        // With KV cache budget, a file that previously fit may no longer fit
+        // 1GB file with overhead: 1.1GB model + KV cache
+        var memory = new AvailableMemory(
+            VramBytes: 4L * 1024 * 1024 * 1024,  // 4GB VRAM (usable: 2GB)
+            RamBytes: 16L * 1024 * 1024 * 1024);
+        var fileSize = 1L * 1024 * 1024 * 1024;
+
+        var kvCache = AvailableMemory.EstimateKvCacheBytes(fileSize, 4096);
+        var totalNeeded = (long)(fileSize * 1.1) + kvCache;
+
+        // Verify KV cache is non-trivial
+        kvCache.Should().BeGreaterThan(0);
+
+        // FitsInGpu result should depend on total (model + KV cache) vs usable VRAM
+        var fits = memory.FitsInGpu(fileSize);
+        fits.Should().Be(totalNeeded <= memory.UsableVramBytes);
+    }
+
+    [Fact]
+    public void FitsInMemory_ContextLength_AffectsBudget()
+    {
+        // Larger context → larger KV cache → harder to fit
+        var smallContextMem = new AvailableMemory(
+            VramBytes: 0, RamBytes: 8L * 1024 * 1024 * 1024, ContextLength: 4096);
+        var largeContextMem = new AvailableMemory(
+            VramBytes: 0, RamBytes: 8L * 1024 * 1024 * 1024, ContextLength: 32768);
+
+        var fileSize = 3L * 1024 * 1024 * 1024;
+
+        // With 8x context, same file may not fit
+        var fitsSmall = smallContextMem.FitsInMemory(fileSize);
+        var fitsLarge = largeContextMem.FitsInMemory(fileSize);
+
+        // If small fits but large doesn't, the KV cache budget is working
+        // At minimum, large context should be harder to fit
+        if (fitsSmall)
+            fitsLarge.Should().BeFalse("32K context on 3GB model exceeds 4GB usable RAM");
+    }
+
+    [Fact]
+    public void Select_LargeContext_ReducesAvailableOptions()
+    {
+        // With 32K context, KV cache is huge → fewer files fit
+        var memorySmallCtx = new AvailableMemory(
+            VramBytes: 0,
+            RamBytes: 20L * 1024 * 1024 * 1024,   // 20GB RAM, usable 16GB
+            ContextLength: 4096);
+
+        var memoryLargeCtx = new AvailableMemory(
+            VramBytes: 0,
+            RamBytes: 20L * 1024 * 1024 * 1024,   // same RAM
+            ContextLength: 32768);                  // 8x context
+
+        var groups = new[]
+        {
+            MakeGroup("model-Q2_K.gguf", 1L * 1024 * 1024 * 1024),
+            MakeGroup("model-Q4_K_M.gguf", 3L * 1024 * 1024 * 1024),
+            MakeGroup("model-Q8_0.gguf", 8L * 1024 * 1024 * 1024),
+        };
+
+        var fittingSmall = groups.Count(g => memorySmallCtx.FitsInMemory(g.TotalSizeBytes));
+        var fittingLarge = groups.Count(g => memoryLargeCtx.FitsInMemory(g.TotalSizeBytes));
+
+        fittingLarge.Should().BeLessThanOrEqualTo(fittingSmall,
+            "larger context should fit fewer or equal models");
+    }
+
     // ─── 헬퍼 ───
 
     private static GgufFileGroup MakeGroup(string filename, long sizeBytes) =>

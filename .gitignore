@@ -46,6 +46,7 @@ local-docs/
 local-tests/
 nul
 test-files/
+publish-test/
 
 # Local test samples (not for distribution)
 samples/Gemma3Test/

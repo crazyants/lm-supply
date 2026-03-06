@@ -375,10 +375,12 @@ internal static class NvmlDetector
 
             // Get memory info
             long? totalMemory = null;
+            long? freeMemory = null;
             if (_nvmlGetMemoryInfo is not null &&
                 _nvmlGetMemoryInfo(device, out var memoryInfo) == NVML_SUCCESS)
             {
                 totalMemory = (long)memoryInfo.total;
+                freeMemory = (long)memoryInfo.free;
             }
 
             // Get compute capability
@@ -395,6 +397,7 @@ internal static class NvmlDetector
                 Vendor = GpuVendor.Nvidia,
                 DeviceName = deviceName,
                 TotalMemoryBytes = totalMemory,
+                FreeMemoryBytes = freeMemory,
                 CudaComputeCapabilityMajor = ccMajor,
                 CudaComputeCapabilityMinor = ccMinor
             };

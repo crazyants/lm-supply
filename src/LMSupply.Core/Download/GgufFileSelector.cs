@@ -5,7 +5,8 @@ namespace LMSupply.Core.Download;
 /// </summary>
 /// <param name="VramBytes">GPU VRAM in bytes (0 for CPU-only systems).</param>
 /// <param name="RamBytes">System RAM in bytes.</param>
-public record AvailableMemory(long VramBytes, long RamBytes)
+/// <param name="ContextLength">Expected inference context length for KV cache estimation (default 4096).</param>
+public record AvailableMemory(long VramBytes, long RamBytes, int ContextLength = 4096)
 {
     // Reserve 2GB for GPU driver and system overhead
     private const long GpuOverheadBytes = 2L * 1024 * 1024 * 1024;
@@ -24,17 +25,46 @@ public record AvailableMemory(long VramBytes, long RamBytes)
     public long TotalUsableBytes => UsableVramBytes + UsableRamBytes;
 
     /// <summary>
-    /// Returns true if the file fits entirely in GPU VRAM (enables full GPU offload = fastest).
+    /// Estimates KV cache memory from model file size and context length.
+    /// Uses rough heuristics when exact model parameters are unknown.
+    /// Formula: contextLength × estimatedHiddenSize × 2 (K+V) × estimatedLayers × 2 (FP16 bytes)
     /// </summary>
-    public bool FitsInGpu(long fileSizeBytes) =>
-        VramBytes > 0 && (long)(fileSizeBytes * RuntimeOverheadFactor) <= UsableVramBytes;
+    public static long EstimateKvCacheBytes(long fileSizeBytes, int contextLength)
+    {
+        var estimatedHiddenSize = fileSizeBytes switch
+        {
+            < 2L * 1024 * 1024 * 1024 => 2048,
+            < 5L * 1024 * 1024 * 1024 => 3072,
+            < 10L * 1024 * 1024 * 1024 => 4096,
+            _ => 5120
+        };
+        var estimatedLayers = fileSizeBytes switch
+        {
+            < 2L * 1024 * 1024 * 1024 => 22,
+            < 5L * 1024 * 1024 * 1024 => 28,
+            < 10L * 1024 * 1024 * 1024 => 32,
+            _ => 40
+        };
+        return (long)contextLength * estimatedHiddenSize * 2 * estimatedLayers * 2;
+    }
 
     /// <summary>
-    /// Returns true if the file fits in total available memory (GPU + RAM).
-    /// Covers CPU-only, full-GPU, and partial GPU offload scenarios.
+    /// Returns true if the model + KV cache fits entirely in GPU VRAM.
     /// </summary>
-    public bool FitsInMemory(long fileSizeBytes) =>
-        (long)(fileSizeBytes * RuntimeOverheadFactor) <= TotalUsableBytes;
+    public bool FitsInGpu(long fileSizeBytes)
+    {
+        var total = (long)(fileSizeBytes * RuntimeOverheadFactor) + EstimateKvCacheBytes(fileSizeBytes, ContextLength);
+        return VramBytes > 0 && total <= UsableVramBytes;
+    }
+
+    /// <summary>
+    /// Returns true if the model + KV cache fits in total available memory (GPU + RAM).
+    /// </summary>
+    public bool FitsInMemory(long fileSizeBytes)
+    {
+        var total = (long)(fileSizeBytes * RuntimeOverheadFactor) + EstimateKvCacheBytes(fileSizeBytes, ContextLength);
+        return total <= TotalUsableBytes;
+    }
 }
 
 /// <summary>
@@ -118,8 +148,9 @@ public static class GgufFileSelector
     /// <summary>
     /// Creates an AvailableMemory instance from a HardwareProfile.
     /// </summary>
-    public static AvailableMemory FromHardwareProfile(Hardware.HardwareProfile profile) =>
+    public static AvailableMemory FromHardwareProfile(Hardware.HardwareProfile profile, int contextLength = 4096) =>
         new(
-            VramBytes: profile.GpuInfo.TotalMemoryBytes ?? 0,
-            RamBytes: profile.SystemMemoryBytes);
+            VramBytes: profile.GpuInfo.EffectiveAvailableBytes ?? 0,
+            RamBytes: profile.SystemMemoryBytes,
+            ContextLength: contextLength);
 }

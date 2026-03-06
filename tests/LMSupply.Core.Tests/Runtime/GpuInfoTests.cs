@@ -235,6 +235,62 @@ public class GpuInfoTests
     }
 }
 
+public class GpuInfoEffectiveMemoryTests
+{
+    [Fact]
+    public void EffectiveAvailableBytes_ReturnsFree_WhenBothAvailable()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 6L * 1024 * 1024 * 1024
+        };
+
+        gpu.EffectiveAvailableBytes.Should().Be(6L * 1024 * 1024 * 1024);
+    }
+
+    [Fact]
+    public void EffectiveAvailableBytes_FallsBackToTotal_WhenFreeIsNull()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = null
+        };
+
+        gpu.EffectiveAvailableBytes.Should().Be(8L * 1024 * 1024 * 1024);
+    }
+
+    [Fact]
+    public void EffectiveAvailableBytes_IsNull_WhenBothNull()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Unknown,
+            TotalMemoryBytes = null,
+            FreeMemoryBytes = null
+        };
+
+        gpu.EffectiveAvailableBytes.Should().BeNull();
+    }
+
+    [Fact]
+    public void FreeMemoryBytes_PreferredOverTotal_EvenWhenSmaller()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 2L * 1024 * 1024 * 1024  // Most VRAM in use
+        };
+
+        // EffectiveAvailableBytes should reflect reality (free), not capacity (total)
+        gpu.EffectiveAvailableBytes.Should().Be(2L * 1024 * 1024 * 1024);
+    }
+}
+
 public class GpuVendorEnumTests
 {
     [Fact]

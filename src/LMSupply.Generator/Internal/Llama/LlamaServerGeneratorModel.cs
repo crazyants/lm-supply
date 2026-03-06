@@ -107,6 +107,57 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         var llamaOpts = options.LlamaOptions ?? LlamaOptions.GetOptimalForHardware();
         var contextLength = options.MaxContextLength ?? 4096;
 
+        // Auto-calculate GPU layer count based on actual VRAM budget when using default (-1 = all)
+        if (llamaOpts.GpuLayerCount == -1 && backend != LlamaServerBackend.Cpu)
+        {
+            var fileSize = new FileInfo(modelPath).Length;
+            var profile = Hardware.HardwareProfile.Current;
+            var estimate = MemoryEstimator.EstimateForGguf(
+                fileSize,
+                contextLength,
+                availableVramBytes: profile.GpuInfo.EffectiveAvailableBytes,
+                availableRamBytes: profile.SystemMemoryBytes);
+
+            if (!estimate.CanFitInVram && estimate.RecommendedGpuLayers < estimate.TotalLayers)
+            {
+                llamaOpts = new LlamaOptions
+                {
+                    GpuLayerCount = estimate.RecommendedGpuLayers,
+                    BatchSize = llamaOpts.BatchSize,
+                    UBatchSize = llamaOpts.UBatchSize,
+                    FlashAttention = llamaOpts.FlashAttention,
+                    UseMemoryMap = llamaOpts.UseMemoryMap,
+                    UseMemoryLock = llamaOpts.UseMemoryLock,
+                    TypeK = llamaOpts.TypeK,
+                    TypeV = llamaOpts.TypeV,
+                    MainGpu = llamaOpts.MainGpu,
+                    Threads = llamaOpts.Threads,
+                    RopeFrequencyBase = llamaOpts.RopeFrequencyBase,
+                    RopeFrequencyScale = llamaOpts.RopeFrequencyScale,
+                    MultimodalProjector = llamaOpts.MultimodalProjector,
+                    LoraPath = llamaOpts.LoraPath,
+                    LoraScale = llamaOpts.LoraScale,
+                };
+                Trace.TraceInformation(
+                    $"[LlamaServerGeneratorModel] Auto partial offload: " +
+                    $"{estimate.RecommendedGpuLayers}/{estimate.TotalLayers} layers on GPU " +
+                    $"(VRAM: {estimate.EstimatedVramBytes / (1024.0 * 1024 * 1024):F1}GB, " +
+                    $"RAM: {estimate.EstimatedRamBytes / (1024.0 * 1024 * 1024):F1}GB)");
+            }
+        }
+
+        // Auto-cap context length based on remaining VRAM after model load
+        if (backend != LlamaServerBackend.Cpu)
+        {
+            var safeContext = EstimateSafeContextLength(modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1);
+            if (safeContext < contextLength)
+            {
+                Trace.TraceInformation(
+                    $"[LlamaServerGeneratorModel] Context capped: {contextLength} → {safeContext} (VRAM budget)");
+                contextLength = safeContext;
+            }
+        }
+
         // Build additional arguments
         var additionalArgs = new List<string>();
         if (llamaOpts.Threads.HasValue)
@@ -146,13 +197,35 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             AdditionalArgs = additionalArgs.Count > 0 ? additionalArgs : null
         };
 
-        // 4. Lease server from pool (reuses existing server if available)
-        var serverLease = await LlamaServerPool.Instance.LeaseAsync(
-            serverPath,
-            serverConfig,
-            backend,
-            progress,
-            cancellationToken);
+        // 4. Lease server from pool with OOM retry (reduces GPU layers on failure)
+        ServerLease serverLease;
+        var currentGpuLayers = serverConfig.GpuLayers;
+
+        while (true)
+        {
+            try
+            {
+                serverLease = await LlamaServerPool.Instance.LeaseAsync(
+                    serverPath,
+                    serverConfig,
+                    backend,
+                    progress,
+                    cancellationToken);
+                break; // Success
+            }
+            catch (Exception ex) when (IsOomError(ex) && currentGpuLayers > 0)
+            {
+                // Reduce GPU layers by ~25% (minimum 1 layer reduction)
+                var reduction = Math.Max(1, currentGpuLayers / 4);
+                currentGpuLayers -= reduction;
+
+                Trace.TraceInformation(
+                    $"[LlamaServerGeneratorModel] OOM detected, retrying with {currentGpuLayers} GPU layers " +
+                    $"(was {serverConfig.GpuLayers}): {ex.Message}");
+
+                serverConfig = CloneConfigWithGpuLayers(serverConfig, currentGpuLayers);
+            }
+        }
 
         progress?.Report(new DownloadProgress
         {
@@ -515,6 +588,89 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         // Legacy HD Graphics - fall back to CPU
         // HD Graphics 4000, 5000, 6000 are too old for good Vulkan performance
         return false;
+    }
+
+    /// <summary>
+    /// Estimates the maximum safe context length based on VRAM remaining after model weights.
+    /// Returns the original requestedContext if it fits, otherwise a capped value.
+    /// </summary>
+    internal static int EstimateSafeContextLength(string modelPath, int requestedContext, int gpuLayerCount)
+    {
+        var profile = Hardware.HardwareProfile.Current;
+        var availableVram = profile.GpuInfo.EffectiveAvailableBytes ?? 0;
+        if (availableVram <= 0 || gpuLayerCount == 0)
+            return requestedContext; // CPU-only, no VRAM constraint
+
+        var modelFileSize = new FileInfo(modelPath).Length;
+        var modelMemory = (long)(modelFileSize * 1.1);
+        const long vramBuffer = 512L * 1024 * 1024; // 500MB safety buffer
+        var remainingVram = Math.Max(0, availableVram - modelMemory - vramBuffer);
+
+        // KV cache per token ≈ 2(K+V) × layers × hiddenSize × 2(FP16 bytes)
+        var kvBytesPerToken = Core.Download.AvailableMemory.EstimateKvCacheBytes(modelFileSize, 1);
+        if (kvBytesPerToken <= 0)
+            return requestedContext;
+
+        var safeContext = (int)(remainingVram / kvBytesPerToken);
+        safeContext = Math.Max(512, safeContext); // minimum 512 tokens
+
+        return Math.Min(requestedContext, safeContext);
+    }
+
+    /// <summary>
+    /// Creates a copy of a LlamaServerConfig with a different GpuLayers value.
+    /// </summary>
+    private static LlamaServerConfig CloneConfigWithGpuLayers(LlamaServerConfig source, int gpuLayers) => new()
+    {
+        ModelPath = source.ModelPath,
+        Port = source.Port,
+        ContextSize = source.ContextSize,
+        GpuLayers = gpuLayers,
+        BatchSize = source.BatchSize,
+        UBatchSize = source.UBatchSize,
+        Parallel = source.Parallel,
+        FlashAttention = source.FlashAttention,
+        CacheTypeK = source.CacheTypeK,
+        CacheTypeV = source.CacheTypeV,
+        UseMemoryMap = source.UseMemoryMap,
+        UseMemoryLock = source.UseMemoryLock,
+        MainGpu = source.MainGpu,
+        RopeFreqBase = source.RopeFreqBase,
+        RopeFreqScale = source.RopeFreqScale,
+        MultimodalProjector = source.MultimodalProjector,
+        LoraPath = source.LoraPath,
+        LoraScale = source.LoraScale,
+        Mode = source.Mode,
+        Pooling = source.Pooling,
+        StartupTimeout = source.StartupTimeout,
+        ShutdownTimeout = source.ShutdownTimeout,
+        AdditionalArgs = source.AdditionalArgs
+    };
+
+    /// <summary>
+    /// Checks if an exception is an out-of-memory error from the GPU runtime.
+    /// </summary>
+    internal static bool IsOomError(Exception ex)
+    {
+        var msg = ex.Message;
+        return msg.Contains("out of memory", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("CUDA_ERROR_OUT_OF_MEMORY", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Could not allocate")
+            || msg.Contains("ggml_backend_cuda_buffer_type_alloc_buffer");
+    }
+
+    /// <summary>
+    /// Estimates total layer count from GGUF file size when metadata is not available.
+    /// </summary>
+    internal static int EstimateTotalLayers(long fileSizeBytes)
+    {
+        return fileSizeBytes switch
+        {
+            < 2L * 1024 * 1024 * 1024 => 22,
+            < 5L * 1024 * 1024 * 1024 => 28,
+            < 10L * 1024 * 1024 * 1024 => 32,
+            _ => 40
+        };
     }
 
     private void ThrowIfDisposed()

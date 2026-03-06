@@ -155,7 +155,9 @@ public sealed partial class UpdateService
                 ?? throw new InvalidOperationException("Cannot determine current executable path");
             var currentDir = Path.GetDirectoryName(currentExePath)!;
             var currentPid = Environment.ProcessId;
+            // CLI 커맨드 arg("update" 등)는 재시작 시 전달하지 않음 — 새 프로세스는 항상 서버 모드로 시작
             var userArgs = string.Join(" ", Environment.GetCommandLineArgs().Skip(1)
+                .Where(a => !a.Equals("update", StringComparison.OrdinalIgnoreCase))
                 .Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
 
             if (OperatingSystem.IsWindows())

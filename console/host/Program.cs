@@ -6,6 +6,13 @@ using LMSupply.Console.Host.Endpoints;
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Services;
 
+// CLI mode: lm-supply.exe update
+if (args.Length > 0 && args[0].Equals("update", StringComparison.OrdinalIgnoreCase))
+{
+    await RunCliUpdateAsync();
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Kestrel 설정 - 대용량 파일 업로드 허용 (최대 500MB)
@@ -140,3 +147,60 @@ app.MapFallback(context =>
 });
 
 app.Run();
+
+static async Task RunCliUpdateAsync()
+{
+    using var host = Host.CreateDefaultBuilder()
+        .ConfigureLogging(l => l.ClearProviders().AddConsole().SetMinimumLevel(LogLevel.Warning))
+        .ConfigureServices(s => s.AddSingleton<UpdateService>())
+        .Build();
+
+    await host.StartAsync();
+    var updateService = host.Services.GetRequiredService<UpdateService>();
+
+    Console.WriteLine($"LMSupply Console v{updateService.CurrentVersion} ({updateService.CurrentRid})");
+
+    var check = await updateService.CheckForUpdateAsync();
+    if (!check.UpdateAvailable)
+    {
+        Console.WriteLine(check.Error is not null
+            ? $"Update check failed: {check.Error}"
+            : $"Already up to date (v{check.CurrentVersion})");
+        await host.StopAsync();
+        return;
+    }
+
+    Console.WriteLine($"Update available: v{check.CurrentVersion} → v{check.LatestVersion}");
+
+    var lastPercent = -1;
+    await foreach (var progress in updateService.ApplyUpdateAsync())
+    {
+        switch (progress.Status)
+        {
+            case "Downloading":
+                if (progress.Percent != lastPercent)
+                {
+                    Console.Write($"\rDownloading... {progress.Percent}%   ");
+                    lastPercent = progress.Percent;
+                }
+                break;
+            case "Extracting":
+                Console.WriteLine("\nExtracting...");
+                break;
+            case "Replacing":
+                Console.WriteLine("Replacing files...");
+                break;
+            case "Restarting":
+                Console.WriteLine("Launching new version...");
+                break;
+            case "Error":
+                Console.Error.WriteLine($"\nError: {progress.Error}");
+                await host.StopAsync();
+                Environment.Exit(1);
+                break;
+        }
+    }
+
+    // UpdateService가 1.5초 후 StopApplication()을 호출하면 자연스럽게 종료
+    await host.WaitForShutdownAsync();
+}

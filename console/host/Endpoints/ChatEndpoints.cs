@@ -1,4 +1,6 @@
+using System.Runtime.CompilerServices;
 using LMSupply.Generator;
+using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Infrastructure.ToolCalling;
@@ -37,6 +39,7 @@ public static class ChatEndpoints
             // Detect feature flags
             var toolsEnabled = ToolCallFormatter.ShouldEnableTools(request.ToolChoice, request.Tools);
             var hasImages = MultimodalHelper.HasImageContent(request.Messages);
+            var isStrictJson = request.ResponseFormat?.Type == "json_schema" && request.ResponseFormat.JsonSchema?.Strict == true;
 
             // Handle streaming separately to avoid IResult after response started
             if (request.Stream)
@@ -45,23 +48,30 @@ public static class ChatEndpoints
                 {
                     await using var scope = await manager.GetGeneratorAsync(request.Model, ct);
                     var messages = await BuildMessagesAsync(request, manager, toolsEnabled, hasImages, ct);
-                    var options = new GenerationOptions
-                    {
-                        MaxTokens = maxTokens,
-                        Temperature = request.Temperature ?? 0.7f,
-                        TopP = request.TopP ?? 0.9f,
-                        FrequencyPenalty = request.FrequencyPenalty ?? 0f,
-                        PresencePenalty = request.PresencePenalty ?? 0f,
-                        Seed = request.Seed ?? -1,
-                        StopSequences = request.Stop?.ToList(),
-                        JsonSchema = request.ResponseFormat?.Type == "json_schema" &&
-                                     request.ResponseFormat.JsonSchema?.Schema.HasValue == true
-                            ? System.Text.Json.JsonSerializer.Serialize(request.ResponseFormat.JsonSchema.Schema.Value)
-                            : null
-                    };
+                    var options = BuildGenerationOptions(request, maxTokens);
 
-                    var tokens = scope.Model.GenerateChatAsync(messages, options, ct);
-                    await SseHelper.StreamChatCompletionAsync(context, scope.Model.ModelId, tokens, ct);
+                    if (request.DraftModel is { } draftModelId)
+                    {
+                        // Speculative decoding: draft model pre-generates candidate tokens verified by target
+                        await using var draftScope = await manager.GetGeneratorAsync(draftModelId, ct);
+                        var prompt = scope.Model.ChatFormatter.FormatPrompt(messages);
+                        using var decoder = new SpeculativeDecoder(
+                            new BorrowedGeneratorModel(draftScope.Model),
+                            new BorrowedGeneratorModel(scope.Model));
+                        var tokens = ToStringTokens(decoder.GenerateAsync(prompt, options, ct));
+                        await SseHelper.StreamChatCompletionAsync(context, scope.Model.ModelId, tokens, ct);
+                    }
+                    else if (isStrictJson)
+                    {
+                        // Strict JSON: buffer full response, validate, retry up to 3 times, then stream result
+                        var tokens = StreamValidatedJsonAsync(scope.Model, messages, options, request.ResponseFormat!, ct);
+                        await SseHelper.StreamChatCompletionAsync(context, scope.Model.ModelId, tokens, ct);
+                    }
+                    else
+                    {
+                        var tokens = scope.Model.GenerateChatAsync(messages, options, ct);
+                        await SseHelper.StreamChatCompletionAsync(context, scope.Model.ModelId, tokens, ct);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -83,83 +93,101 @@ public static class ChatEndpoints
             {
                 await using var scope = await manager.GetGeneratorAsync(request.Model, ct);
                 var messages = await BuildMessagesAsync(request, manager, toolsEnabled, hasImages, ct);
-                var options = new GenerationOptions
-                {
-                    MaxTokens = maxTokens,
-                    Temperature = request.Temperature ?? 0.7f,
-                    TopP = request.TopP ?? 0.9f,
-                    FrequencyPenalty = request.FrequencyPenalty ?? 0f,
-                    PresencePenalty = request.PresencePenalty ?? 0f,
-                    Seed = request.Seed ?? -1,
-                    StopSequences = request.Stop?.ToList(),
-                    JsonSchema = request.ResponseFormat?.Type == "json_schema" &&
-                                 request.ResponseFormat.JsonSchema?.Schema.HasValue == true
-                        ? System.Text.Json.JsonSerializer.Serialize(request.ResponseFormat.JsonSchema.Schema.Value)
-                        : null
-                };
+                var options = BuildGenerationOptions(request, maxTokens);
 
                 var id = ApiHelper.GenerateId("chatcmpl");
                 var n = Math.Max(1, request.N ?? 1);
                 var choices = new List<ChatCompletionChoice>();
                 var aggregatedUsage = new Usage();
 
-                for (var i = 0; i < n; i++)
+                if (request.DraftModel is { } draftModelId)
                 {
-                    // For strict JSON schema, retry up to 3 times on invalid JSON
-                    var maxAttempts = request.ResponseFormat?.Type == "json_schema" && request.ResponseFormat.JsonSchema?.Strict == true ? 3 : 1;
-                    GenerationResult result = default;
-                    for (var attempt = 0; attempt < maxAttempts; attempt++)
-                    {
-                        result = await scope.Model.GenerateChatWithUsageAsync(messages, options, ct);
-                        if (ResponseFormatHelper.ValidateJson(result.Content, request.ResponseFormat))
-                            break;
-                    }
+                    // Speculative decoding path (non-streaming)
+                    await using var draftScope = await manager.GetGeneratorAsync(draftModelId, ct);
+                    var prompt = scope.Model.ChatFormatter.FormatPrompt(messages);
+                    using var decoder = new SpeculativeDecoder(
+                        new BorrowedGeneratorModel(draftScope.Model),
+                        new BorrowedGeneratorModel(scope.Model));
 
-                    // Parse tool calls if tools are enabled
-                    IReadOnlyList<ToolCall>? toolCalls = null;
-                    string? content = result.Content;
-                    string finishReason = "stop";
-
-                    if (toolsEnabled)
+                    for (var i = 0; i < n; i++)
                     {
-                        toolCalls = ToolCallParser.TryParse(result.Content);
-                        if (toolCalls != null)
+                        var specResult = await decoder.GenerateCompleteAsync(prompt, options, ct);
+                        var result = new GenerationResult(
+                            specResult.Text,
+                            new TokenUsage(TokenUsage.EstimateTokens(prompt), TokenUsage.EstimateTokens(specResult.Text)));
+
+                        choices.Add(new ChatCompletionChoice
                         {
-                            content = null; // per OpenAI spec: content is null when tool_calls present
-                            finishReason = "tool_calls";
+                            Index = i,
+                            Message = new ChatCompletionResponseMessage { Role = "assistant", Content = result.Content },
+                            FinishReason = "stop"
+                        });
+
+                        aggregatedUsage = i == 0
+                            ? new Usage { PromptTokens = result.Usage.PromptTokens, CompletionTokens = result.Usage.CompletionTokens, TotalTokens = result.Usage.TotalTokens }
+                            : new Usage { PromptTokens = aggregatedUsage.PromptTokens, CompletionTokens = aggregatedUsage.CompletionTokens + result.Usage.CompletionTokens, TotalTokens = aggregatedUsage.PromptTokens + aggregatedUsage.CompletionTokens + result.Usage.CompletionTokens };
+                    }
+                }
+                else
+                {
+                    for (var i = 0; i < n; i++)
+                    {
+                        // For strict JSON schema, retry up to 3 times on invalid JSON
+                        var maxAttempts = isStrictJson ? 3 : 1;
+                        GenerationResult result = default;
+                        for (var attempt = 0; attempt < maxAttempts; attempt++)
+                        {
+                            result = await scope.Model.GenerateChatWithUsageAsync(messages, options, ct);
+                            if (ResponseFormatHelper.ValidateJson(result.Content, request.ResponseFormat))
+                                break;
                         }
-                    }
 
-                    choices.Add(new ChatCompletionChoice
-                    {
-                        Index = i,
-                        Message = new ChatCompletionResponseMessage
-                        {
-                            Role = "assistant",
-                            Content = content,
-                            ToolCalls = toolCalls
-                        },
-                        FinishReason = finishReason
-                    });
+                        // Parse tool calls if tools are enabled
+                        IReadOnlyList<ToolCall>? toolCalls = null;
+                        string? content = result.Content;
+                        string finishReason = "stop";
 
-                    // Aggregate usage (prompt tokens only counted once for first choice)
-                    if (i == 0)
-                    {
-                        aggregatedUsage = new Usage
+                        if (toolsEnabled)
                         {
-                            PromptTokens = result.Usage.PromptTokens,
-                            CompletionTokens = result.Usage.CompletionTokens,
-                            TotalTokens = result.Usage.TotalTokens
-                        };
-                    }
-                    else
-                    {
-                        aggregatedUsage = new Usage
+                            toolCalls = ToolCallParser.TryParse(result.Content);
+                            if (toolCalls != null)
+                            {
+                                content = null; // per OpenAI spec: content is null when tool_calls present
+                                finishReason = "tool_calls";
+                            }
+                        }
+
+                        choices.Add(new ChatCompletionChoice
                         {
-                            PromptTokens = aggregatedUsage.PromptTokens,
-                            CompletionTokens = aggregatedUsage.CompletionTokens + result.Usage.CompletionTokens,
-                            TotalTokens = aggregatedUsage.PromptTokens + aggregatedUsage.CompletionTokens + result.Usage.CompletionTokens
-                        };
+                            Index = i,
+                            Message = new ChatCompletionResponseMessage
+                            {
+                                Role = "assistant",
+                                Content = content,
+                                ToolCalls = toolCalls
+                            },
+                            FinishReason = finishReason
+                        });
+
+                        // Aggregate usage (prompt tokens only counted once for first choice)
+                        if (i == 0)
+                        {
+                            aggregatedUsage = new Usage
+                            {
+                                PromptTokens = result.Usage.PromptTokens,
+                                CompletionTokens = result.Usage.CompletionTokens,
+                                TotalTokens = result.Usage.TotalTokens
+                            };
+                        }
+                        else
+                        {
+                            aggregatedUsage = new Usage
+                            {
+                                PromptTokens = aggregatedUsage.PromptTokens,
+                                CompletionTokens = aggregatedUsage.CompletionTokens + result.Usage.CompletionTokens,
+                                TotalTokens = aggregatedUsage.PromptTokens + aggregatedUsage.CompletionTokens + result.Usage.CompletionTokens
+                            };
+                        }
                     }
                 }
 
@@ -187,6 +215,53 @@ public static class ChatEndpoints
         .Produces<ChatCompletionResponse>()
         .Produces<ErrorResponse>(400)
         .Produces<ErrorResponse>(500);
+    }
+
+    private static GenerationOptions BuildGenerationOptions(ChatCompletionRequest request, int maxTokens) =>
+        new()
+        {
+            MaxTokens = maxTokens,
+            Temperature = request.Temperature ?? 0.7f,
+            TopP = request.TopP ?? 0.9f,
+            FrequencyPenalty = request.FrequencyPenalty ?? 0f,
+            PresencePenalty = request.PresencePenalty ?? 0f,
+            Seed = request.Seed ?? -1,
+            StopSequences = request.Stop?.ToList(),
+            JsonSchema = request.ResponseFormat?.Type == "json_schema" &&
+                         request.ResponseFormat.JsonSchema?.Schema.HasValue == true
+                ? System.Text.Json.JsonSerializer.Serialize(request.ResponseFormat.JsonSchema.Schema.Value)
+                : null
+        };
+
+    /// <summary>
+    /// Buffers complete generation, validates JSON, retries up to 3 times, then yields result as a single token.
+    /// Used for streaming strict json_schema responses.
+    /// </summary>
+    private static async IAsyncEnumerable<string> StreamValidatedJsonAsync(
+        IGeneratorModel model,
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions options,
+        ResponseFormat format,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        GenerationResult result = default;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            result = await model.GenerateChatWithUsageAsync(messages, options, ct);
+            if (ResponseFormatHelper.ValidateJson(result.Content, format)) break;
+        }
+        yield return result.Content;
+    }
+
+    /// <summary>
+    /// Converts IAsyncEnumerable&lt;SpeculativeToken&gt; to IAsyncEnumerable&lt;string&gt;.
+    /// </summary>
+    private static async IAsyncEnumerable<string> ToStringTokens(
+        IAsyncEnumerable<SpeculativeToken> source,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var t in source.WithCancellation(ct))
+            yield return t.Token;
     }
 
     /// <summary>
@@ -284,5 +359,37 @@ public static class ChatEndpoints
             return $"Out of memory during inference. Try a smaller model. ({msg})";
 
         return msg;
+    }
+
+    /// <summary>
+    /// Non-owning wrapper for IGeneratorModel that prevents the underlying model from being disposed.
+    /// Used to safely pass borrowed models to SpeculativeDecoder which would otherwise take ownership.
+    /// </summary>
+    private sealed class BorrowedGeneratorModel(IGeneratorModel inner) : IGeneratorModel
+    {
+        public string ModelId => inner.ModelId;
+        public int MaxContextLength => inner.MaxContextLength;
+        public IChatFormatter ChatFormatter => inner.ChatFormatter;
+        public bool IsGpuActive => inner.IsGpuActive;
+        public IReadOnlyList<string> ActiveProviders => inner.ActiveProviders;
+        public ExecutionProvider RequestedProvider => inner.RequestedProvider;
+        public long? EstimatedMemoryBytes => inner.EstimatedMemoryBytes;
+        public GeneratorModelInfo GetModelInfo() => inner.GetModelInfo();
+
+        public IAsyncEnumerable<string> GenerateAsync(string prompt, GenerationOptions? options = null, CancellationToken ct = default)
+            => inner.GenerateAsync(prompt, options, ct);
+
+        public IAsyncEnumerable<string> GenerateChatAsync(IEnumerable<ChatMessage> messages, GenerationOptions? options = null, CancellationToken ct = default)
+            => inner.GenerateChatAsync(messages, options, ct);
+
+        public Task<string> GenerateCompleteAsync(string prompt, GenerationOptions? options = null, CancellationToken ct = default)
+            => inner.GenerateCompleteAsync(prompt, options, ct);
+
+        public Task<string> GenerateChatCompleteAsync(IEnumerable<ChatMessage> messages, GenerationOptions? options = null, CancellationToken ct = default)
+            => inner.GenerateChatCompleteAsync(messages, options, ct);
+
+        public Task WarmupAsync(CancellationToken ct = default) => inner.WarmupAsync(ct);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask; // Does NOT dispose the underlying model
     }
 }

@@ -106,6 +106,13 @@ public sealed record ChatCompletionRequest
     /// </summary>
     [JsonPropertyName("max_completion_tokens")]
     public int? MaxCompletionTokens { get; init; }
+
+    /// <summary>
+    /// Draft model ID for speculative decoding acceleration (LMSupply extension).
+    /// When provided, a smaller draft model pre-generates candidate tokens verified by the main model.
+    /// </summary>
+    [JsonPropertyName("draft_model")]
+    public string? DraftModel { get; init; }
 }
 
 /// <summary>

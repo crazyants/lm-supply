@@ -14,6 +14,7 @@ import {
   Segment,
   Translate,
   ImageGenerate,
+  ApiKeys,
 } from './pages';
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/translate" element={<Translate />} />
           <Route path="/image-generate" element={<ImageGenerate />} />
           <Route path="/models" element={<Models />} />
+          <Route path="/api-keys" element={<ApiKeys />} />
         </Route>
       </Routes>
     </BrowserRouter>

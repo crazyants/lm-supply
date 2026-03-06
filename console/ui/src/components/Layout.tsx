@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Menu,
   X,
+  Key,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSystemStore } from '../stores/systemStore';
@@ -195,6 +196,21 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           >
             <Settings className="w-4 h-4" />
             Models
+          </NavLink>
+          <NavLink
+            to="/api-keys"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-accent hover:text-accent-foreground'
+              )
+            }
+          >
+            <Key className="w-4 h-4" />
+            API Keys
           </NavLink>
           <a
             href="/swagger"

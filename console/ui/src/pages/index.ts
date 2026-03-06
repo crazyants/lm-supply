@@ -11,3 +11,4 @@ export { Detect } from './Detect';
 export { Segment } from './Segment';
 export { Translate } from './Translate';
 export { ImageGenerate } from './ImageGenerate';
+export { ApiKeys } from './ApiKeys';

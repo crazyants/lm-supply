@@ -51,7 +51,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.OpenApi" />
-    <!-- 임베디드 정적 파일 제공 (Web SDK에 포함되어 별도 참조 불필요) -->
+    <!-- 임베디드 정적 파일 제공 — ManifestEmbeddedFileProvider의 manifest XML 생성에 필요 -->
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
   </ItemGroup>
 
 </Project>

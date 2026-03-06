@@ -2,9 +2,11 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.FileProviders;
+using LMSupply.Console.Host.Data;
 using LMSupply.Console.Host.Endpoints;
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Services;
+using Microsoft.EntityFrameworkCore;
 
 // CLI mode: lm-supply.exe update
 if (args.Length > 0 && args[0].Equals("update", StringComparison.OrdinalIgnoreCase))
@@ -55,6 +57,22 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "LMSupply Console API", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "API Key",
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Description = "Enter your API key: lms-...",
+    });
+    c.AddSecurityRequirement(doc => new Microsoft.OpenApi.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", doc),
+            []
+        }
+    });
 });
 
 // 서비스 등록
@@ -66,7 +84,26 @@ builder.Services.AddSingleton<UpdateService>();
 builder.Services.AddSingleton<TempFileService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TempFileService>());
 
+// API Key storage (SQLite)
+var dbPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+    ".lmsupply", "api-keys.db");
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+builder.Services.AddDbContextFactory<ApiKeyDbContext>(options =>
+    options.UseSqlite($"Data Source={dbPath}"));
+builder.Services.AddSingleton<ApiKeyService>();
+
 var app = builder.Build();
+
+// Ensure API key database is created and clean up old logs
+using (var scope = app.Services.CreateScope())
+{
+    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApiKeyDbContext>>();
+    await using var ctx = await dbFactory.CreateDbContextAsync();
+    await ctx.Database.EnsureCreatedAsync();
+}
+var apiKeyService = app.Services.GetRequiredService<ApiKeyService>();
+await apiKeyService.CleanupOldLogsAsync();
 
 // Swagger UI
 app.UseSwagger();
@@ -78,6 +115,7 @@ app.UseSwaggerUI(c =>
 
 app.UseCors();
 app.UseMiddleware<RequestIdMiddleware>();
+app.UseMiddleware<ApiKeyMiddleware>();
 app.UseMiddleware<ErrorMiddleware>();
 
 // 임베디드 리소스에서 정적 파일 제공 (wwwroot가 빌드 시 없으면 매니페스트도 없음)
@@ -110,6 +148,7 @@ app.MapTranslateEndpoints();
 app.MapImageEndpoints();
 app.MapFileEndpoints();
 app.MapModelRegistryEndpoints();
+app.MapApiKeyEndpoints();
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));

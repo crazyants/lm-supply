@@ -44,6 +44,7 @@ public static class ApiKeyEndpoints
         // GET /api/keys/stats?days=7
         group.MapGet("/stats", async (ApiKeyService svc, int days = 7) =>
         {
+            days = Math.Clamp(days, 1, 90);
             var stats = await svc.GetGlobalStatsAsync(days);
             return Results.Ok(stats);
         })
@@ -53,6 +54,7 @@ public static class ApiKeyEndpoints
         // GET /api/keys/{id}/stats?days=7
         group.MapGet("/{id:guid}/stats", async (Guid id, ApiKeyService svc, int days = 7) =>
         {
+            days = Math.Clamp(days, 1, 90);
             var stats = await svc.GetKeyStatsAsync(id, days);
             return Results.Ok(stats);
         })

@@ -11,6 +11,9 @@ namespace LMSupply.Console.Host.Services;
 /// </summary>
 public sealed partial class ApiKeyService(IDbContextFactory<ApiKeyDbContext> dbFactory, ILogger<ApiKeyService> logger)
 {
+    private volatile bool _authEnabled;
+    private volatile bool _authStateInitialized;
+
     // ─── Key generation ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -34,6 +37,8 @@ public sealed partial class ApiKeyService(IDbContextFactory<ApiKeyDbContext> dbF
         await using var db = await dbFactory.CreateDbContextAsync();
         db.ApiKeys.Add(entity);
         await db.SaveChangesAsync();
+        _authEnabled = true;
+        _authStateInitialized = true;
 
         LogKeyCreated(logger, entity.Id, name);
         return (ToResponse(entity), rawKey);
@@ -57,8 +62,13 @@ public sealed partial class ApiKeyService(IDbContextFactory<ApiKeyDbContext> dbF
     /// <summary>Returns true if ANY key exists (i.e., auth is enabled).</summary>
     public async Task<bool> AnyKeyExistsAsync()
     {
+        if (_authStateInitialized)
+            return _authEnabled;
+
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.ApiKeys.AnyAsync();
+        _authEnabled = await db.ApiKeys.AnyAsync();
+        _authStateInitialized = true;
+        return _authEnabled;
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
@@ -80,6 +90,12 @@ public sealed partial class ApiKeyService(IDbContextFactory<ApiKeyDbContext> dbF
         db.ApiKeys.Remove(key);
         await db.SaveChangesAsync();
         LogKeyDeleted(logger, id);
+
+        // Recheck actual state (might still have other keys)
+        await using var checkDb = await dbFactory.CreateDbContextAsync();
+        _authEnabled = await checkDb.ApiKeys.AnyAsync();
+        _authStateInitialized = true;
+
         return true;
     }
 
@@ -89,6 +105,7 @@ public sealed partial class ApiKeyService(IDbContextFactory<ApiKeyDbContext> dbF
     public async Task LogRequestAsync(Guid keyId, string path, string method, int statusCode, long durationMs)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
 
         db.ApiKeyRequests.Add(new ApiKeyRequest
         {
@@ -107,6 +124,7 @@ public sealed partial class ApiKeyService(IDbContextFactory<ApiKeyDbContext> dbF
                 .SetProperty(k => k.TotalRequests, k => k.TotalRequests + 1));
 
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
     }
 
     // ─── Statistics ──────────────────────────────────────────────────────────

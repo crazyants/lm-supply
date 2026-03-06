@@ -9,7 +9,7 @@ namespace LMSupply.Console.Host.Infrastructure;
 /// If no keys exist, all requests pass through (unlimited mode).
 /// Management endpoints (/api/keys/*) are always exempt.
 /// </summary>
-public sealed class ApiKeyMiddleware(RequestDelegate next, ApiKeyService apiKeyService)
+public sealed partial class ApiKeyMiddleware(RequestDelegate next, ApiKeyService apiKeyService, ILogger<ApiKeyMiddleware> logger)
 {
     // These path prefixes never require a key (management UI access)
     private static readonly string[] ExemptPrefixes = ["/api/keys", "/swagger", "/health"];
@@ -63,7 +63,10 @@ public sealed class ApiKeyMiddleware(RequestDelegate next, ApiKeyService apiKeyS
             path,
             context.Request.Method,
             context.Response.StatusCode,
-            sw.ElapsedMilliseconds);
+            sw.ElapsedMilliseconds)
+            .ContinueWith(
+                t => LogRequestLoggingFailed(logger, t.Exception!),
+                TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private static bool IsExempt(string path)
@@ -86,6 +89,7 @@ public sealed class ApiKeyMiddleware(RequestDelegate next, ApiKeyService apiKeyS
     private static async Task WriteUnauthorizedAsync(HttpContext context, string message)
     {
         context.Response.StatusCode = 401;
+        context.Response.Headers.Append("WWW-Authenticate", "Bearer realm=\"LMSupply\"");
         context.Response.ContentType = "application/json";
         var body = JsonSerializer.Serialize(new
         {
@@ -93,4 +97,7 @@ public sealed class ApiKeyMiddleware(RequestDelegate next, ApiKeyService apiKeyS
         });
         await context.Response.WriteAsync(body);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to log API key request")]
+    private static partial void LogRequestLoggingFailed(ILogger logger, Exception ex);
 }

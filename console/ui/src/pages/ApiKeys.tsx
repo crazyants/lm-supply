@@ -193,16 +193,18 @@ export function ApiKeys() {
       </div>
 
       {/* Status banner */}
-      {keys.length === 0 ? (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          No API keys — all requests are allowed without authentication. Create a key to enable access control.
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm">
-          <ShieldCheck className="w-4 h-4 shrink-0" />
-          {keys.length} API key{keys.length > 1 ? 's' : ''} active — all requests require a valid Bearer token.
-        </div>
+      {!isLoading && (
+        keys.length === 0 ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            No API keys — all requests are allowed without authentication. Create a key to enable access control.
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            {keys.length} API key{keys.length > 1 ? 's' : ''} active — all requests require a valid Bearer token.
+          </div>
+        )
       )}
 
       {/* Keys table */}

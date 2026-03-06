@@ -47,7 +47,9 @@
     <PackageReference Include="NAudio.Lame" />
     <!-- EF Core SQLite for API key storage -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.OpenApi" />
     <!-- 임베디드 정적 파일 제공 (Web SDK에 포함되어 별도 참조 불필요) -->
   </ItemGroup>

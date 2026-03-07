@@ -301,8 +301,27 @@ internal static class AudioProcessor
         return melSpec;
     }
 
-    private static float HzToMel(float hz) => 2595f * MathF.Log10(1f + hz / 700f);
-    private static float MelToHz(float mel) => 700f * (MathF.Pow(10f, mel / 2595f) - 1f);
+    // Slaney mel scale (librosa default, used by OpenAI Whisper)
+    // Linear below 1000 Hz, logarithmic above
+    private const float SlaneyFMin = 0f;
+    private const float SlaneyFSp = 200f / 3f; // 66.667 Hz per mel below 1000 Hz
+    private const float SlaneyMinLogHz = 1000f;
+    private const float SlaneyMinLogMel = (SlaneyMinLogHz - SlaneyFMin) / SlaneyFSp; // 15.0
+    private static readonly float SlaneyLogStep = MathF.Log(6.4f) / 27f;
+
+    private static float HzToMel(float hz)
+    {
+        if (hz < SlaneyMinLogHz)
+            return (hz - SlaneyFMin) / SlaneyFSp;
+        return SlaneyMinLogMel + MathF.Log(hz / SlaneyMinLogHz) / SlaneyLogStep;
+    }
+
+    private static float MelToHz(float mel)
+    {
+        if (mel < SlaneyMinLogMel)
+            return SlaneyFMin + SlaneyFSp * mel;
+        return SlaneyMinLogHz * MathF.Exp(SlaneyLogStep * (mel - SlaneyMinLogMel));
+    }
 
     /// <summary>
     /// Gets the duration of audio samples in seconds.

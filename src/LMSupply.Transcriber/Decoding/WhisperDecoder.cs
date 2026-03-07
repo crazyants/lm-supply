@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 using LMSupply.Transcriber.Internal;
@@ -39,6 +40,24 @@ internal sealed class WhisperDecoder
     private readonly List<(string Name, int[] Dims)> _pastKeyValueInputs = [];
     private readonly int _numAttentionHeads;
     private readonly int _headDim;
+
+    /// <summary>
+    /// Creates a decoder for testing probability computation only (no ONNX session).
+    /// </summary>
+    internal static WhisperDecoder CreateForTesting(WhisperTokenizer tokenizer)
+    {
+        return new WhisperDecoder(tokenizer);
+    }
+
+    private WhisperDecoder(WhisperTokenizer tokenizer)
+    {
+        _decoderSession = null!;
+        _tokenizer = tokenizer;
+        _maxLength = 0;
+        _actualTokenInputName = "";
+        _actualEncoderInputName = "";
+        _actualLogitsOutputName = "";
+    }
 
     public WhisperDecoder(
         InferenceSession decoderSession,
@@ -107,7 +126,7 @@ internal sealed class WhisperDecoder
         {
             // Initialize tokens with SOT sequence
             var useTimestamps = options?.WordTimestamps ?? false;
-            var initialTokens = WhisperTokenizer.GetSotSequence(options?.Language, useTimestamps);
+            var initialTokens = _tokenizer.GetSotSequence(options?.Language, useTimestamps);
             var tokens = new List<int>(initialTokens);
 
             var segments = new List<TranscriptionSegment>();
@@ -248,7 +267,7 @@ internal sealed class WhisperDecoder
                 var nextToken = ArgMax(lastLogits);
 
                 // Compute log probability of selected token for AvgLogProb metric
-                if (!WhisperTokenizer.IsSpecialToken(nextToken))
+                if (!_tokenizer.IsSpecialToken(nextToken))
                 {
                     currentSegmentLogProbs.Add(ComputeLogProb(lastLogits, nextToken));
                 }
@@ -259,23 +278,24 @@ internal sealed class WhisperDecoder
                     // Compute no-speech probability at the first decoder step
                     chunkNoSpeechProb = ComputeNoSpeechProb(lastLogits);
 
-                    if (WhisperTokenizer.IsLanguageToken(nextToken))
+                    if (_tokenizer.IsLanguageToken(nextToken))
                     {
-                        detectedLanguage = WhisperTokenizer.GetLanguageFromToken(nextToken);
+                        detectedLanguage = _tokenizer.GetLanguageFromToken(nextToken);
                         languageProbability = ComputeLanguageTokenProbability(lastLogits, nextToken);
                     }
                 }
 
                 // Check for end of text
-                if (nextToken == WhisperTokenizer.EndOfTextToken)
+                if (nextToken == _tokenizer.EndOfTextToken)
                 {
+                    Trace.TraceInformation($"[WhisperDecoder] EOT at step {tokens.Count - initialTokens.Length}, totalTokens={tokens.Count}");
                     break;
                 }
 
                 // Handle timestamp tokens
-                if (WhisperTokenizer.IsTimestampToken(nextToken))
+                if (_tokenizer.IsTimestampToken(nextToken))
                 {
-                    var timestamp = WhisperTokenizer.TimestampTokenToSeconds(nextToken);
+                    var timestamp = _tokenizer.TimestampTokenToSeconds(nextToken);
 
                     // Start timestamp
                     if (currentSegmentTokens.Count == 0)
@@ -309,7 +329,7 @@ internal sealed class WhisperDecoder
                         currentSegmentTokens.Clear();
                     }
                 }
-                else if (!WhisperTokenizer.IsSpecialToken(nextToken))
+                else if (!_tokenizer.IsSpecialToken(nextToken))
                 {
                     // Regular text token
                     currentSegmentTokens.Add(nextToken);
@@ -404,10 +424,10 @@ internal sealed class WhisperDecoder
     /// Computes the softmax probability of the selected language token
     /// over all language tokens in the logits.
     /// </summary>
-    internal static float ComputeLanguageTokenProbability(float[] logits, int selectedToken)
+    internal float ComputeLanguageTokenProbability(float[] logits, int selectedToken)
     {
-        var start = WhisperTokenizer.LanguageTokenStart;
-        var end = Math.Min(WhisperTokenizer.LanguageTokenEnd, logits.Length - 1);
+        var start = _tokenizer.LanguageTokenStart;
+        var end = Math.Min(_tokenizer.LanguageTokenEnd, logits.Length - 1);
 
         if (start > end || selectedToken < start || selectedToken > end)
             return 0f;
@@ -454,9 +474,9 @@ internal sealed class WhisperDecoder
     /// Computes the probability that the current audio chunk contains no speech.
     /// Uses the no_speech token (50362) softmax probability over the full vocabulary.
     /// </summary>
-    private static float ComputeNoSpeechProb(float[] logits)
+    private float ComputeNoSpeechProb(float[] logits)
     {
-        const int noSpeechToken = WhisperTokenizer.NoSpeechToken;
+        var noSpeechToken = _tokenizer.NoSpeechToken;
         if (noSpeechToken >= logits.Length)
             return 0f;
 

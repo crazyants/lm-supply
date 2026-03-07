@@ -45,22 +45,23 @@ internal sealed class WhisperTokenizer : IDisposable
     private readonly Dictionary<string, int> _tokenToId;
     private readonly Dictionary<string, string> _bytesToUnicode;
 
-    // Whisper special tokens
-    public const int EndOfTextToken = 50257;       // <|endoftext|>
-    public const int StartOfTranscriptToken = 50258; // <|startoftranscript|>
-    public const int TranslateToken = 50358;       // <|translate|>
-    public const int TranscribeToken = 50359;      // <|transcribe|>
-    public const int StartOfLmToken = 50360;       // <|startoflm|>
-    public const int StartOfPrevToken = 50361;     // <|startofprev|>
-    public const int NoSpeechToken = 50362;        // <|nospeech|>
-    public const int NoTimestampsToken = 50363;    // <|notimestamps|>
+    // Default Whisper special token IDs (v1/v2 values, overridden by tokenizer.json)
+    private const int DefaultEndOfTextToken = 50257;
+    private const int DefaultStartOfTranscriptToken = 50258;
+    private const int DefaultLanguageTokenStart = 50259;
 
-    // First timestamp token (0.00s)
-    public const int TimestampBeginToken = 50364;
-
-    // Language token range
-    public const int LanguageTokenStart = 50259;
-    public const int LanguageTokenEnd = 50357; // Inclusive
+    // Instance special token IDs (resolved from tokenizer.json at load time)
+    public int EndOfTextToken { get; private set; } = DefaultEndOfTextToken;
+    public int StartOfTranscriptToken { get; private set; } = DefaultStartOfTranscriptToken;
+    public int TranslateToken { get; private set; } = 50358;
+    public int TranscribeToken { get; private set; } = 50359;
+    public int StartOfLmToken { get; private set; } = 50360;
+    public int StartOfPrevToken { get; private set; } = 50361;
+    public int NoSpeechToken { get; private set; } = 50362;
+    public int NoTimestampsToken { get; private set; } = 50363;
+    public int TimestampBeginToken { get; private set; } = 50364;
+    public int LanguageTokenStart { get; private set; } = DefaultLanguageTokenStart;
+    public int LanguageTokenEnd { get; private set; } = 50357;
 
     public int VocabSize { get; }
 
@@ -72,6 +73,15 @@ internal sealed class WhisperTokenizer : IDisposable
         _tokenToId = tokenToId;
         _bytesToUnicode = CreateBytesToUnicode();
         VocabSize = idToToken.Count;
+    }
+
+    /// <summary>
+    /// Creates a tokenizer with default (v2) special token IDs and empty vocabulary.
+    /// For testing only.
+    /// </summary>
+    internal static WhisperTokenizer CreateDefault()
+    {
+        return new WhisperTokenizer([], []);
     }
 
     /// <summary>
@@ -99,7 +109,84 @@ internal sealed class WhisperTokenizer : IDisposable
             idToToken[id] = token;
         }
 
-        return new WhisperTokenizer(idToToken, tokenToId);
+        var tokenizer = new WhisperTokenizer(idToToken, tokenToId);
+
+        // Resolve special token IDs from tokenizer.json (handles v2 vs v3 differences)
+        var tokenizerJsonPath = Path.Combine(modelDir, "tokenizer.json");
+        if (File.Exists(tokenizerJsonPath))
+        {
+            tokenizer.LoadSpecialTokenIds(tokenizerJsonPath);
+        }
+
+        return tokenizer;
+    }
+
+    private void LoadSpecialTokenIds(string tokenizerJsonPath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(tokenizerJsonPath);
+            using var doc = JsonDocument.Parse(stream);
+
+            if (!doc.RootElement.TryGetProperty("added_tokens", out var addedTokens))
+                return;
+
+            var specialTokenMap = new Dictionary<string, int>();
+            foreach (var token in addedTokens.EnumerateArray())
+            {
+                if (token.TryGetProperty("content", out var content) &&
+                    token.TryGetProperty("id", out var id))
+                {
+                    specialTokenMap[content.GetString()!] = id.GetInt32();
+                }
+            }
+
+            // Map special token names to instance properties
+            if (specialTokenMap.TryGetValue("<|endoftext|>", out var eot))
+                EndOfTextToken = eot;
+            if (specialTokenMap.TryGetValue("<|startoftranscript|>", out var sot))
+                StartOfTranscriptToken = sot;
+            if (specialTokenMap.TryGetValue("<|translate|>", out var translate))
+                TranslateToken = translate;
+            if (specialTokenMap.TryGetValue("<|transcribe|>", out var transcribe))
+                TranscribeToken = transcribe;
+            if (specialTokenMap.TryGetValue("<|startoflm|>", out var startOfLm))
+                StartOfLmToken = startOfLm;
+            if (specialTokenMap.TryGetValue("<|startofprev|>", out var startOfPrev))
+                StartOfPrevToken = startOfPrev;
+            if (specialTokenMap.TryGetValue("<|nospeech|>", out var noSpeech))
+                NoSpeechToken = noSpeech;
+            if (specialTokenMap.TryGetValue("<|notimestamps|>", out var noTs))
+                NoTimestampsToken = noTs;
+            if (specialTokenMap.TryGetValue("<|0.00|>", out var tsBegin))
+                TimestampBeginToken = tsBegin;
+
+            // Determine language token range from actual tokens
+            var langStart = int.MaxValue;
+            var langEnd = int.MinValue;
+            foreach (var lang in SupportedLanguages.Keys)
+            {
+                if (specialTokenMap.TryGetValue($"<|{lang}|>", out var langId))
+                {
+                    langStart = Math.Min(langStart, langId);
+                    langEnd = Math.Max(langEnd, langId);
+                }
+            }
+            if (langStart != int.MaxValue)
+            {
+                LanguageTokenStart = langStart;
+                LanguageTokenEnd = langEnd;
+            }
+
+            Trace.TraceInformation($"[WhisperTokenizer] Loaded special tokens from tokenizer.json - " +
+                $"EOT={EndOfTextToken}, SOT={StartOfTranscriptToken}, Transcribe={TranscribeToken}, " +
+                $"NoTimestamps={NoTimestampsToken}, NoSpeech={NoSpeechToken}, " +
+                $"TimestampBegin={TimestampBeginToken}, LangRange=[{LanguageTokenStart}-{LanguageTokenEnd}]");
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"[WhisperTokenizer] Failed to load special tokens from tokenizer.json, using defaults: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -143,7 +230,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Checks if a token ID is a special token.
     /// </summary>
-    public static bool IsSpecialToken(int tokenId)
+    public bool IsSpecialToken(int tokenId)
     {
         return tokenId >= EndOfTextToken;
     }
@@ -151,7 +238,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Checks if a token ID is a timestamp token.
     /// </summary>
-    public static bool IsTimestampToken(int tokenId)
+    public bool IsTimestampToken(int tokenId)
     {
         return tokenId >= TimestampBeginToken;
     }
@@ -159,7 +246,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Converts a timestamp token to seconds.
     /// </summary>
-    public static float TimestampTokenToSeconds(int tokenId)
+    public float TimestampTokenToSeconds(int tokenId)
     {
         if (tokenId < TimestampBeginToken)
             return 0f;
@@ -170,7 +257,7 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Checks if a token ID is a language token.
     /// </summary>
-    public static bool IsLanguageToken(int tokenId)
+    public bool IsLanguageToken(int tokenId)
     {
         return tokenId >= LanguageTokenStart && tokenId <= LanguageTokenEnd;
     }
@@ -178,16 +265,14 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Gets the language code for a language token.
     /// </summary>
-    public static string? GetLanguageFromToken(int tokenId)
+    public string? GetLanguageFromToken(int tokenId)
     {
         if (!IsLanguageToken(tokenId))
             return null;
 
-        // Language tokens are computed as LanguageTokenStart + index
-        // Reverse the calculation to get the language code
         var index = tokenId - LanguageTokenStart;
         var languageCodes = SupportedLanguages.Keys.ToList();
-        
+
         if (index >= 0 && index < languageCodes.Count)
         {
             var lang = languageCodes[index];
@@ -200,19 +285,17 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <summary>
     /// Gets the token ID for a language code.
     /// </summary>
-    public static int? GetLanguageToken(string languageCode)
+    public int? GetLanguageToken(string languageCode)
     {
-        // Language tokens are NOT in vocab.json - they're computed as offsets from LanguageTokenStart
-        // The order matches the SupportedLanguages dictionary order
         var languageCodes = SupportedLanguages.Keys.ToList();
         var index = languageCodes.FindIndex(c => c.Equals(languageCode, StringComparison.OrdinalIgnoreCase));
-        
+
         if (index >= 0)
         {
             var token = LanguageTokenStart + index;
             return token;
         }
-        
+
         return null;
     }
 
@@ -222,14 +305,13 @@ internal sealed class WhisperTokenizer : IDisposable
     /// <param name="language">ISO 639-1 language code (e.g., "en", "zh", "ja").</param>
     /// <param name="timestamps">Whether to include timestamps in output.</param>
     /// <returns>Array of token IDs for the SOT sequence.</returns>
-    public static int[] GetSotSequence(string? language = null, bool timestamps = false)
+    public int[] GetSotSequence(string? language = null, bool timestamps = false)
     {
         var tokens = new List<int> { StartOfTranscriptToken };
 
         // Add language token
         if (language != null)
         {
-            // Normalize language code (lowercase, handle common aliases)
             var normalizedLang = NormalizeLanguageCode(language);
             var langToken = GetLanguageToken(normalizedLang);
 

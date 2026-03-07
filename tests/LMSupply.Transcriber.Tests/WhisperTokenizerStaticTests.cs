@@ -4,10 +4,13 @@ using LMSupply.Transcriber.Decoding;
 namespace LMSupply.Transcriber.Tests;
 
 /// <summary>
-/// Tests for WhisperTokenizer static helper methods not covered by WhisperLanguageDetectionTests.
+/// Tests for WhisperTokenizer helper methods not covered by WhisperLanguageDetectionTests.
+/// Uses default (v2) token IDs.
 /// </summary>
 public class WhisperTokenizerStaticTests
 {
+    private readonly WhisperTokenizer _tokenizer = WhisperTokenizer.CreateDefault();
+
     // IsSpecialToken tests
 
     [Theory]
@@ -22,7 +25,7 @@ public class WhisperTokenizerStaticTests
     [InlineData(51000, true)]     // Arbitrary high timestamp
     public void IsSpecialToken_ShouldClassifyCorrectly(int tokenId, bool expected)
     {
-        WhisperTokenizer.IsSpecialToken(tokenId).Should().Be(expected);
+        _tokenizer.IsSpecialToken(tokenId).Should().Be(expected);
     }
 
     // IsTimestampToken tests
@@ -37,7 +40,7 @@ public class WhisperTokenizerStaticTests
     [InlineData(51864, true)]     // 30.00s timestamp (1500 * 0.02)
     public void IsTimestampToken_ShouldClassifyCorrectly(int tokenId, bool expected)
     {
-        WhisperTokenizer.IsTimestampToken(tokenId).Should().Be(expected);
+        _tokenizer.IsTimestampToken(tokenId).Should().Be(expected);
     }
 
     // TimestampTokenToSeconds tests
@@ -49,7 +52,7 @@ public class WhisperTokenizerStaticTests
     [InlineData(51864, 30.0f)]     // 1500 * 0.02s = 30.0s
     public void TimestampTokenToSeconds_ValidTimestamps_ShouldConvert(int tokenId, float expectedSeconds)
     {
-        WhisperTokenizer.TimestampTokenToSeconds(tokenId)
+        _tokenizer.TimestampTokenToSeconds(tokenId)
             .Should().BeApproximately(expectedSeconds, 0.001f);
     }
 
@@ -59,29 +62,29 @@ public class WhisperTokenizerStaticTests
     [InlineData(50363)]    // NoTimestamps
     public void TimestampTokenToSeconds_BelowBegin_ShouldReturnZero(int tokenId)
     {
-        WhisperTokenizer.TimestampTokenToSeconds(tokenId).Should().Be(0f);
+        _tokenizer.TimestampTokenToSeconds(tokenId).Should().Be(0f);
     }
 
-    // Special token constant tests
+    // Default token ID tests
 
     [Fact]
-    public void SpecialTokenConstants_ShouldHaveExpectedValues()
+    public void DefaultTokenIds_ShouldHaveExpectedV2Values()
     {
-        WhisperTokenizer.EndOfTextToken.Should().Be(50257);
-        WhisperTokenizer.StartOfTranscriptToken.Should().Be(50258);
-        WhisperTokenizer.TranslateToken.Should().Be(50358);
-        WhisperTokenizer.TranscribeToken.Should().Be(50359);
-        WhisperTokenizer.NoSpeechToken.Should().Be(50362);
-        WhisperTokenizer.NoTimestampsToken.Should().Be(50363);
-        WhisperTokenizer.TimestampBeginToken.Should().Be(50364);
+        _tokenizer.EndOfTextToken.Should().Be(50257);
+        _tokenizer.StartOfTranscriptToken.Should().Be(50258);
+        _tokenizer.TranslateToken.Should().Be(50358);
+        _tokenizer.TranscribeToken.Should().Be(50359);
+        _tokenizer.NoSpeechToken.Should().Be(50362);
+        _tokenizer.NoTimestampsToken.Should().Be(50363);
+        _tokenizer.TimestampBeginToken.Should().Be(50364);
     }
 
     [Fact]
     public void LanguageTokenRange_ShouldBeConsistent()
     {
-        WhisperTokenizer.LanguageTokenStart.Should().Be(50259);
-        WhisperTokenizer.LanguageTokenEnd.Should().Be(50357);
-        (WhisperTokenizer.LanguageTokenEnd - WhisperTokenizer.LanguageTokenStart + 1)
+        _tokenizer.LanguageTokenStart.Should().Be(50259);
+        _tokenizer.LanguageTokenEnd.Should().Be(50357);
+        (_tokenizer.LanguageTokenEnd - _tokenizer.LanguageTokenStart + 1)
             .Should().Be(99, "99 language slots in the standard range");
     }
 
@@ -97,8 +100,6 @@ public class WhisperTokenizerStaticTests
     [Fact]
     public void AllTimestampTokens_ShouldAlsoBeSpecialTokens()
     {
-        // Every timestamp token should also be a special token
-        // since special is >= EndOfTextToken and timestamp is >= TimestampBeginToken > EndOfTextToken
-        WhisperTokenizer.IsSpecialToken(WhisperTokenizer.TimestampBeginToken).Should().BeTrue();
+        _tokenizer.IsSpecialToken(_tokenizer.TimestampBeginToken).Should().BeTrue();
     }
 }

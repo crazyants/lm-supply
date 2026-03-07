@@ -73,7 +73,7 @@ await LocalEmbedder.LoadAsync("BAAI/bge-small-en-v1.5");
 ```csharp
 // 1. Use progress callback to monitor
 var progress = new Progress<DownloadProgress>(p =>
-    Console.WriteLine($"{p.ProgressPercentage:P0}"));
+    Console.WriteLine($"{p.OverallPercentComplete:F0}%"));
 
 await LocalEmbedder.LoadAsync("default", progress: progress);
 

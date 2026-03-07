@@ -73,8 +73,14 @@ public sealed class HuggingFaceDownloader : IDisposable
         Directory.CreateDirectory(modelDir);
 
         // Download all discovered files, preserving directory structure
-        foreach (var file in discovery.GetAllFiles())
+        var allFiles = discovery.GetAllFiles().ToList();
+        var totalFileCount = allFiles.Count;
+        var fileIndex = 0;
+
+        foreach (var file in allFiles)
         {
+            fileIndex++;
+
             // Preserve the full relative path structure (e.g., "unet/model.onnx_data")
             var localPath = Path.GetFullPath(Path.Combine(modelDir, file.Replace('/', Path.DirectorySeparatorChar)));
 
@@ -91,10 +97,13 @@ public sealed class HuggingFaceDownloader : IDisposable
 
             if (!File.Exists(localPath) || CacheManager.IsLfsPointerFile(localPath))
             {
+                // Wrap progress to include multi-file context
+                var wrappedProgress = WrapProgress(progress, fileIndex, totalFileCount);
+
                 // Download using the full file path (includes subfolder)
                 await DownloadFileWithRetryAsync(
                     repoId, file, localPath, revision, subfolder: null,
-                    progress, cancellationToken);
+                    wrappedProgress, cancellationToken);
             }
         }
 
@@ -125,16 +134,21 @@ public sealed class HuggingFaceDownloader : IDisposable
         Directory.CreateDirectory(modelDir);
 
         // Default files if not specified
-        files ??= GetDefaultModelFiles();
+        var fileList = (files ?? GetDefaultModelFiles()).ToList();
+        var totalFileCount = fileList.Count;
+        var fileIndex = 0;
 
-        foreach (var file in files)
+        foreach (var file in fileList)
         {
+            fileIndex++;
             var localPath = Path.Combine(modelDir, file);
             if (!File.Exists(localPath) || CacheManager.IsLfsPointerFile(localPath))
             {
+                var wrappedProgress = WrapProgress(progress, fileIndex, totalFileCount);
+
                 var downloaded = await TryDownloadFileWithFallbackAsync(
                     repoId, file, localPath, revision, subfolder,
-                    progress, cancellationToken);
+                    wrappedProgress, cancellationToken);
 
                 if (!downloaded && IsCriticalFile(file))
                 {
@@ -353,6 +367,32 @@ public sealed class HuggingFaceDownloader : IDisposable
         // Move to final location atomically
         fileStream.Close();
         File.Move(tempPath, destinationPath, overwrite: true);
+    }
+
+    /// <summary>
+    /// Wraps a progress reporter to include multi-file context (file index and total count).
+    /// </summary>
+    private static MultiFileProgress? WrapProgress(
+        IProgress<DownloadProgress>? progress, int currentFileIndex, int totalFileCount)
+    {
+        if (progress is null)
+            return null;
+
+        return new MultiFileProgress(progress, currentFileIndex, totalFileCount);
+    }
+
+    private sealed class MultiFileProgress(
+        IProgress<DownloadProgress> inner, int currentFileIndex, int totalFileCount)
+        : IProgress<DownloadProgress>
+    {
+        public void Report(DownloadProgress value)
+        {
+            inner.Report(value with
+            {
+                CurrentFileIndex = currentFileIndex,
+                TotalFileCount = totalFileCount
+            });
+        }
     }
 
     private static IEnumerable<string> GetDefaultModelFiles()

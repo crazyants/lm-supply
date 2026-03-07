@@ -314,11 +314,16 @@ All long-running operations MUST support progress reporting:
 
 ```csharp
 // Shared in LMSupply.Core
-public readonly record struct DownloadProgress(
+public record DownloadProgress
+{
     string FileName,
     long BytesDownloaded,
     long TotalBytes,
-    double ProgressPercentage);
+    double PercentComplete,           // per-file (0-100)
+    int CurrentFileIndex,             // 1-based, 0 for single-file
+    int TotalFileCount,               // 0 for single-file
+    double OverallPercentComplete     // overall across all files (0-100)
+}
 
 // Usage
 IProgress<DownloadProgress>? progress

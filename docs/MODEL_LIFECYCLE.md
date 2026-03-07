@@ -57,7 +57,7 @@ await using var model = await LocalEmbedder.LoadAsync("default", options);
 ```csharp
 var progress = new Progress<DownloadProgress>(p =>
 {
-    Console.WriteLine($"Downloading: {p.ProgressPercentage:P0}");
+    Console.WriteLine($"Downloading: {p.OverallPercentComplete:F0}%");
 });
 
 await using var model = await LocalEmbedder.LoadAsync("default", progress: progress);

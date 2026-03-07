@@ -23,9 +23,29 @@ public record DownloadProgress
     public long TotalBytes { get; init; }
 
     /// <summary>
-    /// Gets the download progress as a percentage (0-100).
+    /// Gets the download progress of the current file as a percentage (0-100).
     /// </summary>
     public double PercentComplete => TotalBytes > 0 ? (double)BytesDownloaded / TotalBytes * 100 : 0;
+
+    /// <summary>
+    /// Gets the 1-based index of the current file in a multi-file download.
+    /// Zero when downloading a single file outside of a multi-file context.
+    /// </summary>
+    public int CurrentFileIndex { get; init; }
+
+    /// <summary>
+    /// Gets the total number of files in a multi-file download.
+    /// Zero when downloading a single file outside of a multi-file context.
+    /// </summary>
+    public int TotalFileCount { get; init; }
+
+    /// <summary>
+    /// Gets the overall download progress across all files as a percentage (0-100).
+    /// Uses file-count-weighted approximation. Falls back to <see cref="PercentComplete"/> for single-file downloads.
+    /// </summary>
+    public double OverallPercentComplete => TotalFileCount > 0
+        ? ((CurrentFileIndex - 1) * 100.0 + PercentComplete) / TotalFileCount
+        : PercentComplete;
 
     /// <summary>
     /// Gets the current download speed in bytes per second.

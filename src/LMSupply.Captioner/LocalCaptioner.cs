@@ -43,6 +43,11 @@ public static class LocalCaptioner
         ArgumentException.ThrowIfNullOrWhiteSpace(modelIdOrPath);
         options ??= new CaptionerOptions();
 
+        // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelIdOrPath);
+        modelIdOrPath = baseId;
+        options.QuantizationHint ??= qualifier;
+
         ModelInfo? modelInfo = null;
         string modelDir;
         string? tokenizerDir = null; // Separate tokenizer directory for HuggingFace repos with subfolders
@@ -84,9 +89,19 @@ public static class LocalCaptioner
             using var downloader = new HuggingFaceDownloader(cacheDir);
 
             // Use auto-discovery to find ONNX files and config
+            var hwPrefs = ModelPreferences.ForCurrentHardware();
+            var preferences = options.QuantizationHint is { } hint
+                ? new ModelPreferences
+                {
+                    PreferLowMemory = hwPrefs.PreferLowMemory,
+                    QuantizationPriority = ModelPreferences.ForQuantizationHint(hint).QuantizationPriority,
+                    PreferredProvider = options.Provider != ExecutionProvider.Auto
+                        ? options.Provider : hwPrefs.PreferredProvider
+                }
+                : hwPrefs;
             var (downloadedDir, discovery) = await downloader.DownloadWithDiscoveryAsync(
                 modelIdOrPath,
-                preferences: ModelPreferences.ForCurrentHardware(),
+                preferences: preferences,
                 progress: progress,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 

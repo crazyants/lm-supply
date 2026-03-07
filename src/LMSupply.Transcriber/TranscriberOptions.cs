@@ -33,7 +33,8 @@ public sealed class TranscriberOptions : LMSupplyOptionsBase
         CacheDirectory = CacheDirectory,
         Provider = Provider,
         DisableAutoDownload = DisableAutoDownload,
-        ThreadCount = ThreadCount
+        ThreadCount = ThreadCount,
+        QuantizationHint = QuantizationHint
     };
 }
 

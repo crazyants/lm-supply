@@ -39,7 +39,11 @@ public static class LocalTranscriber
         CancellationToken cancellationToken = default)
     {
         options ??= new TranscriberOptions();
-        options.ModelId = modelIdOrPath;
+
+        // Parse variant qualifier (e.g., "large:fp16" → modelId="large", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelIdOrPath);
+        options.ModelId = baseId;
+        options.QuantizationHint ??= qualifier;
 
         var transcriber = new OnnxTranscriberModel(options);
 

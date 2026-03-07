@@ -54,6 +54,18 @@ public static class LocalOcr
         ArgumentException.ThrowIfNullOrWhiteSpace(detectionModel);
         options ??= new OcrOptions();
 
+        // Parse variant qualifier (e.g., "default:fp16" → detectionModel="default", hint="fp16")
+        var (baseDetId, detQualifier) = LMSupplyOptionsBase.SplitQualifier(detectionModel);
+        detectionModel = baseDetId;
+        options.QuantizationHint ??= detQualifier;
+
+        if (recognitionModel is not null)
+        {
+            var (baseRecId, recQualifier) = LMSupplyOptionsBase.SplitQualifier(recognitionModel);
+            recognitionModel = baseRecId;
+            options.QuantizationHint ??= recQualifier;
+        }
+
         // Resolve detection model
         var (detModelInfo, detModelPath) = await ResolveDetectionModelAsync(
             detectionModel, options, progress, cancellationToken).ConfigureAwait(false);

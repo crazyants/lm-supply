@@ -73,6 +73,50 @@ public sealed class ModelPreferences
         ForTier(HardwareProfile.Current.Tier);
 
     /// <summary>
+    /// Creates preferences from a quantization hint string (e.g., "fp16", "int8", "q4", "bnb4").
+    /// The hinted quantization level is prioritized first, with other levels as fallbacks.
+    /// </summary>
+    public static ModelPreferences ForQuantizationHint(string? hint)
+    {
+        if (string.IsNullOrWhiteSpace(hint))
+            return ForCurrentHardware();
+
+        var primary = ParseQuantizationHint(hint);
+        if (primary == Quantization.Default)
+            return new ModelPreferences
+            {
+                QuantizationPriority = [Quantization.Default, Quantization.Fp16, Quantization.Quant8, Quantization.Quant4]
+            };
+
+        // Put the hinted level first, then fill remaining in quality-descending order
+        var all = new[] { Quantization.Default, Quantization.Fp16, Quantization.Quant8, Quantization.Quant4 };
+        var priority = new List<Quantization> { primary };
+        priority.AddRange(all.Where(q => q != primary));
+
+        return new ModelPreferences
+        {
+            PreferLowMemory = primary is Quantization.Quant4,
+            QuantizationPriority = priority
+        };
+    }
+
+    /// <summary>
+    /// Parses a user-facing quantization hint to a Quantization enum value.
+    /// </summary>
+    public static Quantization ParseQuantizationHint(string hint)
+    {
+        var normalized = hint.Trim().ToLowerInvariant().TrimStart('_');
+        return normalized switch
+        {
+            "fp16" or "half" or "float16" => Quantization.Fp16,
+            "int8" or "uint8" or "q8" or "quantized" => Quantization.Quant8,
+            "int4" or "q4" or "bnb4" or "q4f16" or "4bit" => Quantization.Quant4,
+            "fp32" or "default" or "full" or "float32" => Quantization.Default,
+            _ => Quantization.Default
+        };
+    }
+
+    /// <summary>
     /// Whether to prefer smaller/quantized models for lower memory usage.
     /// </summary>
     public bool PreferLowMemory { get; init; }

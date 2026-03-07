@@ -367,10 +367,16 @@ internal sealed class OnnxTranslatorModel : ITranslatorModel
         if (_modelInfo.UseAutoDiscovery)
         {
             // Use auto-discovery for ONNX files
+            var hwPrefs = ModelPreferences.ForCurrentHardware();
             var preferences = new ModelPreferences
             {
                 PreferredSubfolder = _modelInfo.Subfolder,
-                DecoderVariantPriority = [_modelInfo.PreferredDecoderVariant, DecoderVariant.Standard, DecoderVariant.Merged]
+                DecoderVariantPriority = [_modelInfo.PreferredDecoderVariant, DecoderVariant.Standard, DecoderVariant.Merged],
+                QuantizationPriority = _options.QuantizationHint is { } hint
+                    ? ModelPreferences.ForQuantizationHint(hint).QuantizationPriority
+                    : hwPrefs.QuantizationPriority,
+                PreferredProvider = _options.Provider != ExecutionProvider.Auto
+                    ? _options.Provider : hwPrefs.PreferredProvider
             };
 
             var (modelDir, discovery) = await downloader.DownloadWithDiscoveryAsync(

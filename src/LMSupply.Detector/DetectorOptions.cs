@@ -63,6 +63,7 @@ public sealed class DetectorOptions : LMSupplyOptionsBase
         Provider = Provider,
         DisableAutoDownload = DisableAutoDownload,
         ThreadCount = ThreadCount,
-        ClassFilter = ClassFilter is not null ? new HashSet<int>(ClassFilter) : null
+        ClassFilter = ClassFilter is not null ? new HashSet<int>(ClassFilter) : null,
+        QuantizationHint = QuantizationHint
     };
 }

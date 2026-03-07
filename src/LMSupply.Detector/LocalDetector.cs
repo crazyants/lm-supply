@@ -39,7 +39,11 @@ public static class LocalDetector
         CancellationToken cancellationToken = default)
     {
         options ??= new DetectorOptions();
-        options.ModelId = modelIdOrPath;
+
+        // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelIdOrPath);
+        options.ModelId = baseId;
+        options.QuantizationHint ??= qualifier;
 
         var detector = new OnnxDetectorModel(options);
 

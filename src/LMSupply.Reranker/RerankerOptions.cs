@@ -49,6 +49,7 @@ public sealed class RerankerOptions : LMSupplyOptionsBase
         Provider = Provider,
         DisableAutoDownload = DisableAutoDownload,
         ThreadCount = ThreadCount,
-        BatchSize = BatchSize
+        BatchSize = BatchSize,
+        QuantizationHint = QuantizationHint
     };
 }

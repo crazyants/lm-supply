@@ -29,7 +29,24 @@ public sealed class ModelDiscoveryService : IDisposable
         "text_encoder", "text_encoder_2", "unet", "vae_decoder", "vae_encoder", "vae"
     };
 
-    // Encoder model file patterns for encoder-decoder architectures
+    // Encoder model file prefixes for encoder-decoder architectures (prefix-based matching)
+    private static readonly string[] EncoderPrefixes =
+    [
+        "encoder_model",  // matches encoder_model.onnx, encoder_model_fp16.onnx, encoder_model_bnb4.onnx, etc.
+        "encoder"         // matches encoder.onnx
+    ];
+
+    // Decoder model file prefixes for encoder-decoder architectures (priority order by variant)
+    private static readonly (string Prefix, DecoderVariant Variant)[] DecoderPrefixes =
+    [
+        ("decoder_model_merged", DecoderVariant.Merged),       // merged encoder+decoder
+        ("decoder_with_past_model", DecoderVariant.WithPast),  // KV-cache variant
+        ("decoder_with_past", DecoderVariant.WithPast),        // alternate naming
+        ("decoder_model", DecoderVariant.Standard),            // standalone decoder
+        ("decoder", DecoderVariant.Standard)                   // minimal naming
+    ];
+
+    // Legacy exact-match patterns kept only for IsEncoderDecoderModel (architecture detection)
     private static readonly string[] EncoderPatterns =
     [
         "encoder_model.onnx",
@@ -40,19 +57,10 @@ public sealed class ModelDiscoveryService : IDisposable
         "encoder.onnx"
     ];
 
-    // Decoder model file patterns for encoder-decoder architectures (priority order)
     private static readonly string[] DecoderPatterns =
     [
         "decoder_model_merged.onnx",
-        "decoder_model_merged_quantized.onnx",
-        "decoder_model_merged_fp16.onnx",
-        "decoder_model_merged_int8.onnx",
-        "decoder_model_merged_int4.onnx",
         "decoder_model.onnx",
-        "decoder_model_quantized.onnx",
-        "decoder_model_fp16.onnx",
-        "decoder_model_int8.onnx",
-        "decoder_model_int4.onnx",
         "decoder_with_past_model.onnx",
         "decoder.onnx"
     ];
@@ -367,7 +375,7 @@ public sealed class ModelDiscoveryService : IDisposable
         {
             var keyword = quant switch
             {
-                Quantization.Quant4 => "int4",
+                Quantization.Quant4 => "int4",  // folder names typically use int4/int8 convention
                 Quantization.Quant8 => "int8",
                 Quantization.Fp16 => "fp16",
                 _ => null
@@ -488,125 +496,153 @@ public sealed class ModelDiscoveryService : IDisposable
     }
 
     /// <summary>
-    /// Classifies encoder and decoder files from a list of ONNX files.
+    /// Classifies encoder and decoder files from a list of ONNX files using prefix-based matching.
+    /// Supports all quantization suffixes (_fp16, _int8, _int4, _bnb4, _q4, _q4f16, _uint8, etc.).
     /// </summary>
     private static (List<string> encoderFiles, List<string> decoderFiles, DecoderVariant variant)
         ClassifyEncoderDecoderFiles(List<RepoFile> onnxFiles, ModelPreferences preferences)
     {
-        var encoderFiles = new List<string>();
-        var decoderFiles = new List<string>();
+        // Classify all files by role using prefix matching
+        var allEncoders = new List<RepoFile>();
+        var decodersByVariant = new Dictionary<DecoderVariant, List<RepoFile>>();
 
         foreach (var file in onnxFiles)
         {
-            var fileName = file.FileName;
-            if (EncoderPatterns.Any(p => fileName.EndsWith(p, StringComparison.OrdinalIgnoreCase) ||
-                                         fileName.Equals(Path.GetFileName(p), StringComparison.OrdinalIgnoreCase)))
+            var baseName = Path.GetFileNameWithoutExtension(file.FileName);
+
+            // Check encoder prefixes (longest match first to avoid "encoder" matching "encoder_model_*")
+            if (EncoderPrefixes.Any(prefix => baseName.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                                               baseName.StartsWith(prefix + "_", StringComparison.OrdinalIgnoreCase)))
             {
-                encoderFiles.Add(file.Path);
+                allEncoders.Add(file);
+                continue;
             }
-            else if (DecoderPatterns.Any(p => fileName.EndsWith(p, StringComparison.OrdinalIgnoreCase) ||
-                                              fileName.Equals(Path.GetFileName(p), StringComparison.OrdinalIgnoreCase)))
+
+            // Check decoder prefixes (ordered by specificity: merged > with_past > standard)
+            foreach (var (prefix, variant) in DecoderPrefixes)
             {
-                decoderFiles.Add(file.Path);
+                if (baseName.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                    baseName.StartsWith(prefix + "_", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!decodersByVariant.TryGetValue(variant, out var list))
+                    {
+                        list = [];
+                        decodersByVariant[variant] = list;
+                    }
+                    list.Add(file);
+                    break; // Don't match shorter prefixes
+                }
             }
         }
 
-        // Select best decoder based on preferences
-        var selectedDecoder = SelectBestDecoder(decoderFiles, preferences);
-        var variant = DetectDecoderVariant(selectedDecoder);
-
-        // Select matching encoder (same quantization if required)
-        var selectedEncoder = preferences.RequireMatchedQuantization
-            ? SelectMatchingEncoder(encoderFiles, selectedDecoder)
-            : encoderFiles.FirstOrDefault();
-
-        return (
-            selectedEncoder is not null ? [selectedEncoder] : [],
-            selectedDecoder is not null ? [selectedDecoder] : [],
-            variant
-        );
-    }
-
-    /// <summary>
-    /// Selects the best decoder based on variant priority preferences.
-    /// </summary>
-    private static string? SelectBestDecoder(List<string> decoderFiles, ModelPreferences preferences)
-    {
-        if (decoderFiles.Count == 0)
-            return null;
+        // Select best decoder variant type, then best quantization within that variant
+        string? selectedDecoder = null;
+        var selectedVariant = DecoderVariant.Standard;
 
         // Check explicit override first
         if (!string.IsNullOrEmpty(preferences.ExplicitDecoderFile))
         {
-            var explicitMatch = decoderFiles.FirstOrDefault(f =>
-                f.EndsWith(preferences.ExplicitDecoderFile, StringComparison.OrdinalIgnoreCase));
+            var explicitMatch = onnxFiles.FirstOrDefault(f =>
+                f.Path.EndsWith(preferences.ExplicitDecoderFile, StringComparison.OrdinalIgnoreCase));
             if (explicitMatch is not null)
-                return explicitMatch;
-        }
-
-        // Select based on decoder variant priority
-        foreach (var variant in preferences.DecoderVariantPriority)
-        {
-            var patterns = variant switch
             {
-                DecoderVariant.Merged => new[] { "decoder_model_merged" },
-                DecoderVariant.WithPast => new[] { "decoder_with_past" },
-                DecoderVariant.Standard => new[] { "decoder_model.onnx", "decoder.onnx" },
-                _ => Array.Empty<string>()
-            };
-
-            foreach (var pattern in patterns)
-            {
-                var match = decoderFiles.FirstOrDefault(f =>
-                    Path.GetFileName(f).Contains(pattern, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                    return match;
+                selectedDecoder = explicitMatch.Path;
+                selectedVariant = DetectDecoderVariant(selectedDecoder);
             }
         }
 
-        return decoderFiles.FirstOrDefault();
+        if (selectedDecoder is null)
+        {
+            foreach (var variant in preferences.DecoderVariantPriority)
+            {
+                if (decodersByVariant.TryGetValue(variant, out var candidates) && candidates.Count > 0)
+                {
+                    // Apply quantization preference to select best variant
+                    var bestFiles = SelectBestQuantizationVariants(candidates, preferences);
+                    if (bestFiles.Count > 0)
+                    {
+                        selectedDecoder = bestFiles[0];
+                        selectedVariant = variant;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Select encoder with matching quantization
+        string? selectedEncoder = null;
+        if (allEncoders.Count > 0)
+        {
+            if (preferences.RequireMatchedQuantization && selectedDecoder is not null)
+            {
+                selectedEncoder = SelectMatchingEncoder(allEncoders, selectedDecoder, preferences);
+            }
+            else
+            {
+                var bestEncoders = SelectBestQuantizationVariants(allEncoders, preferences);
+                selectedEncoder = bestEncoders.Count > 0 ? bestEncoders[0] : null;
+            }
+        }
+
+        return (
+            selectedEncoder is not null ? [selectedEncoder] : [],
+            selectedDecoder is not null ? [selectedDecoder] : [],
+            selectedVariant
+        );
     }
 
     /// <summary>
     /// Selects an encoder that matches the quantization of the selected decoder.
+    /// Falls back to quantization preference if no exact match.
     /// </summary>
-    private static string? SelectMatchingEncoder(List<string> encoderFiles, string? selectedDecoder)
+    private static string? SelectMatchingEncoder(List<RepoFile> encoderFiles, string selectedDecoder, ModelPreferences preferences)
     {
-        if (encoderFiles.Count == 0 || selectedDecoder is null)
-            return encoderFiles.FirstOrDefault();
+        if (encoderFiles.Count == 0)
+            return null;
 
-        var decoderFileName = Path.GetFileName(selectedDecoder);
+        var decoderQuant = DetectFileQuantization(Path.GetFileNameWithoutExtension(selectedDecoder));
 
-        // Determine quantization suffix from decoder
-        string? quantSuffix = null;
-        foreach (var suffix in new[] { "_int4", "_int8", "_fp16", "_quantized" })
+        if (decoderQuant is not null)
         {
-            if (decoderFileName.Contains(suffix, StringComparison.OrdinalIgnoreCase))
-            {
-                quantSuffix = suffix;
-                break;
-            }
-        }
-
-        if (quantSuffix is not null)
-        {
-            // Find encoder with matching quantization
+            // Find encoder with same quantization suffix
             var match = encoderFiles.FirstOrDefault(f =>
-                Path.GetFileName(f).Contains(quantSuffix, StringComparison.OrdinalIgnoreCase));
+                DetectFileQuantization(Path.GetFileNameWithoutExtension(f.FileName)) == decoderQuant);
             if (match is not null)
-                return match;
+                return match.Path;
         }
         else
         {
-            // Decoder has no quantization, prefer encoder without quantization
+            // Decoder is FP32, prefer encoder without quantization
             var match = encoderFiles.FirstOrDefault(f =>
-                !HasQuantizationSuffix(Path.GetFileName(f)));
+                !HasQuantizationSuffix(f.FileName));
             if (match is not null)
-                return match;
+                return match.Path;
         }
 
-        return encoderFiles.FirstOrDefault();
+        // Fall back to preference-based selection
+        var best = SelectBestQuantizationVariants(encoderFiles, preferences);
+        return best.Count > 0 ? best[0] : encoderFiles[0].Path;
     }
+
+    /// <summary>
+    /// Detects the quantization suffix from a file name (without extension).
+    /// Returns the suffix string (e.g., "_fp16", "_bnb4") or null for FP32.
+    /// </summary>
+    private static string? DetectFileQuantization(string nameWithoutExtension)
+    {
+        foreach (var suffix in QuantizationSuffixes)
+        {
+            if (nameWithoutExtension.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return suffix;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// All known quantization suffixes, ordered longest-first to avoid partial matches.
+    /// </summary>
+    private static readonly string[] QuantizationSuffixes =
+        ["_q4f16", "_quantized", "_uint8", "_bnb4", "_int4", "_int8", "_fp16", "_q4", "_q8"];
 
     /// <summary>
     /// Detects the decoder variant type from a decoder file path.
@@ -670,6 +706,7 @@ public sealed class ModelDiscoveryService : IDisposable
 
     /// <summary>
     /// Selects the best quantization variants based on preferences.
+    /// Supports all common suffixes: _int4, _int8, _fp16, _bnb4, _q4, _q4f16, _uint8, _quantized.
     /// </summary>
     private static List<string> SelectBestQuantizationVariants(
         List<RepoFile> candidates,
@@ -689,25 +726,30 @@ public sealed class ModelDiscoveryService : IDisposable
 
             foreach (var quant in preferences.QuantizationPriority)
             {
-                var suffix = quant switch
+                if (quant == Quantization.Default)
                 {
-                    Quantization.Quant4 => "_int4",
-                    Quantization.Quant8 => "_int8",
-                    Quantization.Fp16 => "_fp16",
-                    _ => ""
-                };
-
-                bestVariant = quant == Quantization.Default
-                    ? variants.FirstOrDefault(v => !HasQuantizationSuffix(v.FileName))
-                    : variants.FirstOrDefault(v => v.FileName.Contains(suffix, StringComparison.OrdinalIgnoreCase));
+                    bestVariant = variants.FirstOrDefault(v => !HasQuantizationSuffix(v.FileName));
+                }
+                else
+                {
+                    // Try all suffixes that map to this quantization level
+                    var suffixes = QuantizationLevelSuffixes(quant);
+                    foreach (var suffix in suffixes)
+                    {
+                        bestVariant = variants.FirstOrDefault(v =>
+                            Path.GetFileNameWithoutExtension(v.FileName)
+                                .EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+                        if (bestVariant is not null)
+                            break;
+                    }
+                }
 
                 if (bestVariant is not null)
                     break;
             }
 
-            // 2차: 이름 매칭 실패 시 크기 기반 선택
-            // PreferLowMemory(Low tier) → 가장 작은 파일, 그 외 → 가장 큰 파일
-            // Size=0인 파일은 크기 미확인 항목이므로 우선 제외하고, 없으면 전체 사용
+            // Fallback: size-based selection when no suffix match
+            // PreferLowMemory (Low tier) → smallest file, otherwise → largest file
             if (bestVariant is null && variants.Count > 0)
             {
                 var withSize = variants.Where(v => v.Size > 0).ToList();
@@ -717,7 +759,6 @@ public sealed class ModelDiscoveryService : IDisposable
                     : pool.MaxBy(v => v.Size);
             }
 
-            // Fall back to first variant if no match
             bestVariant ??= variants.First();
             selected.Add(bestVariant.Path);
         }
@@ -726,14 +767,26 @@ public sealed class ModelDiscoveryService : IDisposable
     }
 
     /// <summary>
+    /// Returns all file suffixes that correspond to a given quantization level.
+    /// Ordered by preference (standard naming first).
+    /// </summary>
+    private static string[] QuantizationLevelSuffixes(Quantization quant) => quant switch
+    {
+        Quantization.Fp16 => ["_fp16"],
+        Quantization.Quant8 => ["_int8", "_uint8", "_quantized", "_q8"],
+        Quantization.Quant4 => ["_int4", "_bnb4", "_q4", "_q4f16"],
+        _ => []
+    };
+
+    /// <summary>
     /// Gets the base model name without quantization suffix.
     /// </summary>
     private static string GetBaseModelName(string fileName)
     {
         var name = Path.GetFileNameWithoutExtension(fileName);
 
-        // Remove common quantization suffixes (longer suffixes must come first to avoid partial matches)
-        foreach (var suffix in new[] { "_q4f16", "_bnb4", "_int4", "_int8", "_fp16", "_uint8", "_quantized", "_q4", "_q8" })
+        // Remove common quantization suffixes (uses centralized list, longest-first)
+        foreach (var suffix in QuantizationSuffixes)
         {
             if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 return name[..^suffix.Length];
@@ -747,8 +800,8 @@ public sealed class ModelDiscoveryService : IDisposable
     /// </summary>
     private static bool HasQuantizationSuffix(string fileName)
     {
-        var suffixes = new[] { "_int4", "_int8", "_fp16", "_uint8", "_quantized", "_q4", "_q8", "_bnb4", "_q4f16" };
-        return suffixes.Any(s => fileName.Contains(s, StringComparison.OrdinalIgnoreCase));
+        var name = Path.GetFileNameWithoutExtension(fileName);
+        return QuantizationSuffixes.Any(s => name.EndsWith(s, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

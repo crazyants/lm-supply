@@ -39,7 +39,11 @@ public static class LocalSegmenter
         CancellationToken cancellationToken = default)
     {
         options ??= new SegmenterOptions();
-        options.ModelId = modelIdOrPath;
+
+        // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelIdOrPath);
+        options.ModelId = baseId;
+        options.QuantizationHint ??= qualifier;
 
         var segmenter = new OnnxSegmenterModel(options);
 

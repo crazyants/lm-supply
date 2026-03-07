@@ -21,7 +21,8 @@ public sealed class SynthesizerOptions : LMSupplyOptionsBase
         ModelId = ModelId,
         Provider = Provider,
         CacheDirectory = CacheDirectory,
-        ThreadCount = ThreadCount
+        ThreadCount = ThreadCount,
+        QuantizationHint = QuantizationHint
     };
 }
 

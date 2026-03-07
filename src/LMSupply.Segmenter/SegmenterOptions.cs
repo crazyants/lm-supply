@@ -40,6 +40,7 @@ public sealed class SegmenterOptions : LMSupplyOptionsBase
         Provider = Provider,
         DisableAutoDownload = DisableAutoDownload,
         ThreadCount = ThreadCount,
-        ResizeToOriginal = ResizeToOriginal
+        ResizeToOriginal = ResizeToOriginal,
+        QuantizationHint = QuantizationHint
     };
 }

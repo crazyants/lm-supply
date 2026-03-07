@@ -66,21 +66,25 @@ public abstract class ModelRegistryBase<TModelInfo> : IModelRegistry<TModelInfo>
         if (string.IsNullOrWhiteSpace(modelIdOrAlias))
             return false;
 
+        // Strip variant qualifier if present (e.g., "large:fp16" → "large")
+        // Qualifier is handled by the loading layer via LMSupplyOptionsBase.SplitQualifier
+        var (baseId, _) = LMSupplyOptionsBase.SplitQualifier(modelIdOrAlias);
+
         // 1. "auto"
-        if (modelIdOrAlias.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        if (baseId.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
             modelInfo = GetAutoModel();
             return true;
         }
 
         // 2. User alias -> resolve target (no re-entry to user aliases)
-        if (_userAliases.TryGetValue(modelIdOrAlias, out var targetId))
+        if (_userAliases.TryGetValue(baseId, out var targetId))
         {
             return TryResolveInternal(targetId, out modelInfo);
         }
 
         // 3-7. Standard resolution
-        return TryResolveInternal(modelIdOrAlias, out modelInfo);
+        return TryResolveInternal(baseId, out modelInfo);
     }
 
     private bool TryResolveInternal(string modelIdOrAlias, out TModelInfo? modelInfo)

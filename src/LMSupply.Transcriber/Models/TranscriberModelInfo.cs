@@ -92,6 +92,7 @@ public sealed class TranscriberModelInfo : IModelInfoBase
     /// </summary>
     public string License { get; init; } = "MIT";
 
+
     /// <summary>
     /// Creates a new instance with parameters overridden from a parsed Whisper config.
     /// Only non-null config values are applied.

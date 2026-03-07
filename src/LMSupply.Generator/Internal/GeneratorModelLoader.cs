@@ -51,9 +51,26 @@ internal static class GeneratorModelLoader
         GeneratorModelRegistry.Default.TryResolve(modelId, out var modelInfo);
 
         // Build preferences from registry info if available
-        var preferences = modelInfo?.Subfolder != null
-            ? new ModelPreferences { PreferredSubfolder = modelInfo.Subfolder }
-            : ModelPreferences.ForCurrentHardware();
+        var hwPrefs = ModelPreferences.ForCurrentHardware();
+        ModelPreferences preferences;
+        if (modelInfo?.Subfolder != null)
+        {
+            preferences = new ModelPreferences { PreferredSubfolder = modelInfo.Subfolder };
+        }
+        else if (options.QuantizationHint is { } hint)
+        {
+            preferences = new ModelPreferences
+            {
+                PreferLowMemory = hwPrefs.PreferLowMemory,
+                QuantizationPriority = ModelPreferences.ForQuantizationHint(hint).QuantizationPriority,
+                PreferredProvider = options.Provider != ExecutionProvider.Auto
+                    ? options.Provider : hwPrefs.PreferredProvider
+            };
+        }
+        else
+        {
+            preferences = hwPrefs;
+        }
 
         // Use discovery-based download for all models
         // This handles dynamic ONNX file names (e.g., phi-3.5-mini-instruct-*.onnx)

@@ -71,6 +71,7 @@ public sealed class TranslatorOptions : LMSupplyOptionsBase
         BeamWidth = BeamWidth,
         UseGreedyDecoding = UseGreedyDecoding,
         LengthPenalty = LengthPenalty,
-        RepetitionPenalty = RepetitionPenalty
+        RepetitionPenalty = RepetitionPenalty,
+        QuantizationHint = QuantizationHint
     };
 }

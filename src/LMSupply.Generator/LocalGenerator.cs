@@ -49,6 +49,11 @@ public static class LocalGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         options ??= new GeneratorOptions();
 
+        // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelId);
+        modelId = baseId;
+        options.QuantizationHint ??= qualifier;
+
         // Handle "auto" and standard aliases via the registry
         if (GeneratorModelRegistry.Default.TryResolve(modelId, out var resolvedModel))
         {

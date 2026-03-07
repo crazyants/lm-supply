@@ -71,7 +71,11 @@ public static class LocalReranker
         CancellationToken cancellationToken = default)
     {
         options ??= new RerankerOptions();
-        options.ModelId = modelIdOrPath;
+
+        // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelIdOrPath);
+        options.ModelId = baseId;
+        options.QuantizationHint ??= qualifier;
 
         // Check for GGUF format
         if (IsGgufModel(modelIdOrPath))

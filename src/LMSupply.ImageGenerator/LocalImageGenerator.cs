@@ -54,6 +54,13 @@ public static class LocalImageGenerator
 
         options ??= new ImageGeneratorOptions();
 
+        // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelIdOrPath);
+        modelIdOrPath = baseId;
+        // Note: ImageGeneratorOptions doesn't extend LMSupplyOptionsBase,
+        // so qualifier is parsed but not stored (reserved for future use)
+        _ = qualifier;
+
         // Resolve model to ImageGeneratorModelInfo via registry
         var modelInfo = ImageGeneratorModelRegistry.Default.Resolve(modelIdOrPath);
         var modelDefinition = ImageGeneratorModelRegistry.ToModelDefinition(modelInfo);

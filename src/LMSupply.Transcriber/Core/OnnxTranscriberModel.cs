@@ -461,15 +461,25 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         var cacheDir = _options.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
         using var downloader = new HuggingFaceDownloader(cacheDir);
 
+        // Build hardware-aware preferences with onnx subfolder for Whisper models
+        var hwPrefs = ModelPreferences.ForCurrentHardware();
+        var preferences = new ModelPreferences
+        {
+            PreferredSubfolder = "onnx",
+            PreferLowMemory = hwPrefs.PreferLowMemory,
+            QuantizationPriority = _options.QuantizationHint is { } hint
+                ? ModelPreferences.ForQuantizationHint(hint).QuantizationPriority
+                : hwPrefs.QuantizationPriority,
+            PreferredProvider = _options.Provider != ExecutionProvider.Auto
+                ? _options.Provider : hwPrefs.PreferredProvider,
+            RequireMatchedQuantization = true
+        };
+
         // Use discovery-based download to automatically find all model files
         // including external data files (*.onnx_data) for large models
         var (modelPath, discovery) = await downloader.DownloadWithDiscoveryAsync(
             _modelInfo.Id,
-            preferences: new ModelPreferences
-            {
-                // Prefer onnx subfolder for Whisper models
-                PreferredSubfolder = "onnx"
-            },
+            preferences: preferences,
             cancellationToken: cancellationToken);
 
         return (modelPath, discovery);

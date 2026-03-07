@@ -705,6 +705,14 @@ public sealed class ModelDiscoveryService : IDisposable
         => SelectBestQuantizationVariants(candidates, preferences);
 
     /// <summary>
+    /// Test-accessible wrapper for ClassifyEncoderDecoderFiles.
+    /// Returns (encoderFiles, decoderFiles, variant) without requiring network calls.
+    /// </summary>
+    internal static (List<string> EncoderFiles, List<string> DecoderFiles, DecoderVariant Variant)
+        ClassifyEncoderDecoderForTest(List<RepoFile> onnxFiles, ModelPreferences preferences)
+        => ClassifyEncoderDecoderFiles(onnxFiles, preferences);
+
+    /// <summary>
     /// Selects the best quantization variants based on preferences.
     /// Supports all common suffixes: _int4, _int8, _fp16, _bnb4, _q4, _q4f16, _uint8, _quantized.
     /// </summary>

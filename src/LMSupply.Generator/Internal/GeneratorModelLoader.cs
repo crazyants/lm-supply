@@ -27,7 +27,7 @@ internal static class GeneratorModelLoader
         {
             ModelFormat.Gguf => await LoadGgufAsync(modelId, options, progress, cancellationToken),
             ModelFormat.Onnx => await LoadOnnxAsync(modelId, options, progress, cancellationToken),
-            ModelFormat.Unknown => await LoadOnnxAsync(modelId, options, progress, cancellationToken), // fallback
+            ModelFormat.Unknown => await LoadGgufAsync(modelId, options, progress, cancellationToken), // GGUF fallback (GGUF-first strategy)
             _ => throw new NotSupportedException($"Unsupported model format: {format}")
         };
     }
@@ -157,7 +157,7 @@ internal static class GeneratorModelLoader
         {
             ModelFormat.Gguf => await LoadGgufFromPathAsync(modelPath, options, modelId),
             ModelFormat.Onnx => await LoadOnnxFromPathAsync(modelPath, options, modelId),
-            ModelFormat.Unknown => await LoadOnnxFromPathAsync(modelPath, options, modelId), // fallback
+            ModelFormat.Unknown => await LoadGgufFromPathAsync(modelPath, options, modelId), // GGUF fallback (GGUF-first strategy)
             _ => throw new NotSupportedException($"Unsupported model format: {format}")
         };
     }

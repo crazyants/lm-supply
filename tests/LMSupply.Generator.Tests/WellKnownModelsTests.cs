@@ -19,10 +19,10 @@ public class WellKnownModelsTests
     }
 
     [Fact]
-    public void Generator_Fast_IsLlama1B()
+    public void Generator_Fast_IsPhi4Mini()
     {
-        // Assert
-        WellKnownModels.Generator.Fast.Should().Contain("Llama-3.2-1B");
+        // Fast is now Phi4Mini (smallest FC-capable ONNX model)
+        WellKnownModels.Generator.Fast.Should().Be(WellKnownModels.Generator.Default);
     }
 
     [Fact]
@@ -43,13 +43,12 @@ public class WellKnownModelsTests
     }
 
     [Fact]
-    public void GetLicenseTier_Llama_ReturnsConditional()
+    public void GetLicenseTier_Fast_ReturnsMIT()
     {
-        // Act
+        // Fast is now Phi4Mini (MIT license)
         var tier = WellKnownModels.GetLicenseTier(WellKnownModels.Generator.Fast);
 
-        // Assert
-        tier.Should().Be(LicenseTier.Conditional);
+        tier.Should().Be(LicenseTier.MIT);
     }
 
     [Fact]
@@ -63,25 +62,23 @@ public class WellKnownModelsTests
     }
 
     [Fact]
-    public void HasRestrictions_ConditionalModel_ReturnsTrue()
+    public void HasRestrictions_FastModel_ReturnsFalse()
     {
-        // Act
+        // Fast is now Phi4Mini (MIT, no restrictions)
         var hasRestrictions = WellKnownModels.HasRestrictions(WellKnownModels.Generator.Fast);
 
-        // Assert
-        hasRestrictions.Should().BeTrue();
+        hasRestrictions.Should().BeFalse();
     }
 
     [Fact]
     public void GetUnrestrictedModels_ContainsMITModelsOnly()
     {
-        // Act
         var models = WellKnownModels.GetUnrestrictedModels();
 
-        // Assert
         models.Should().Contain(WellKnownModels.Generator.Default);
         models.Should().Contain(WellKnownModels.Generator.Quality);
-        models.Should().NotContain(WellKnownModels.Generator.Fast);
+        // Fast == Default (Phi4Mini), so it's also in the unrestricted list
+        models.Should().Contain(WellKnownModels.Generator.Fast);
     }
 
     [Fact]

@@ -98,11 +98,10 @@ public static class ModelRegistryEndpoints
         Models =
         [
             new ModelAliasInfo { AliasName = "default", RepoId = WellKnownModels.Generator.Default, Description = "Microsoft Phi-4 Mini (3.8B, MIT)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Default) },
-            new ModelAliasInfo { AliasName = "fast", RepoId = WellKnownModels.Generator.Fast, Description = "Llama 3.2 1B (ultra-fast)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Fast) },
+            new ModelAliasInfo { AliasName = "fast", RepoId = WellKnownModels.Generator.Fast, Description = "Phi-4 Mini (3.8B, fastest FC-capable)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Fast) },
             new ModelAliasInfo { AliasName = "quality", RepoId = WellKnownModels.Generator.Quality, Description = "Microsoft Phi-4 (14B, highest quality)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Quality) },
             new ModelAliasInfo { AliasName = "medium", RepoId = WellKnownModels.Generator.Medium, Description = "Phi-3.5 Mini (3.8B, 128K context)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Medium) },
-            new ModelAliasInfo { AliasName = "large", RepoId = WellKnownModels.Generator.Large, Description = "Llama 3.2 3B", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Large) },
-            new ModelAliasInfo { AliasName = "multilingual", RepoId = WellKnownModels.Generator.Multilingual, Description = "Qwen 2.5 3B (29+ languages, Apache 2.0)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Multilingual) },
+            new ModelAliasInfo { AliasName = "large", RepoId = WellKnownModels.Generator.Large, Description = "Microsoft Phi-4 (14B, highest quality)", IsCached = cachedRepoIds.Contains(WellKnownModels.Generator.Large) },
         ]
     };
 

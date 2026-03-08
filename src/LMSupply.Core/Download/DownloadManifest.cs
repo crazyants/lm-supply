@@ -39,7 +39,7 @@ public sealed class DownloadManifest
             var json = await File.ReadAllTextAsync(path);
             return JsonSerializer.Deserialize<DownloadManifest>(json, s_jsonOptions);
         }
-        catch
+        catch (JsonException)
         {
             return null;
         }

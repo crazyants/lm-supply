@@ -38,20 +38,19 @@ public sealed class GeneratorModelRegistry : ModelRegistryBase<ModelInfo>
     /// </summary>
     /// <remarks>
     /// Tier mapping:
-    /// - Low/Medium: Phi-3.5-mini (3.8B params) - legacy, lightweight
-    /// - High:       Phi-4-mini (3.8B, 16K context) - default, good quality
-    /// - Ultra:      Phi-4 (14B params) - highest quality
+    /// - Ultra/High: Phi-4 (14B params) - highest quality
+    /// - Others:     Phi-4-mini (3.8B, 16K context) - default, good balance
     /// </remarks>
     protected override ModelInfo GetAutoModel()
     {
         var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[GeneratorModelRegistry] Auto-selecting model for tier: {tier}");
+        Trace.TraceInformation($"[GeneratorModelRegistry] Auto-selecting ONNX model for tier: {tier}");
 
         var model = tier switch
         {
-            PerformanceTier.Ultra => DefaultGeneratorModels.Phi4,
-            PerformanceTier.High => DefaultGeneratorModels.Phi4Mini,
-            _ => DefaultGeneratorModels.Phi35Mini
+            PerformanceTier.Ultra => DefaultGeneratorModels.Phi4,      // 14B
+            PerformanceTier.High => DefaultGeneratorModels.Phi4,       // 14B
+            _ => DefaultGeneratorModels.Phi4Mini                       // 3.8B
         };
 
         return model with { AliasName = "auto" };

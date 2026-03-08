@@ -45,6 +45,26 @@ public sealed class DownloadManifest
         }
     }
 
+    /// <summary>
+    /// Reads the manifest synchronously. Returns null if not found or corrupt.
+    /// </summary>
+    public static DownloadManifest? Read(string directoryPath)
+    {
+        var path = Path.Combine(directoryPath, FileName);
+        if (!File.Exists(path))
+            return null;
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<DownloadManifest>(json, s_jsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public static DownloadManifest CreateFromDirectory(
         string directoryPath, string? repoId = null, string? revision = null)
     {

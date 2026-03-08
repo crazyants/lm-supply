@@ -115,7 +115,7 @@ public class ModelPathResolverTests : IDisposable
     }
 
     [Fact]
-    public async Task ResolveModelAsync_WithEmptyDirectory_ShouldThrowModelLoadException()
+    public async Task ResolveModelAsync_WithEmptyDirectory_ShouldThrowFileNotFound()
     {
         // Arrange
         var emptyDir = Path.Combine(_tempDir, "empty-model");
@@ -123,9 +123,9 @@ public class ModelPathResolverTests : IDisposable
 
         using var resolver = new ModelPathResolver(_tempDir);
 
-        // Act & Assert - validation rejects directories with no model files
+        // Act & Assert - no ONNX files found in empty directory
         var act = async () => await resolver.ResolveModelAsync(emptyDir, "model.onnx");
-        await act.Should().ThrowAsync<LMSupply.Exceptions.ModelLoadException>();
+        await act.Should().ThrowAsync<FileNotFoundException>();
     }
 
     [Fact]

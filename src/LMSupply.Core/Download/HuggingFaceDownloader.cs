@@ -182,8 +182,26 @@ public sealed class HuggingFaceDownloader : IDisposable
             }
         }
 
-        // Write manifest after successful download
-        var downloadedManifest = DownloadManifest.CreateFromDirectory(modelDir, repoId, revision);
+        // Write manifest from actually downloaded files (not directory scan)
+        var downloadedFiles = fileList
+            .Select(file =>
+            {
+                var filePath = Path.Combine(modelDir, file);
+                return new ManifestFileEntry
+                {
+                    Path = file,
+                    Size = File.Exists(filePath) ? new FileInfo(filePath).Length : 0
+                };
+            })
+            .Where(e => e.Size > 0)
+            .ToList();
+
+        var downloadedManifest = new DownloadManifest
+        {
+            RepoId = repoId,
+            Revision = revision,
+            Files = downloadedFiles
+        };
         await DownloadManifest.WriteAsync(modelDir, downloadedManifest);
 
         return modelDir;

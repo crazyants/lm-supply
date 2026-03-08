@@ -64,7 +64,9 @@ public static class ModelDirectoryValidator
 
         foreach (var entry in manifest.Files)
         {
-            var fullPath = Path.Combine(directoryPath, entry.Path);
+            // Normalize path separators for cross-platform compatibility
+            var normalizedPath = entry.Path.Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.Combine(directoryPath, normalizedPath);
             if (!File.Exists(fullPath))
             {
                 missing.Add(entry.Path);
@@ -151,13 +153,6 @@ public static class ModelDirectoryValidator
 
     private static DownloadManifest? ReadManifestSync(string directoryPath)
     {
-        try
-        {
-            return DownloadManifest.ReadAsync(directoryPath).GetAwaiter().GetResult();
-        }
-        catch
-        {
-            return null;
-        }
+        return DownloadManifest.Read(directoryPath);
     }
 }

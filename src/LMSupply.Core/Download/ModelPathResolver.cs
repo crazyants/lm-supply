@@ -78,9 +78,14 @@ public sealed class ModelPathResolver : IDisposable
         // Check if it's a local directory path
         if (Directory.Exists(modelIdOrPath))
         {
-            // Validate directory before using it
+            // Validate for critical issues (.part files, LFS pointers) before resolution
             var validation = ModelDirectoryValidator.Validate(modelIdOrPath);
-            if (!validation.IsValid)
+
+            // Only block on critical failures (.part files, LFS pointers, manifest mismatches).
+            // Allow "No model files found" to fall through — model may be in subdirectories.
+            if (!validation.IsValid
+                && validation.Reason != null
+                && !validation.Reason.StartsWith("No model files found", StringComparison.Ordinal))
             {
                 throw new ModelLoadException(
                     $"Model directory validation failed: {validation.Reason}",
@@ -99,7 +104,7 @@ public sealed class ModelPathResolver : IDisposable
                 };
             }
 
-            // Try to find any ONNX file in the directory
+            // Try to find any ONNX file in the directory (including subdirectories)
             var onnxFiles = Directory.GetFiles(modelIdOrPath, "*.onnx", SearchOption.AllDirectories);
             if (onnxFiles.Length > 0)
             {

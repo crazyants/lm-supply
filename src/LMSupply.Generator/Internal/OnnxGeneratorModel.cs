@@ -287,11 +287,11 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
     {
         var toolDescriptions = string.Join("\n", tools.Select(t =>
         {
-            var parts = new List<string> { $"{{\"name\": \"{t.Function.Name}\"" };
-            if (t.Function.Description != null)
-                parts.Add($"\"description\": \"{t.Function.Description}\"");
-            if (t.Function.Parameters != null)
-                parts.Add($"\"parameters\": {t.Function.Parameters}");
+            var parts = new List<string> { $"{{\"name\": \"{t.Name}\"" };
+            if (t.Description != null)
+                parts.Add($"\"description\": \"{t.Description}\"");
+            if (t.Parameters.HasValue)
+                parts.Add($"\"parameters\": {t.Parameters.Value}");
             return string.Join(", ", parts) + "}";
         }));
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using LMSupply.Generator.Models;
 
@@ -8,12 +9,7 @@ public class ToolCallingModelTests
     [Fact]
     public void ChatToolCall_Creation_SetsProperties()
     {
-        var toolCall = new ChatToolCall
-        {
-            Id = "call_123",
-            FunctionName = "get_weather",
-            Arguments = """{"location": "Seoul"}"""
-        };
+        var toolCall = new ChatToolCall("call_123", "get_weather", """{"location": "Seoul"}""");
 
         toolCall.Id.Should().Be("call_123");
         toolCall.FunctionName.Should().Be("get_weather");
@@ -23,19 +19,17 @@ public class ToolCallingModelTests
     [Fact]
     public void ChatToolDefinition_Creation_SetsProperties()
     {
-        var tool = new ChatToolDefinition
-        {
-            Function = new ChatFunctionDefinition
-            {
-                Name = "get_weather",
-                Description = "Get weather for a location",
-                Parameters = """{"type":"object","properties":{"location":{"type":"string"}}}"""
-            }
-        };
+        var parameters = JsonSerializer.Deserialize<JsonElement>(
+            """{"type":"object","properties":{"location":{"type":"string"}}}""");
 
-        tool.Type.Should().Be("function");
-        tool.Function.Name.Should().Be("get_weather");
-        tool.Function.Description.Should().NotBeNull();
+        var tool = new ChatToolDefinition(
+            "get_weather",
+            "Get weather for a location",
+            parameters);
+
+        tool.Name.Should().Be("get_weather");
+        tool.Description.Should().NotBeNull();
+        tool.Parameters.Should().NotBeNull();
     }
 
     [Fact]
@@ -43,7 +37,7 @@ public class ToolCallingModelTests
     {
         var toolCalls = new[]
         {
-            new ChatToolCall { Id = "call_1", FunctionName = "search", Arguments = "{}" }
+            new ChatToolCall("call_1", "search", "{}")
         };
 
         var msg = ChatMessage.AssistantToolCalls(toolCalls);
@@ -74,7 +68,7 @@ public class ToolCallingModelTests
     {
         var result = new ChatCompletionResult
         {
-            ToolCalls = new[] { new ChatToolCall { Id = "1", FunctionName = "f", Arguments = "{}" } }
+            ToolCalls = new[] { new ChatToolCall("1", "f", "{}") }
         };
 
         result.HasToolCalls.Should().BeTrue();
@@ -93,5 +87,22 @@ public class ToolCallingModelTests
     {
         var options = new GenerationOptions();
         options.Tools.Should().BeNull();
+    }
+
+    [Fact]
+    public void ToolAlias_ImplicitConversion_Works()
+    {
+        var alias = new Models.ToolCall("id1", "func", "{}");
+        ChatToolCall chatToolCall = alias;
+
+        chatToolCall.Id.Should().Be("id1");
+        chatToolCall.FunctionName.Should().Be("func");
+
+        var parameters = JsonSerializer.Deserialize<JsonElement>("""{"type":"object"}""");
+        var defAlias = new Models.ToolDefinition("fn", "desc", parameters);
+        ChatToolDefinition chatToolDef = defAlias;
+
+        chatToolDef.Name.Should().Be("fn");
+        chatToolDef.Description.Should().Be("desc");
     }
 }

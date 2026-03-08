@@ -89,12 +89,7 @@ internal static class ToolCallTextParser
             if (string.IsNullOrEmpty(name))
                 continue;
 
-            calls.Add(new ChatToolCall
-            {
-                Id = id,
-                FunctionName = name,
-                Arguments = arguments
-            });
+            calls.Add(new ChatToolCall(id, name, arguments));
         }
 
         return calls.Count > 0 ? calls : null;
@@ -109,15 +104,7 @@ internal static class ToolCallTextParser
 
         var arguments = SerializeArguments(argsElement);
 
-        return
-        [
-            new()
-            {
-                Id = GenerateCallId(),
-                FunctionName = name,
-                Arguments = arguments
-            }
-        ];
+        return [new ChatToolCall(GenerateCallId(), name, arguments)];
     }
 
     /// <summary>

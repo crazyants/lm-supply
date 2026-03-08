@@ -390,6 +390,9 @@ public static class ChatEndpoints
 
         public Task WarmupAsync(CancellationToken ct = default) => inner.WarmupAsync(ct);
 
+        public Task<ChatCompletionResult> GenerateChatWithToolsAsync(IEnumerable<ChatMessage> messages, GenerationOptions? options = null, CancellationToken ct = default)
+            => inner.GenerateChatWithToolsAsync(messages, options, ct);
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask; // Does NOT dispose the underlying model
     }
 }

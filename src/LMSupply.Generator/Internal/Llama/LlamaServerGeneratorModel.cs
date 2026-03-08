@@ -356,33 +356,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         try
         {
             // Convert to llama-server format
-            var serverMessages = messages.Select(m => new ChatCompletionMessage
-            {
-                Role = m.Role switch
-                {
-                    ChatRole.System => "system",
-                    ChatRole.User => "user",
-                    ChatRole.Assistant => "assistant",
-                    _ => "user"
-                },
-                Content = m.Content
-            });
-
-            var chatOptions = new ChatCompletionOptions
-            {
-                MaxTokens = options.MaxNewTokens ?? options.MaxTokens,
-                Temperature = options.Temperature,
-                TopP = options.TopP,
-                TopK = options.TopK,
-                MinP = options.MinP,
-                RepeatPenalty = options.RepetitionPenalty,
-                FrequencyPenalty = options.FrequencyPenalty,
-                PresencePenalty = options.PresencePenalty,
-                Seed = options.Seed,
-                StopSequences = MergeStopSequences(options.StopSequences),
-                Grammar = options.Grammar,
-                JsonSchema = options.JsonSchema
-            };
+            var serverMessages = ConvertMessages(messages);
+            var chatOptions = CreateChatOptions(options);
 
             // Initialize reasoning token filter if needed
             var useReasoningFilter = options.FilterReasoningTokens || options.ExtractReasoningTokens;
@@ -477,6 +452,106 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         BackendLog = _serverLease.Server.Info?.StartupLog,
         RuntimeVersion = _serverVersion
     };
+
+    /// <summary>
+    /// Generates a chat completion with tool calling support.
+    /// Returns structured result that may contain tool calls.
+    /// </summary>
+    public async Task<ChatCompletionResult> GenerateChatWithToolsAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        options ??= GenerationOptions.Default;
+
+        await _concurrencyLimiter.WaitAsync(cancellationToken);
+        try
+        {
+            var serverMessages = ConvertMessages(messages);
+            var chatOptions = CreateChatOptions(options);
+
+            var response = await _serverLease.Client.GenerateChatWithToolsAsync(
+                serverMessages, chatOptions, cancellationToken);
+
+            var choice = response.Choices?.FirstOrDefault();
+            var message = choice?.Message;
+
+            return new ChatCompletionResult
+            {
+                Content = message?.Content,
+                FinishReason = choice?.FinishReason,
+                ToolCalls = message?.ToolCalls?.Select(tc => new ChatToolCall
+                {
+                    Id = tc.Id ?? string.Empty,
+                    FunctionName = tc.Function?.Name ?? string.Empty,
+                    Arguments = tc.Function?.Arguments ?? string.Empty
+                }).ToList()
+            };
+        }
+        finally
+        {
+            _concurrencyLimiter.Release();
+        }
+    }
+
+    private static IEnumerable<ChatCompletionMessage> ConvertMessages(IEnumerable<ChatMessage> messages)
+    {
+        return messages.Select(m => new ChatCompletionMessage
+        {
+            Role = m.Role switch
+            {
+                ChatRole.System => "system",
+                ChatRole.User => "user",
+                ChatRole.Assistant => "assistant",
+                ChatRole.Tool => "tool",
+                _ => "user"
+            },
+            Content = m.Content,
+            ToolCallId = m.ToolCallId,
+            ToolCalls = m.ToolCalls?.Select(tc => new ToolCallMessage
+            {
+                Id = tc.Id,
+                Type = "function",
+                Function = new FunctionCallMessage
+                {
+                    Name = tc.FunctionName,
+                    Arguments = tc.Arguments
+                }
+            }).ToList()
+        });
+    }
+
+    private ChatCompletionOptions CreateChatOptions(GenerationOptions options)
+    {
+        return new ChatCompletionOptions
+        {
+            MaxTokens = options.MaxNewTokens ?? options.MaxTokens,
+            Temperature = options.Temperature,
+            TopP = options.TopP,
+            TopK = options.TopK,
+            MinP = options.MinP,
+            RepeatPenalty = options.RepetitionPenalty,
+            FrequencyPenalty = options.FrequencyPenalty,
+            PresencePenalty = options.PresencePenalty,
+            Seed = options.Seed,
+            StopSequences = MergeStopSequences(options.StopSequences),
+            Grammar = options.Grammar,
+            JsonSchema = options.JsonSchema,
+            Tools = options.Tools?.Select(t => new ToolDefinition
+            {
+                Type = "function",
+                Function = new FunctionDefinition
+                {
+                    Name = t.Function.Name,
+                    Description = t.Function.Description,
+                    Parameters = t.Function.Parameters != null
+                        ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(t.Function.Parameters)
+                        : null
+                }
+            }).ToList()
+        };
+    }
 
     private List<string>? MergeStopSequences(IReadOnlyList<string>? userStops)
     {

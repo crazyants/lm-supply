@@ -61,6 +61,19 @@ public interface ITextGenerator : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Generates a chat completion with tool calling support.
+    /// Returns structured result that may contain tool calls.
+    /// </summary>
+    /// <param name="messages">The chat messages.</param>
+    /// <param name="options">Generation options. If null, default options are used.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A chat completion result that may contain text content and/or tool calls.</returns>
+    Task<ChatCompletionResult> GenerateChatWithToolsAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Pre-loads the model to avoid cold start latency on first inference.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

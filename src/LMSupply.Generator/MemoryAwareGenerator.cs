@@ -167,6 +167,20 @@ public sealed class MemoryAwareGenerator : IGeneratorModel
     }
 
     /// <inheritdoc />
+    public async Task<ChatCompletionResult> GenerateChatWithToolsAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        CheckMemoryBudget();
+
+        var result = await _inner.GenerateChatWithToolsAsync(messages, options, cancellationToken);
+        CheckMemoryDuringGeneration();
+        return result;
+    }
+
+    /// <inheritdoc />
     public Task WarmupAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();

@@ -81,9 +81,9 @@ public class ChatMessageTests
 public class ChatRoleEnumTests
 {
     [Fact]
-    public void ShouldHaveThreeValues()
+    public void ShouldHaveFourValues()
     {
-        Enum.GetValues<ChatRole>().Should().HaveCount(3);
+        Enum.GetValues<ChatRole>().Should().HaveCount(4);
     }
 
     [Theory]

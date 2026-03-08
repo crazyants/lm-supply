@@ -131,6 +131,12 @@ public sealed class GenerationOptions
     /// </summary>
     public bool ExtractReasoningTokens { get; set; }
 
+    /// <summary>
+    /// Tool definitions available for the model to call.
+    /// When set, the model may respond with tool calls instead of text.
+    /// </summary>
+    public IReadOnlyList<ChatToolDefinition>? Tools { get; set; }
+
     #region Phase 3: Grammar Constraints
 
     /// <summary>

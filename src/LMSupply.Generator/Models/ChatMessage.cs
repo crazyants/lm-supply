@@ -8,6 +8,16 @@ namespace LMSupply.Generator.Models;
 public readonly record struct ChatMessage(ChatRole Role, string Content)
 {
     /// <summary>
+    /// Tool calls made by the assistant.
+    /// </summary>
+    public IReadOnlyList<ChatToolCall>? ToolCalls { get; init; }
+
+    /// <summary>
+    /// Tool call ID this message is responding to (for Tool role).
+    /// </summary>
+    public string? ToolCallId { get; init; }
+
+    /// <summary>
     /// Creates a system message.
     /// </summary>
     public static ChatMessage System(string content) => new(ChatRole.System, content);
@@ -21,6 +31,18 @@ public readonly record struct ChatMessage(ChatRole Role, string Content)
     /// Creates an assistant message.
     /// </summary>
     public static ChatMessage Assistant(string content) => new(ChatRole.Assistant, content);
+
+    /// <summary>
+    /// Creates an assistant message with tool calls.
+    /// </summary>
+    public static ChatMessage AssistantToolCalls(IReadOnlyList<ChatToolCall> toolCalls)
+        => new(ChatRole.Assistant, string.Empty) { ToolCalls = toolCalls };
+
+    /// <summary>
+    /// Creates a tool result message.
+    /// </summary>
+    public static ChatMessage ToolResult(string toolCallId, string content)
+        => new(ChatRole.Tool, content) { ToolCallId = toolCallId };
 }
 
 /// <summary>
@@ -41,5 +63,10 @@ public enum ChatRole
     /// <summary>
     /// Assistant message from the AI model.
     /// </summary>
-    Assistant
+    Assistant,
+
+    /// <summary>
+    /// Tool result message containing the output of a tool call.
+    /// </summary>
+    Tool
 }

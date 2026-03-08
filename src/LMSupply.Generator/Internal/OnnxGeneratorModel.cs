@@ -240,6 +240,95 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
     }
 
     /// <inheritdoc />
+    public async Task<ChatCompletionResult> GenerateChatWithToolsAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        options ??= GenerationOptions.Default;
+
+        // Build messages with tool definitions injected into the system prompt
+        var messageList = messages.ToList();
+        if (options.Tools is { Count: > 0 })
+        {
+            messageList = InjectToolDefinitions(messageList, options.Tools);
+        }
+
+        // Generate the full text response
+        var responseText = await GenerateChatCompleteAsync(messageList, options, cancellationToken);
+
+        // Try to parse tool calls from the response
+        var toolCalls = ToolCallTextParser.TryParse(responseText);
+
+        if (toolCalls != null)
+        {
+            return new ChatCompletionResult
+            {
+                ToolCalls = toolCalls,
+                FinishReason = "tool_calls"
+            };
+        }
+
+        return new ChatCompletionResult
+        {
+            Content = responseText,
+            FinishReason = "stop"
+        };
+    }
+
+    /// <summary>
+    /// Injects tool definitions into the system message so the ONNX model
+    /// knows which tools are available and the expected response format.
+    /// </summary>
+    private static List<ChatMessage> InjectToolDefinitions(
+        List<ChatMessage> messages,
+        IReadOnlyList<ChatToolDefinition> tools)
+    {
+        var toolDescriptions = string.Join("\n", tools.Select(t =>
+        {
+            var parts = new List<string> { $"{{\"name\": \"{t.Function.Name}\"" };
+            if (t.Function.Description != null)
+                parts.Add($"\"description\": \"{t.Function.Description}\"");
+            if (t.Function.Parameters != null)
+                parts.Add($"\"parameters\": {t.Function.Parameters}");
+            return string.Join(", ", parts) + "}";
+        }));
+
+        var toolSystemPrompt =
+            "You have access to the following tools. When you need to call a tool, respond ONLY with a valid JSON object in this exact format:\n" +
+            "{\"tool_calls\": [{\"id\": \"call_<unique_id>\", \"type\": \"function\", \"function\": {\"name\": \"<tool_name>\", \"arguments\": \"<json_arguments>\"}}]}\n" +
+            "Only call a tool when the user's request requires it. If no tool call is needed, respond normally.\n\n" +
+            "Available tools:\n" +
+            toolDescriptions;
+
+        var result = new List<ChatMessage>(messages.Count + 1);
+
+        // Find existing system message and prepend tool instructions
+        var hasSystem = false;
+        foreach (var msg in messages)
+        {
+            if (msg.Role == ChatRole.System && !hasSystem)
+            {
+                hasSystem = true;
+                result.Add(ChatMessage.System(toolSystemPrompt + "\n\n" + msg.Content));
+            }
+            else
+            {
+                result.Add(msg);
+            }
+        }
+
+        // If no system message existed, add one
+        if (!hasSystem)
+        {
+            result.Insert(0, ChatMessage.System(toolSystemPrompt));
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
     public Task WarmupAsync(CancellationToken cancellationToken = default)
     {
         // Perform a minimal generation to warm up the model

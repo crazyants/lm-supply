@@ -66,7 +66,8 @@ public sealed class LlamaServerClient : IDisposable
             Stream = true,
             Stop = options.StopSequences?.ToList(),
             Grammar = options.Grammar,
-            JsonSchema = options.JsonSchema
+            JsonSchema = options.JsonSchema,
+            Tools = options.Tools?.ToList()
         };
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
@@ -135,6 +136,51 @@ public sealed class LlamaServerClient : IDisposable
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generates a non-streaming chat completion with full response including tool calls.
+    /// </summary>
+    public async Task<ChatCompletionFullResponse> GenerateChatWithToolsAsync(
+        IEnumerable<ChatCompletionMessage> messages,
+        ChatCompletionOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new ChatCompletionOptions();
+
+        var request = new ChatCompletionRequest
+        {
+            Messages = messages.ToList(),
+            MaxTokens = options.MaxTokens,
+            Temperature = options.Temperature,
+            TopP = options.TopP,
+            TopK = options.TopK > 0 ? options.TopK : null,
+            MinP = options.MinP > 0 ? options.MinP : null,
+            RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
+            FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
+            PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
+            Seed = options.Seed != -1 ? options.Seed : null,
+            Stream = false,
+            Stop = options.StopSequences?.ToList(),
+            Grammar = options.Grammar,
+            JsonSchema = options.JsonSchema,
+            Tools = options.Tools?.ToList()
+        };
+
+        var json = JsonSerializer.Serialize(request, JsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.PostAsync(
+            $"{_baseUrl}/v1/chat/completions",
+            content,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+        var result = JsonSerializer.Deserialize<ChatCompletionFullResponse>(responseJson, JsonOptions);
+
+        return result ?? new ChatCompletionFullResponse();
     }
 
     /// <summary>
@@ -342,11 +388,18 @@ public sealed class ChatCompletionMessage
     public required string Role { get; init; }
 
     [JsonPropertyName("content")]
-    public required string Content { get; init; }
+    public string? Content { get; init; }
+
+    [JsonPropertyName("tool_calls")]
+    public List<ToolCallMessage>? ToolCalls { get; init; }
+
+    [JsonPropertyName("tool_call_id")]
+    public string? ToolCallId { get; init; }
 
     public static ChatCompletionMessage System(string content) => new() { Role = "system", Content = content };
     public static ChatCompletionMessage User(string content) => new() { Role = "user", Content = content };
     public static ChatCompletionMessage Assistant(string content) => new() { Role = "assistant", Content = content };
+    public static ChatCompletionMessage Tool(string toolCallId, string content) => new() { Role = "tool", Content = content, ToolCallId = toolCallId };
 }
 
 /// <summary>
@@ -375,6 +428,12 @@ public sealed class ChatCompletionOptions
     /// When set, output will be constrained to match this schema.
     /// </summary>
     public string? JsonSchema { get; init; }
+
+    /// <summary>
+    /// Tool definitions available for the model.
+    /// When provided, the model may respond with tool_calls.
+    /// </summary>
+    public IReadOnlyList<ToolDefinition>? Tools { get; init; }
 }
 
 /// <summary>
@@ -431,6 +490,11 @@ internal sealed class ChatCompletionRequest
     public string? JsonSchema { get; set; }
 
     /// <summary>
+    /// Tool definitions (OpenAI-compatible).
+    /// </summary>
+    public List<ToolDefinition>? Tools { get; set; }
+
+    /// <summary>
     /// Re-use KV cache from previous request if possible.
     /// Reduces first token latency for prompts with common prefixes.
     /// </summary>
@@ -483,12 +547,133 @@ internal sealed class ChatCompletionChoice
 internal sealed class ChatCompletionDelta
 {
     public string? Content { get; set; }
+
+    [JsonPropertyName("tool_calls")]
+    public List<ToolCallDelta>? ToolCalls { get; set; }
+}
+
+/// <summary>
+/// Tool call delta in streaming response.
+/// </summary>
+internal sealed class ToolCallDelta
+{
+    [JsonPropertyName("index")]
+    public int Index { get; set; }
+
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("function")]
+    public FunctionCallDelta? Function { get; set; }
+}
+
+/// <summary>
+/// Function call delta in streaming response.
+/// </summary>
+internal sealed class FunctionCallDelta
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("arguments")]
+    public string? Arguments { get; set; }
 }
 
 internal sealed class CompletionChunk
 {
     public string? Content { get; set; }
     public bool Stop { get; set; }
+}
+
+/// <summary>
+/// Tool call in a message (OpenAI format).
+/// </summary>
+public sealed class ToolCallMessage
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "function";
+
+    [JsonPropertyName("function")]
+    public FunctionCallMessage? Function { get; set; }
+}
+
+/// <summary>
+/// Function call details.
+/// </summary>
+public sealed class FunctionCallMessage
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("arguments")]
+    public string? Arguments { get; set; }
+}
+
+/// <summary>
+/// Tool definition for the request (OpenAI format).
+/// </summary>
+public sealed class ToolDefinition
+{
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "function";
+
+    [JsonPropertyName("function")]
+    public FunctionDefinition? Function { get; set; }
+}
+
+/// <summary>
+/// Function definition for a tool.
+/// </summary>
+public sealed class FunctionDefinition
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("parameters")]
+    public JsonElement? Parameters { get; set; }
+}
+
+/// <summary>
+/// Full (non-streaming) chat completion response.
+/// </summary>
+public sealed class ChatCompletionFullResponse
+{
+    public List<ChatCompletionFullChoice>? Choices { get; set; }
+}
+
+/// <summary>
+/// Choice in a full chat completion response.
+/// </summary>
+public sealed class ChatCompletionFullChoice
+{
+    public ChatCompletionResponseMessage? Message { get; set; }
+
+    [JsonPropertyName("finish_reason")]
+    public string? FinishReason { get; set; }
+}
+
+/// <summary>
+/// Message in a full chat completion response.
+/// </summary>
+public sealed class ChatCompletionResponseMessage
+{
+    [JsonPropertyName("role")]
+    public string? Role { get; set; }
+
+    [JsonPropertyName("content")]
+    public string? Content { get; set; }
+
+    [JsonPropertyName("tool_calls")]
+    public List<ToolCallMessage>? ToolCalls { get; set; }
 }
 
 #endregion

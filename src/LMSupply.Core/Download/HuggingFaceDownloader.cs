@@ -107,6 +107,28 @@ public sealed class HuggingFaceDownloader : IDisposable
             }
         }
 
+        // After all files downloaded, write manifest
+        var manifestFiles = allFiles
+            .Select(file =>
+            {
+                var localPath = Path.GetFullPath(Path.Combine(modelDir, file.Replace('/', Path.DirectorySeparatorChar)));
+                return new ManifestFileEntry
+                {
+                    Path = file,
+                    Size = File.Exists(localPath) ? new FileInfo(localPath).Length : 0
+                };
+            })
+            .Where(e => e.Size > 0)
+            .ToList();
+
+        var manifest = new DownloadManifest
+        {
+            RepoId = repoId,
+            Revision = revision,
+            Files = manifestFiles
+        };
+        await DownloadManifest.WriteAsync(modelDir, manifest);
+
         return (modelDir, discovery);
     }
 
@@ -159,6 +181,10 @@ public sealed class HuggingFaceDownloader : IDisposable
                 }
             }
         }
+
+        // Write manifest after successful download
+        var downloadedManifest = DownloadManifest.CreateFromDirectory(modelDir, repoId, revision);
+        await DownloadManifest.WriteAsync(modelDir, downloadedManifest);
 
         return modelDir;
     }

@@ -11,127 +11,75 @@ public static class GgufModelRegistry
     private static readonly Dictionary<string, GgufModelInfo> _models = new(StringComparer.OrdinalIgnoreCase)
     {
         // ============================================================
-        // TIER 1: MIT License - No restrictions
+        // Tool-Calling First: llama.cpp 네이티브 핸들러 안정성 기준
+        // Option A (안정성 최우선) — Hermes/Mistral/Llama 핸들러
         // ============================================================
 
-        // Note: Most GGUF models on HuggingFace are conversions of models
-        // with conditional licenses. Pure MIT GGUF models are rare.
-
-        // ============================================================
-        // TIER 2: Conditional License - Usage restrictions apply
-        // ============================================================
-
-        // Default: Balanced quality/speed (Llama 3.2 3B)
-        ["gguf:default"] = new GgufModelInfo
-        {
-            RepoId = "bartowski/Llama-3.2-3B-Instruct-GGUF",
-            DisplayName = "Llama 3.2 3B Instruct",
-            DefaultFile = "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
-            ChatFormat = "llama3",
-            ContextLength = 8192,
-            ParameterCount = 3_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Llama 3.2 Community License",
-            LicenseRestrictions = "700M MAU limit for commercial use"
-        },
-
-        // Fast: Small model for quick inference
+        // Fast: Smallest tool-calling capable model (Mistral Nemo handler)
         ["gguf:fast"] = new GgufModelInfo
         {
-            RepoId = "bartowski/Llama-3.2-1B-Instruct-GGUF",
-            DisplayName = "Llama 3.2 1B Instruct",
-            DefaultFile = "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
-            ChatFormat = "llama3",
+            RepoId = "mistralai/Ministral-3-3B-Instruct-2512-GGUF",
+            DisplayName = "Ministral 3 3B Instruct",
+            DefaultFile = "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+            ChatFormat = "mistral-nemo",
+            ContextLength = 32768,
+            ParameterCount = 3_000_000_000,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+        },
+
+        // Default: Most stable tool-calling model (Hermes native handler)
+        ["gguf:default"] = new GgufModelInfo
+        {
+            RepoId = "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
+            DisplayName = "Hermes 3 Llama 3.1 8B",
+            DefaultFile = "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf",
+            ChatFormat = "chatml",
             ContextLength = 8192,
-            ParameterCount = 1_000_000_000,
+            ParameterCount = 8_000_000_000,
             License = LicenseTier.Conditional,
-            LicenseName = "Llama 3.2 Community License",
+            LicenseName = "Llama 3.1 Community License",
             LicenseRestrictions = "700M MAU limit for commercial use"
         },
 
-        // Quality: Higher quality model
+        // Quality: Mistral Nemo native handler, Apache 2.0
         ["gguf:quality"] = new GgufModelInfo
         {
-            RepoId = "bartowski/Qwen2.5-7B-Instruct-GGUF",
-            DisplayName = "Qwen 2.5 7B Instruct",
-            DefaultFile = "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-            ChatFormat = "chatml",
+            RepoId = "bartowski/Mistral-Nemo-Instruct-2407-GGUF",
+            DisplayName = "Mistral Nemo 12B Instruct",
+            DefaultFile = "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+            ChatFormat = "mistral-nemo",
             ContextLength = 32768,
-            ParameterCount = 7_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Qwen License",
-            LicenseRestrictions = "Commercial use requires agreement"
+            ParameterCount = 12_000_000_000,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
         },
 
-        // Large: Larger model for best quality
+        // Large: High quality dense model
         ["gguf:large"] = new GgufModelInfo
         {
-            RepoId = "bartowski/Qwen2.5-14B-Instruct-GGUF",
-            DisplayName = "Qwen 2.5 14B Instruct",
-            DefaultFile = "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+            RepoId = "unsloth/Qwen3-32B-GGUF",
+            DisplayName = "Qwen 3 32B",
+            DefaultFile = "Qwen3-32B-Q4_K_M.gguf",
             ChatFormat = "chatml",
             ContextLength = 32768,
-            ParameterCount = 14_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Qwen License",
-            LicenseRestrictions = "Commercial use requires agreement"
+            ParameterCount = 32_000_000_000,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
         },
 
-        // Multilingual: Good for non-English tasks
-        ["gguf:multilingual"] = new GgufModelInfo
+        // XLarge: Server-grade MoE model
+        ["gguf:xlarge"] = new GgufModelInfo
         {
-            RepoId = "bartowski/gemma-2-9b-it-GGUF",
-            DisplayName = "Gemma 2 9B Instruct",
-            DefaultFile = "gemma-2-9b-it-Q4_K_M.gguf",
-            ChatFormat = "gemma",
-            ContextLength = 8192,
-            ParameterCount = 9_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Gemma Terms of Use",
-            LicenseRestrictions = "Prohibited Use Policy applies"
-        },
-
-        // Korean: Korean language specialized
-        ["gguf:korean"] = new GgufModelInfo
-        {
-            RepoId = "bartowski/EXAONE-3.5-7.8B-Instruct-GGUF",
-            DisplayName = "EXAONE 3.5 7.8B Instruct",
-            DefaultFile = "EXAONE-3.5-7.8B-Instruct-Q4_K_M.gguf",
-            ChatFormat = "exaone",
-            ContextLength = 32768,
-            ParameterCount = 7_800_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "EXAONE AI Model License",
-            LicenseRestrictions = "LG AI Research terms apply"
-        },
-
-        // Code: Optimized for coding tasks
-        ["gguf:code"] = new GgufModelInfo
-        {
-            RepoId = "bartowski/Qwen2.5-Coder-7B-Instruct-GGUF",
-            DisplayName = "Qwen 2.5 Coder 7B",
-            DefaultFile = "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+            RepoId = "unsloth/Qwen3.5-122B-A10B-GGUF",
+            DisplayName = "Qwen 3.5 122B A10B (MoE)",
+            DefaultFile = "Qwen3.5-122B-A10B-Q4_K_M.gguf",
             ChatFormat = "chatml",
             ContextLength = 32768,
-            ParameterCount = 7_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "Qwen License",
-            LicenseRestrictions = "Commercial use requires agreement"
+            ParameterCount = 122_000_000_000,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
         },
-
-        // Reasoning: DeepSeek R1 for complex reasoning
-        ["gguf:reasoning"] = new GgufModelInfo
-        {
-            RepoId = "bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF",
-            DisplayName = "DeepSeek R1 Distill 8B",
-            DefaultFile = "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf",
-            ChatFormat = "deepseek",
-            ContextLength = 32768,
-            ParameterCount = 8_000_000_000,
-            License = LicenseTier.Conditional,
-            LicenseName = "DeepSeek License",
-            LicenseRestrictions = "Research and commercial use allowed"
-        }
     };
 
     /// <summary>
@@ -168,10 +116,10 @@ public static class GgufModelRegistry
     /// </summary>
     /// <remarks>
     /// Model selection based on performance tier:
-    /// - Ultra: Qwen 2.5 14B (highest quality, needs 16GB+ VRAM)
-    /// - High: Qwen 2.5 7B (quality model, 8-16GB VRAM)
-    /// - Medium: Llama 3.2 3B (balanced, 4-8GB VRAM)
-    /// - Low: Llama 3.2 1B (fast, minimal resources)
+    /// - Ultra: Qwen 3 32B (highest quality, needs 24GB+ VRAM)
+    /// - High: Mistral Nemo 12B (quality model, 8-16GB VRAM)
+    /// - Medium: Hermes 3 8B (balanced, 4-8GB VRAM)
+    /// - Low: Ministral 3 3B (fast, minimal resources)
     /// </remarks>
     public static GgufModelInfo GetAutoModel()
     {
@@ -179,10 +127,10 @@ public static class GgufModelRegistry
 
         return tier switch
         {
-            PerformanceTier.Ultra => _models["gguf:large"],    // Qwen 2.5 14B
-            PerformanceTier.High => _models["gguf:quality"],   // Qwen 2.5 7B
-            PerformanceTier.Medium => _models["gguf:default"], // Llama 3.2 3B
-            _ => _models["gguf:fast"]                          // Llama 3.2 1B
+            PerformanceTier.Ultra => _models["gguf:large"],    // Qwen3 32B
+            PerformanceTier.High => _models["gguf:quality"],   // Mistral Nemo 12B
+            PerformanceTier.Medium => _models["gguf:default"], // Hermes 3 8B
+            _ => _models["gguf:fast"]                          // Ministral 3 3B
         };
     }
 

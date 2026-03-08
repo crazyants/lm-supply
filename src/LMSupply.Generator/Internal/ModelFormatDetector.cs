@@ -1,5 +1,7 @@
 using LMSupply.Generator.Internal.Llama;
 using LMSupply.Generator.Models;
+using LMSupply.Hardware;
+using LMSupply.Runtime;
 
 namespace LMSupply.Generator.Internal;
 
@@ -21,32 +23,38 @@ internal static class ModelFormatDetector
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelIdOrPath);
 
-        // 0. Check if it's a GGUF registry alias (e.g., "gguf:default", "gguf:fast")
+        // 0. Handle "auto" — platform-based routing
+        if (modelIdOrPath.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return ShouldPreferOnnx() ? ModelFormat.Onnx : ModelFormat.Gguf;
+        }
+
+        // 1. Check if it's a GGUF registry alias (e.g., "gguf:default", "gguf:fast")
         if (GgufModelRegistry.IsAlias(modelIdOrPath))
         {
             return ModelFormat.Gguf;
         }
 
-        // 1. Check file extension for direct file paths
+        // 2. Check file extension for direct file paths
         if (HasExtension(modelIdOrPath, GgufExtensions))
             return ModelFormat.Gguf;
 
         if (HasExtension(modelIdOrPath, OnnxExtensions))
             return ModelFormat.Onnx;
 
-        // 2. Check local directory for model files
+        // 3. Check local directory for model files
         if (Directory.Exists(modelIdOrPath))
         {
             return DetectFromDirectory(modelIdOrPath);
         }
 
-        // 3. Check if it's a HuggingFace repo ID pattern
+        // 4. Check if it's a HuggingFace repo ID pattern
         if (IsHuggingFaceRepoId(modelIdOrPath))
         {
             return DetectFromRepoId(modelIdOrPath);
         }
 
-        // 4. Check if it's a local file path (not yet existing)
+        // 5. Check if it's a local file path (not yet existing)
         if (IsFilePath(modelIdOrPath))
         {
             // Infer from the path pattern even if file doesn't exist yet
@@ -55,15 +63,14 @@ internal static class ModelFormatDetector
                 return ModelFormat.Gguf;
         }
 
-        // 5. Check registry for known ONNX models
+        // 6. Check registry for known ONNX models
         if (GeneratorModelRegistry.Default.TryResolve(modelIdOrPath, out _))
         {
             return ModelFormat.Onnx;
         }
 
-        // 6. Default: Assume ONNX for backward compatibility
-        // Unknown HuggingFace repos are assumed to be ONNX format
-        return ModelFormat.Onnx;
+        // 7. Default: GGUF (GGUF-first strategy)
+        return ModelFormat.Gguf;
     }
 
     /// <summary>
@@ -119,8 +126,8 @@ internal static class ModelFormatDetector
             return ModelFormat.Gguf;
         }
 
-        // Default to ONNX for backward compatibility
-        return ModelFormat.Onnx;
+        // Default: GGUF (GGUF-first strategy)
+        return ModelFormat.Gguf;
     }
 
     /// <summary>
@@ -140,7 +147,9 @@ internal static class ModelFormatDetector
             "bartowski" => true,
             "ggml-org" => true,
             "mradermacher" => true,
-            "unsloth" when repoId.Contains("gguf", StringComparison.OrdinalIgnoreCase) => true,
+            "unsloth" => true,
+            "nousresearch" => true,
+            "mistralai" => true,
             _ => false
         };
     }
@@ -182,6 +191,25 @@ internal static class ModelFormatDetector
         return value.Contains(Path.DirectorySeparatorChar) ||
                value.Contains(Path.AltDirectorySeparatorChar) ||
                Path.IsPathRooted(value);
+    }
+
+    /// <summary>
+    /// Determines if ONNX should be preferred based on hardware.
+    /// ONNX is only preferred for Windows DirectML (non-NVIDIA) or NPU environments.
+    /// </summary>
+    private static bool ShouldPreferOnnx()
+    {
+        var profile = HardwareProfile.Current;
+
+        // ONNX advantage: Windows DirectML for non-NVIDIA GPUs
+        if (profile.RecommendedProvider == ExecutionProvider.DirectML &&
+            profile.GpuInfo.Vendor != GpuVendor.Nvidia)
+        {
+            return true;
+        }
+
+        // All other cases: GGUF (CPU, CUDA, Metal, Linux)
+        return false;
     }
 
     /// <summary>

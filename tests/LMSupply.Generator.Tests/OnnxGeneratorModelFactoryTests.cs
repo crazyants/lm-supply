@@ -106,6 +106,7 @@ public class OnnxGeneratorModelFactoryTests
         {
             // Create a valid model structure
             File.WriteAllText(Path.Combine(modelDir, "genai_config.json"), "{}");
+            File.WriteAllText(Path.Combine(modelDir, "model.onnx"), "dummy");
 
             using var factory = new OnnxGeneratorModelFactory(tempDir, ExecutionProvider.Auto);
 

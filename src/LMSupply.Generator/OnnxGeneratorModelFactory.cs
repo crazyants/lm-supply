@@ -283,12 +283,8 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
 
     private static bool IsValidModelDirectory(string path)
     {
-        if (!Directory.Exists(path))
-            return false;
-
-        return File.Exists(Path.Combine(path, "genai_config.json"))
-            || File.Exists(Path.Combine(path, "model.onnx"))
-            || File.Exists(Path.Combine(path, "model.onnx.data"));
+        var result = ModelDirectoryValidator.Validate(path);
+        return result.IsValid;
     }
 
     private static IChatFormatter ResolveChatFormatter(string modelId, string? explicitFormat)

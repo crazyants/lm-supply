@@ -5,6 +5,7 @@ using LMSupply.Generator.Models;
 using LMSupply.Console.Host.Infrastructure;
 using LMSupply.Console.Host.Infrastructure.ToolCalling;
 using LMSupply.Console.Host.Models.OpenAI;
+using ToolCall = LMSupply.Console.Host.Models.OpenAI.ToolCall;
 using LMSupply.Console.Host.Services;
 
 namespace LMSupply.Console.Host.Endpoints;

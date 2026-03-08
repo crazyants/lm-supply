@@ -555,12 +555,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             {
                 Content = message?.Content,
                 FinishReason = choice?.FinishReason,
-                ToolCalls = message?.ToolCalls?.Select(tc => new ChatToolCall
-                {
-                    Id = tc.Id ?? string.Empty,
-                    FunctionName = tc.Function?.Name ?? string.Empty,
-                    Arguments = tc.Function?.Arguments ?? string.Empty
-                }).ToList()
+                ToolCalls = message?.ToolCalls?.Select(tc => new ChatToolCall(
+                    tc.Id ?? string.Empty,
+                    tc.Function?.Name ?? string.Empty,
+                    tc.Function?.Arguments ?? string.Empty
+                )).ToList()
             };
         }
         finally
@@ -612,16 +611,14 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             StopSequences = MergeStopSequences(options.StopSequences),
             Grammar = options.Grammar,
             JsonSchema = options.JsonSchema,
-            Tools = options.Tools?.Select(t => new ToolDefinition
+            Tools = options.Tools?.Select(t => new LMSupply.Llama.Server.ToolDefinition
             {
                 Type = "function",
-                Function = new FunctionDefinition
+                Function = new LMSupply.Llama.Server.FunctionDefinition
                 {
-                    Name = t.Function.Name,
-                    Description = t.Function.Description,
-                    Parameters = t.Function.Parameters != null
-                        ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(t.Function.Parameters)
-                        : null
+                    Name = t.Name,
+                    Description = t.Description,
+                    Parameters = t.Parameters
                 }
             }).ToList()
         };

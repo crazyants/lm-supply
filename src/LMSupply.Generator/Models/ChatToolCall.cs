@@ -3,20 +3,10 @@ namespace LMSupply.Generator.Models;
 /// <summary>
 /// Represents a tool/function call made by the model.
 /// </summary>
-public sealed record ChatToolCall
-{
-    /// <summary>
-    /// Unique identifier for the tool call.
-    /// </summary>
-    public required string Id { get; init; }
-
-    /// <summary>
-    /// The function name to call.
-    /// </summary>
-    public required string FunctionName { get; init; }
-
-    /// <summary>
-    /// The JSON arguments for the function.
-    /// </summary>
-    public required string Arguments { get; init; }
-}
+/// <param name="Id">Unique identifier for the tool call.</param>
+/// <param name="FunctionName">The function name to call.</param>
+/// <param name="Arguments">The JSON arguments for the function.</param>
+public sealed record ChatToolCall(
+    string Id,
+    string FunctionName,
+    string Arguments);

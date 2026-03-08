@@ -19,14 +19,15 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void Resolve_WithFastAlias_ReturnsLlama1B()
+    public void Resolve_WithFastAlias_ReturnsPhi4Mini()
     {
+        // Fast alias now points to Phi4Mini (smallest FC-capable ONNX model)
         // Act
         var model = GeneratorModelRegistry.Default.Resolve("fast");
 
         // Assert
         model.Should().NotBeNull();
-        model.ModelId.Should().Be("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX");
+        model.ModelId.Should().Be("microsoft/Phi-4-mini-instruct-onnx");
     }
 
     [Fact]
@@ -107,7 +108,7 @@ public class ModelRegistryTests
 
         // Assert
         models.Should().NotBeEmpty();
-        models.Should().HaveCountGreaterThanOrEqualTo(5);
+        models.Should().HaveCount(3);
     }
 
     [Fact]
@@ -154,18 +155,17 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void ConditionalModels_HaveRestrictions()
+    public void AllModels_AreMITLicensed()
     {
+        // All remaining ONNX models are MIT-licensed Phi-4 series
         // Act
-        var models = GeneratorModelRegistry.Default.GetAvailableModels()
-            .Where(m => m.License == LicenseTier.Conditional);
+        var models = GeneratorModelRegistry.Default.GetAvailableModels();
 
         // Assert
-        models.Should().NotBeEmpty();
         models.Should().AllSatisfy(m =>
         {
-            m.HasRestrictions.Should().BeTrue();
-            m.LicenseRestrictions.Should().NotBeNullOrEmpty();
+            m.License.Should().Be(LicenseTier.MIT);
+            m.HasRestrictions.Should().BeFalse();
         });
     }
 
@@ -201,13 +201,10 @@ public class ModelRegistryTests
     public void DefaultGeneratorModels_All_ShouldContainAllModels()
     {
         // Assert
-        DefaultGeneratorModels.All.Should().HaveCount(6);
+        DefaultGeneratorModels.All.Should().HaveCount(3);
         DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Phi4Mini);
         DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Phi35Mini);
         DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Phi4);
-        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Llama321B);
-        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Llama323B);
-        DefaultGeneratorModels.All.Should().Contain(DefaultGeneratorModels.Gemma22B);
     }
 
     [Fact]
@@ -215,6 +212,13 @@ public class ModelRegistryTests
     {
         // Assert
         DefaultGeneratorModels.Default.Should().Be(DefaultGeneratorModels.Phi4Mini);
+    }
+
+    [Fact]
+    public void DefaultGeneratorModels_Fast_ShouldBePhi4Mini()
+    {
+        // Phi4Mini is the smallest FC-capable ONNX model
+        DefaultGeneratorModels.Fast.Should().Be(DefaultGeneratorModels.Phi4Mini);
     }
 
     [Fact]
@@ -247,6 +251,7 @@ public class ModelRegistryTests
     [Fact]
     public void AllModels_HaveValidChatFormat()
     {
+        // All remaining models use phi3 chat format
         // Act
         var models = GeneratorModelRegistry.Default.GetAvailableModels();
 
@@ -254,7 +259,7 @@ public class ModelRegistryTests
         models.Should().AllSatisfy(m =>
         {
             m.ChatFormat.Should().NotBeNullOrEmpty();
-            m.ChatFormat.Should().BeOneOf("phi3", "llama3", "gemma", "chatml");
+            m.ChatFormat.Should().Be("phi3");
         });
     }
 
@@ -274,10 +279,9 @@ public class ModelRegistryTests
     }
 
     [Theory]
+    [InlineData("microsoft/Phi-4-mini-instruct-onnx", LicenseTier.MIT)]
     [InlineData("microsoft/Phi-3.5-mini-instruct-onnx", LicenseTier.MIT)]
     [InlineData("microsoft/phi-4-onnx", LicenseTier.MIT)]
-    [InlineData("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX", LicenseTier.Conditional)]
-    [InlineData("onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX", LicenseTier.Conditional)]
     public void TryResolve_KnownModel_HasCorrectLicense(string modelId, LicenseTier expectedLicense)
     {
         var result = GeneratorModelRegistry.Default.TryResolve(modelId, out var model);

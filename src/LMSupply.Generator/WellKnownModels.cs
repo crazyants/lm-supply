@@ -19,11 +19,9 @@ public static class WellKnownModels
         public const string Default = "microsoft/Phi-4-mini-instruct-onnx";
 
         /// <summary>
-        /// Fast/small model - Meta Llama 3.2 1B.
-        /// 1B parameters, fast inference, good for simple tasks.
-        /// Note: Llama Community License (700M MAU limit).
+        /// Fast model - same as Default (Phi-4 Mini is the smallest FC-capable ONNX model).
         /// </summary>
-        public const string Fast = "onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX";
+        public const string Fast = Default;
 
         /// <summary>
         /// Small model - same as Fast, alias for clarity.
@@ -45,23 +43,10 @@ public static class WellKnownModels
         public const string Medium = "microsoft/Phi-3.5-mini-instruct-onnx";
 
         /// <summary>
-        /// Large model - Meta Llama 3.3 70B (quantized for local inference).
-        /// Best accuracy among Llama models, excellent for complex reasoning.
-        /// Note: Llama Community License (700M MAU limit).
+        /// Large/quality model - Microsoft Phi-4.
+        /// 14B parameters, highest quality reasoning among ONNX models.
         /// </summary>
-        public const string Large = "onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX";
-
-        /// <summary>
-        /// Multilingual model - Alibaba Qwen 2.5 3B.
-        /// 3B parameters, 128K context, excellent multilingual support (29+ languages).
-        /// Note: Apache 2.0 license.
-        /// </summary>
-        public const string Multilingual = "Qwen/Qwen2.5-3B-Instruct-ONNX";
-
-        /// <summary>
-        /// Legacy multilingual - Google Gemma 2 2B for backward compatibility.
-        /// </summary>
-        public const string Gemma2 = "google/gemma-2-2b-it-onnx";
+        public const string Large = Quality;
 
         /// <summary>
         /// Legacy default - Phi-3.5 Mini for backward compatibility.

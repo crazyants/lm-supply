@@ -15,22 +15,32 @@ public sealed class GeneratorModelRegistry : ModelRegistryBase<ModelInfo>
 
     /// <summary>
     /// Initializes a new registry with the specified system models.
+    /// Also registers "fast" as a system alias for the default model (Phi4Mini),
+    /// since it is the smallest FC-capable ONNX model.
     /// </summary>
     /// <param name="systemModels">Models to register as system defaults.</param>
     public GeneratorModelRegistry(IEnumerable<ModelInfo> systemModels)
-        : base(systemModels) { }
+        : base(AppendFastAlias(systemModels)) { }
+
+    private static IEnumerable<ModelInfo> AppendFastAlias(IEnumerable<ModelInfo> models)
+    {
+        foreach (var model in models)
+            yield return model;
+
+        // Register "fast" as an alias pointing to Phi4Mini
+        yield return DefaultGeneratorModels.Phi4Mini with { AliasName = "fast" };
+    }
 
     /// <summary>
-    /// Gets the optimal model based on current hardware profile.
+    /// Gets the optimal ONNX model based on current hardware profile.
     /// Uses PerformanceTier to select appropriate model size.
-    /// Prefers MIT-licensed models when possible.
+    /// All models are MIT-licensed Phi-4 series with function calling support.
     /// </summary>
     /// <remarks>
     /// Tier mapping:
-    /// - Low:    Llama-3.2-1B (1B params) - fast, lightweight
-    /// - Medium: Phi-3.5-mini (3.8B params) - balanced
-    /// - High:   Phi-4-mini (3.8B, 16K context) - MIT, good quality
-    /// - Ultra:  Phi-4 (14B params) - MIT, highest quality
+    /// - Low/Medium: Phi-3.5-mini (3.8B params) - legacy, lightweight
+    /// - High:       Phi-4-mini (3.8B, 16K context) - default, good quality
+    /// - Ultra:      Phi-4 (14B params) - highest quality
     /// </remarks>
     protected override ModelInfo GetAutoModel()
     {
@@ -41,8 +51,7 @@ public sealed class GeneratorModelRegistry : ModelRegistryBase<ModelInfo>
         {
             PerformanceTier.Ultra => DefaultGeneratorModels.Phi4,
             PerformanceTier.High => DefaultGeneratorModels.Phi4Mini,
-            PerformanceTier.Medium => DefaultGeneratorModels.Phi35Mini,
-            _ => DefaultGeneratorModels.Llama321B
+            _ => DefaultGeneratorModels.Phi35Mini
         };
 
         return model with { AliasName = "auto" };

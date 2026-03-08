@@ -11,6 +11,11 @@ public static class DefaultGeneratorModels
     /// </summary>
     public static ModelInfo Default => Phi4Mini;
 
+    /// <summary>
+    /// Gets the fast model. Currently same as Default since Phi4Mini is the smallest FC-capable ONNX model.
+    /// </summary>
+    public static ModelInfo Fast => Phi4Mini;
+
     // ===== Tier 1: MIT License - No restrictions =====
 
     /// <summary>
@@ -78,87 +83,13 @@ public static class DefaultGeneratorModels
         Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
     };
 
-    // ===== Tier 2: Conditional - Usage restrictions apply =====
-
     /// <summary>
-    /// Meta Llama 3.2 1B - Fast/small model.
-    /// 1B parameters, fast inference, good for simple tasks.
-    /// Note: Llama Community License (700M MAU limit).
-    /// </summary>
-    public static ModelInfo Llama321B { get; } = new()
-    {
-        ModelId = "onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX",
-        AliasName = "fast",
-        DisplayName = "Llama 3.2 1B",
-        Description = "Fast: Llama 3.2 1B, fast inference, Llama license",
-        ParameterCount = 1_000_000_000,
-        License = LicenseTier.Conditional,
-        LicenseName = "Llama 3.2 Community License",
-        LicenseRestrictions = "700M MAU limit for commercial use",
-        ChatFormat = "llama3",
-        DefaultQuantization = Quantization.Quant4,
-        RecommendedContextLength = 4096,
-        NumLayers = 16,
-        HiddenSize = 2048,
-        Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
-    };
-
-    /// <summary>
-    /// Meta Llama 3.2 3B - Medium-large model.
-    /// 3B parameters, good accuracy for complex reasoning.
-    /// Note: Llama Community License (700M MAU limit).
-    /// </summary>
-    public static ModelInfo Llama323B { get; } = new()
-    {
-        ModelId = "onnx-community/Llama-3.2-3B-Instruct-GENAI-ONNX",
-        AliasName = "llama-3.2-3b",
-        DisplayName = "Llama 3.2 3B",
-        Description = "Llama 3.2 3B, good accuracy, Llama license",
-        ParameterCount = 3_000_000_000,
-        License = LicenseTier.Conditional,
-        LicenseName = "Llama 3.2 Community License",
-        LicenseRestrictions = "700M MAU limit for commercial use",
-        ChatFormat = "llama3",
-        DefaultQuantization = Quantization.Quant4,
-        RecommendedContextLength = 4096,
-        NumLayers = 28,
-        HiddenSize = 3072,
-        Subfolder = "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
-    };
-
-    /// <summary>
-    /// Google Gemma 2 2B - Multilingual model.
-    /// 2B parameters, good multilingual support.
-    /// Note: Gemma Terms of Use, Prohibited Use Policy applies.
-    /// </summary>
-    public static ModelInfo Gemma22B { get; } = new()
-    {
-        ModelId = "google/gemma-2-2b-it-onnx",
-        AliasName = "gemma-2-2b",
-        DisplayName = "Gemma 2 2B",
-        Description = "Gemma 2 2B, multilingual, Gemma license",
-        ParameterCount = 2_000_000_000,
-        License = LicenseTier.Conditional,
-        LicenseName = "Gemma Terms of Use",
-        LicenseRestrictions = "Prohibited Use Policy applies",
-        ChatFormat = "gemma",
-        DefaultQuantization = Quantization.Quant4,
-        RecommendedContextLength = 4096,
-        NumLayers = 26,
-        HiddenSize = 2304,
-        Subfolder = "onnx"
-    };
-
-    /// <summary>
-    /// Gets all built-in models.
+    /// Gets all built-in ONNX models. Only FC-capable Phi-4 series models are included.
     /// </summary>
     public static IReadOnlyList<ModelInfo> All { get; } =
     [
         Phi4Mini,   // default
-        Phi35Mini,  // phi-3.5-mini
+        Phi35Mini,  // phi-3.5-mini (legacy)
         Phi4,       // quality
-        Llama321B,  // fast
-        Llama323B,  // llama-3.2-3b
-        Gemma22B    // gemma-2-2b
     ];
 }

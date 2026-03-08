@@ -10,18 +10,7 @@ Supports both **ONNX** models and **GGUF** models (via llama-server).
 dotnet add package LMSupply.Reranker
 ```
 
-For GPU acceleration:
-
-```bash
-# NVIDIA CUDA
-dotnet add package Microsoft.ML.OnnxRuntime.Gpu
-
-# Windows DirectML
-dotnet add package Microsoft.ML.OnnxRuntime.DirectML
-
-# macOS CoreML
-dotnet add package Microsoft.ML.OnnxRuntime.CoreML
-```
+GPU acceleration is automatic — LMSupply detects your hardware and downloads appropriate runtime binaries on first use. No additional packages required.
 
 ## What is Reranking?
 

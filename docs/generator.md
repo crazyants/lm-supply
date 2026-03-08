@@ -17,7 +17,7 @@ using LMSupply.Generator;
 
 // Using the builder pattern
 var generator = await TextGeneratorBuilder.Create()
-    .WithDefaultModel()        // Uses Phi-3.5 Mini
+    .WithDefaultModel()        // Uses Phi-4 Mini (ONNX)
     .BuildAsync();
 
 // Generate text
@@ -62,22 +62,20 @@ await foreach (var token in generator.GenerateAsync("Write a short story about a
 ### Preset Models
 
 ```csharp
-// Default: Phi-3.5 Mini (balanced, MIT license)
+// Default: Phi-4 Mini (balanced, MIT license)
 .WithDefaultModel()
 
 // Or use presets
-.WithModel(GeneratorModelPreset.Default)   // Phi-3.5 Mini
-.WithModel(GeneratorModelPreset.Fast)      // Llama 3.2 1B
+.WithModel(GeneratorModelPreset.Default)   // Phi-4 Mini
+.WithModel(GeneratorModelPreset.Fast)      // Phi-4 Mini (smallest FC-capable)
 .WithModel(GeneratorModelPreset.Quality)   // Phi-4
-.WithModel(GeneratorModelPreset.Small)     // Llama 3.2 1B
 ```
 
 ### HuggingFace Models
 
 ```csharp
 // Use any ONNX model from HuggingFace
-.WithHuggingFaceModel("microsoft/Phi-3.5-mini-instruct-onnx")
-.WithHuggingFaceModel("onnx-community/Llama-3.2-1B-Instruct-GENAI-ONNX")
+.WithHuggingFaceModel("microsoft/Phi-4-mini-instruct-onnx")
 ```
 
 ### Local Models
@@ -161,7 +159,7 @@ Console.WriteLine(recommendation.GetSummary());
 // Provider: Cuda
 // Quantization: FP16
 // Max Context: 16384
-// Recommended Models: microsoft/Phi-3.5-mini-instruct-onnx, microsoft/phi-4-onnx
+// Recommended Models: microsoft/Phi-4-mini-instruct-onnx, microsoft/phi-4-onnx
 
 // Auto-select best provider
 var provider = HardwareDetector.GetBestProvider();
@@ -214,17 +212,17 @@ using LMSupply.Generator;
 using var factory = new OnnxGeneratorModelFactory();
 
 // Check if model is available locally
-if (!factory.IsModelAvailable("microsoft/Phi-3.5-mini-instruct-onnx"))
+if (!factory.IsModelAvailable("microsoft/Phi-4-mini-instruct-onnx"))
 {
     // Download model
     await factory.DownloadModelAsync(
-        "microsoft/Phi-3.5-mini-instruct-onnx",
+        "microsoft/Phi-4-mini-instruct-onnx",
         progress: new Progress<double>(p => Console.WriteLine($"Downloading: {p:P0}"))
     );
 }
 
 // Create model instance
-var model = await factory.CreateAsync("microsoft/Phi-3.5-mini-instruct-onnx");
+var model = await factory.CreateAsync("microsoft/Phi-4-mini-instruct-onnx");
 
 // List available models
 foreach (var modelId in factory.GetAvailableModels())
@@ -237,10 +235,9 @@ foreach (var modelId in factory.GetAvailableModels())
 
 | Alias | Model | Parameters | License |
 |-------|-------|------------|---------|
-| Default | Phi-3.5-mini-instruct | 3.8B | MIT |
-| Fast | Llama-3.2-1B-Instruct | 1B | Llama 3.2 |
+| Default | Phi-4-mini-instruct | 3.8B | MIT |
+| Fast | Phi-4-mini-instruct | 3.8B | MIT |
 | Quality | phi-4 | 14B | MIT |
-| Small | Llama-3.2-1B-Instruct | 1B | Llama 3.2 |
 
 ## Chat Formats
 
@@ -248,10 +245,9 @@ The library automatically detects chat format based on model ID:
 
 | Format | Models |
 |--------|--------|
-| Phi-3 | Phi-3, Phi-3.5, Phi-4 |
-| Llama 3 | Llama-3, Llama-3.1, Llama-3.2 |
-| ChatML | Most other models |
-| Gemma | Gemma, Gemma-2 |
+| Phi-3 | Phi-3, Phi-3.5, Phi-4 (ONNX) |
+| ChatML | Hermes 3, Qwen 3 (GGUF) |
+| Mistral Nemo | Ministral, Mistral Nemo (GGUF) |
 
 Or specify explicitly:
 
@@ -296,14 +292,11 @@ await foreach (var token in model.GenerateAsync("Hello, my name is"))
 | Alias | Model | Parameters | Use Case |
 |-------|-------|------------|----------|
 | `gguf:auto` | Hardware-optimized | varies | Auto-select by hardware |
-| `gguf:default` | Llama 3.2 3B Instruct | 3B | Balanced quality/speed |
-| `gguf:fast` | Llama 3.2 1B Instruct | 1B | Quick responses |
-| `gguf:quality` | Qwen 2.5 7B Instruct | 7B | Higher quality |
-| `gguf:large` | Qwen 2.5 14B Instruct | 14B | Best quality |
-| `gguf:multilingual` | Gemma 2 9B | 9B | Non-English tasks |
-| `gguf:korean` | EXAONE 3.5 7.8B | 7.8B | Korean language |
-| `gguf:code` | Qwen 2.5 Coder 7B | 7B | Coding tasks |
-| `gguf:reasoning` | DeepSeek R1 Distill 8B | 8B | Complex reasoning |
+| `gguf:fast` | Ministral 3 3B | 3B | Quick responses, tool calling |
+| `gguf:default` | Hermes 3 Llama 3.1 8B | 8B | Balanced, stable tool calling |
+| `gguf:quality` | Mistral Nemo 12B | 12B | Higher quality, tool calling |
+| `gguf:large` | Qwen 3 32B | 32B | Best quality |
+| `gguf:xlarge` | Qwen 3.5 122B MoE | 122B (10B active) | Server-grade |
 
 #### Hardware-Optimized Selection (`gguf:auto`)
 
@@ -311,10 +304,10 @@ Use `gguf:auto` for automatic model selection based on your hardware:
 
 | Performance Tier | Hardware | Selected Model |
 |------------------|----------|----------------|
-| **Low** | CPU only or GPU <4GB | Llama 3.2 1B |
-| **Medium** | GPU 4-8GB | Llama 3.2 3B |
-| **High** | GPU 8-16GB | Qwen 2.5 7B |
-| **Ultra** | GPU 16GB+ | Qwen 2.5 14B |
+| **Low** | CPU only or GPU <4GB | Ministral 3 3B |
+| **Medium** | GPU 4-8GB | Hermes 3 8B |
+| **High** | GPU 8-16GB | Mistral Nemo 12B |
+| **Ultra** | GPU 16GB+ | Qwen 3 32B |
 
 ```csharp
 // Let LMSupply choose the optimal model for your hardware
@@ -328,12 +321,12 @@ Load any GGUF model directly with `owner/repo-name` format:
 ```csharp
 // Load from any GGUF repository (auto-detected by -GGUF suffix)
 await using var model = await LocalGenerator.LoadAsync(
-    "bartowski/Llama-3.2-3B-Instruct-GGUF");
+    "NousResearch/Hermes-3-Llama-3.1-8B-GGUF");
 
 // Other popular repositories
-await using var model = await LocalGenerator.LoadAsync("bartowski/Qwen2.5-7B-Instruct-GGUF");
-await using var model = await LocalGenerator.LoadAsync("bartowski/gemma-2-9b-it-GGUF");
-await using var model = await LocalGenerator.LoadAsync("bartowski/EXAONE-3.5-7.8B-Instruct-GGUF");
+await using var model = await LocalGenerator.LoadAsync("bartowski/Mistral-Nemo-Instruct-2407-GGUF");
+await using var model = await LocalGenerator.LoadAsync("unsloth/Qwen3-32B-GGUF");
+await using var model = await LocalGenerator.LoadAsync("mistralai/Ministral-3-3B-Instruct-2512-GGUF");
 
 // Specify a particular quantization file
 await using var model = await LocalGenerator.LoadAsync(
@@ -546,6 +539,19 @@ await foreach (var token in model.GenerateChatAsync(messages))
 }
 ```
 
+### Tool Calling with GGUF
+
+GGUF models support native tool calling via the `--jinja` flag (enabled by default). Models with llama.cpp native handlers (Hermes, Mistral Nemo) provide the most stable experience.
+
+```csharp
+// Tool calling is automatically available with GGUF models
+await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Hermes 3 (chatml handler)
+
+// Tool definitions use OpenAI-compatible format via llama-server
+```
+
+> **Recommended models for tool calling:** `gguf:default` (Hermes 3), `gguf:fast` (Ministral 3), `gguf:quality` (Mistral Nemo) — these use llama.cpp native chat handlers for stable tool calling.
+
 ### Generation Options
 
 ```csharp
@@ -568,7 +574,7 @@ await foreach (var token in model.GenerateAsync(prompt, genOptions))
 For reasoning models like DeepSeek R1 that output `<think>...</think>` tags:
 
 ```csharp
-await using var model = await LocalGenerator.LoadAsync("gguf:reasoning");
+await using var model = await LocalGenerator.LoadAsync("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF");
 
 // Option 1: Filter reasoning tokens (only show final answer)
 var options = new GenerationOptions

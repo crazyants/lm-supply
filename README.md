@@ -132,23 +132,15 @@ foreach (var result in results)
 ```csharp
 using LMSupply.Generator;
 
-// ONNX models (via GenAI)
-var generator = await TextGeneratorBuilder.Create()
-    .WithDefaultModel()  // Phi-4-mini-instruct
-    .BuildAsync();
-
-string response = await generator.GenerateCompleteAsync("What is machine learning?");
-Console.WriteLine(response);
-
-// GGUF models (via llama-server) - Access to thousands of quantized models
-await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Llama 3.2 3B
+// GGUF models (default) — native tool calling support via llama-server
+await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Hermes 3 8B
 
 await foreach (var token in model.GenerateAsync("Hello, my name is"))
 {
     Console.Write(token);
 }
 
-// Chat format with GGUF
+// Chat with tool calling support (--jinja enabled)
 var messages = new[]
 {
     ChatMessage.System("You are a helpful assistant."),
@@ -159,6 +151,13 @@ await foreach (var token in model.GenerateChatAsync(messages))
 {
     Console.Write(token);
 }
+
+// ONNX models (for DirectML/NPU environments)
+var generator = await TextGeneratorBuilder.Create()
+    .WithDefaultModel()  // Phi-4 Mini
+    .BuildAsync();
+
+string response = await generator.GenerateCompleteAsync("What is machine learning?");
 ```
 
 ### Translation
@@ -219,7 +218,7 @@ Console.WriteLine($"Real-time factor: {result.RealTimeFactor:F1}x");
 
 ## Available Models
 
-*Updated: 2026-01 based on MTEB leaderboard and community benchmarks*
+*Updated: 2026-03 based on MTEB leaderboard and community benchmarks*
 
 ### Embedder (ONNX)
 
@@ -266,23 +265,20 @@ GGUF reranker models are auto-detected by `-GGUF` or `_gguf` in repo name.
 | Alias | Model | Params | Context | License | Best For |
 |-------|-------|--------|---------|---------|----------|
 | `default` | Phi-4-mini-instruct | 3.8B | 16K | MIT | Balanced reasoning |
-| `fast` | Llama-3.2-1B-Instruct | 1B | 8K | Llama 3.2 | Ultra-fast inference |
+| `fast` | Phi-4-mini-instruct | 3.8B | 16K | MIT | Same as default (smallest FC-capable) |
 | `quality` | phi-4 | 14B | 16K | MIT | Best reasoning |
-| `medium` | Phi-3.5-mini-instruct | 3.8B | 128K | MIT | Long context |
-| `multilingual` | gemma-2-2b-it | 2B | 8K | Gemma ToU | Multi-language |
+| `medium` | Phi-3.5-mini-instruct | 3.8B | 128K | MIT | Long context (legacy) |
 
 ### Generator (GGUF via llama-server)
 
 | Alias | Model | Params | Context | Best For |
 |-------|-------|--------|---------|----------|
 | `gguf:auto` | Hardware-optimized | varies | varies | Auto-select by hardware |
-| `gguf:default` | Llama 3.2 3B Instruct | 3B | 8K | Balanced quality/speed |
-| `gguf:fast` | Llama 3.2 1B Instruct | 1B | 8K | Quick responses |
-| `gguf:quality` | Qwen 2.5 7B Instruct | 7B | 32K | Higher quality |
-| `gguf:large` | Qwen 2.5 14B Instruct | 14B | 32K | Best quality |
-| `gguf:korean` | EXAONE 3.5 7.8B | 7.8B | 32K | Korean language |
-| `gguf:code` | Qwen 2.5 Coder 7B | 7B | 32K | Coding tasks |
-| `gguf:reasoning` | DeepSeek R1 Distill 8B | 8B | 32K | Complex reasoning |
+| `gguf:fast` | Ministral 3 3B | 3B | 32K | Quick responses, tool calling |
+| `gguf:default` | Hermes 3 Llama 3.1 8B | 8B | 8K | Balanced, stable tool calling |
+| `gguf:quality` | Mistral Nemo 12B | 12B | 32K | Higher quality, tool calling |
+| `gguf:large` | Qwen 3 32B | 32B | 32K | Best quality |
+| `gguf:xlarge` | Qwen 3.5 122B MoE | 122B (10B active) | 32K | Server-grade |
 
 ### Translator
 
@@ -325,8 +321,7 @@ Use `"auto"` to let LMSupply select the optimal model based on your hardware:
 ```csharp
 // Hardware-optimized model selection
 await using var embedder = await LocalEmbedder.LoadAsync("auto");
-await using var generator = await LocalGenerator.LoadAsync("auto");      // ONNX
-await using var ggufModel = await LocalGenerator.LoadAsync("gguf:auto"); // GGUF
+await using var generator = await LocalGenerator.LoadAsync("auto");      // Platform-based: GGUF or ONNX
 await using var reranker = await LocalReranker.LoadAsync("auto");
 ```
 
@@ -336,19 +331,21 @@ LMSupply detects your hardware and selects models accordingly:
 
 | Performance Tier | Hardware | Embedder | Generator | Reranker |
 |------------------|----------|----------|-----------|----------|
-| **Low** | CPU only or GPU <4GB | bge-small (33M) | Llama-3.2-1B | MiniLM-L6 (22M) |
-| **Medium** | GPU 4-8GB | bge-base (110M) | Phi-3.5-mini | bge-reranker-base |
-| **High** | GPU 8-16GB | gte-large (434M) | Phi-4-mini | bge-reranker-large |
+| **Low** | CPU only or GPU <4GB | bge-small (33M) | Phi-4-mini (3.8B) | MiniLM-L6 (22M) |
+| **Medium** | GPU 4-8GB | bge-base (110M) | Phi-4-mini (3.8B) | bge-reranker-base |
+| **High** | GPU 8-16GB | gte-large (434M) | Phi-4 (14B) | bge-reranker-large |
 | **Ultra** | GPU 16GB+ | gte-large (434M) | Phi-4 (14B) | bge-reranker-large |
 
 ### GGUF Models (via `gguf:auto`)
 
 | Performance Tier | Hardware | GGUF Generator |
 |------------------|----------|----------------|
-| **Low** | CPU only or GPU <4GB | Llama 3.2 1B |
-| **Medium** | GPU 4-8GB | Llama 3.2 3B |
-| **High** | GPU 8-16GB | Qwen 2.5 7B |
-| **Ultra** | GPU 16GB+ | Qwen 2.5 14B |
+| **Low** | CPU only or GPU <4GB | Ministral 3 3B |
+| **Medium** | GPU 4-8GB | Hermes 3 8B |
+| **High** | GPU 8-16GB | Mistral Nemo 12B |
+| **Ultra** | GPU 16GB+ | Qwen 3 32B |
+
+> **Platform-based routing (v0.21.0+):** `LoadAsync("auto")` automatically selects GGUF for most environments (CPU, CUDA, Metal) and ONNX only for Windows DirectML with non-NVIDIA GPUs. Use `gguf:auto` or `default` to force a specific backend.
 
 **Key benefits:**
 - **Zero configuration** - Just use `"auto"`, no hardware research needed
@@ -448,8 +445,8 @@ Use predefined aliases for quick access to popular models:
 ```csharp
 await using var embedder = await LocalEmbedder.LoadAsync("default");      // bge-small-en-v1.5
 await using var embedder = await LocalEmbedder.LoadAsync("multilingual"); // bge-m3
-await using var generator = await LocalGenerator.LoadAsync("gguf:auto");  // Hardware-optimized
-await using var generator = await LocalGenerator.LoadAsync("gguf:code");  // Qwen 2.5 Coder
+await using var generator = await LocalGenerator.LoadAsync("gguf:auto");    // Hardware-optimized
+await using var generator = await LocalGenerator.LoadAsync("gguf:quality"); // Mistral Nemo 12B
 ```
 
 ### 2. HuggingFace Repository ID (Full control)

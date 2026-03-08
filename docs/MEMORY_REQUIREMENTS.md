@@ -71,16 +71,23 @@ Generator models require significantly more memory than other domains.
 
 | Model | Parameters | ONNX Size | Est. Memory | Context |
 |-------|------------|-----------|-------------|---------|
-| Llama-3.2-1B-Instruct | 1B | ~2GB | ~4GB | 8K tokens |
-| Gemma-2-2B-IT | 2B | ~4GB | ~8GB | 8K tokens |
-| Qwen2.5-3B-Instruct | 3B | ~6GB | ~12GB | 128K tokens |
-| Phi-3.5-mini-instruct | 3.8B | ~7.5GB | ~15GB | 128K tokens |
 | Phi-4-mini-instruct | 3.8B | ~7.5GB | ~15GB | 16K tokens |
+| Phi-3.5-mini-instruct | 3.8B | ~7.5GB | ~15GB | 128K tokens |
 | Phi-4 | 14B | ~28GB | ~56GB | 16K tokens |
 
-**GGUF Format (Quantized):**
+**GGUF Format (default backend, via llama-server):**
 
-Quantized GGUF models use significantly less memory:
+GGUF models are the default backend for Generator. They use significantly less memory via quantization:
+
+| Model | Parameters | Q4_K_M Size | Est. Memory | Context |
+|-------|------------|-------------|-------------|---------|
+| Ministral 3 3B | 3B | ~1.8GB | ~3.6GB | 32K tokens |
+| Hermes 3 Llama 3.1 8B | 8B | ~4.6GB | ~9.2GB | 8K tokens |
+| Mistral Nemo 12B | 12B | ~7GB | ~14GB | 32K tokens |
+| Qwen 3 32B | 32B | ~18GB | ~36GB | 32K tokens |
+| Qwen 3.5 122B MoE (10B active) | 122B | ~70GB | ~140GB | 32K tokens |
+
+**Quantization Options:**
 
 | Quantization | Memory Reduction | Quality Impact |
 |--------------|-----------------|----------------|
@@ -100,9 +107,9 @@ LMSupply automatically selects the **best quantization file that fits your avail
 - To specify a file explicitly: `new GeneratorOptions { GgufFileName = "model-Q4_K_M.gguf" }`
 
 **Recommended:**
-- 💡 **Low Memory (4-8GB)**: `Llama-3.2-1B` or GGUF Q4_K_M (auto-selected)
-- ⚖️ **Balanced (8-16GB)**: `Phi-3.5-mini` or `Phi-4-mini`
-- 🚀 **Quality (16GB+)**: `Phi-4-mini` ONNX or larger GGUF (auto-selected)
+- 💡 **Low Memory (4-8GB)**: `gguf:fast` (Ministral 3 3B Q4_K_M)
+- ⚖️ **Balanced (8-16GB)**: `gguf:default` (Hermes 3 8B) or `Phi-4-mini` (ONNX)
+- 🚀 **Quality (16GB+)**: `gguf:quality` (Mistral Nemo 12B) or `Phi-4` (ONNX)
 
 ---
 

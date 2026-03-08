@@ -122,7 +122,7 @@ public class ModelDirectoryValidatorTests : IDisposable
     }
 
     [Fact]
-    public void FallbackValidate_OnnxGenAI_MissingConfig_ReturnsInvalid()
+    public void FallbackValidate_GeneralOnnx_WithoutGenaiConfig_ReturnsValid()
     {
         File.WriteAllText(Path.Combine(_testDir, "model.onnx"), "data");
 

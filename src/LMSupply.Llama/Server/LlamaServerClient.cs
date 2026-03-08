@@ -121,6 +121,97 @@ public sealed class LlamaServerClient : IDisposable
     }
 
     /// <summary>
+    /// Generates a streaming chat completion with structured data.
+    /// Returns text deltas, tool call deltas, and finish reason.
+    /// </summary>
+    public async IAsyncEnumerable<ChatStreamData> GenerateChatStreamAsync(
+        IEnumerable<ChatCompletionMessage> messages,
+        ChatCompletionOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        options ??= new ChatCompletionOptions();
+
+        var request = new ChatCompletionRequest
+        {
+            Messages = messages.ToList(),
+            MaxTokens = options.MaxTokens,
+            Temperature = options.Temperature,
+            TopP = options.TopP,
+            TopK = options.TopK > 0 ? options.TopK : null,
+            MinP = options.MinP > 0 ? options.MinP : null,
+            RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
+            FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
+            PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
+            Seed = options.Seed != -1 ? options.Seed : null,
+            Stream = true,
+            Stop = options.StopSequences?.ToList(),
+            Grammar = options.Grammar,
+            JsonSchema = options.JsonSchema,
+            Tools = options.Tools?.ToList()
+        };
+
+        var json = JsonSerializer.Serialize(request, JsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/v1/chat/completions")
+        {
+            Content = content
+        };
+
+        using var response = await _httpClient.SendAsync(
+            httpRequest,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (string.IsNullOrEmpty(line))
+                continue;
+
+            if (!line.StartsWith("data: ", StringComparison.Ordinal))
+                continue;
+
+            var data = line[6..];
+
+            if (data == "[DONE]")
+                break;
+
+            ChatCompletionChunk? chunk;
+            try
+            {
+                chunk = JsonSerializer.Deserialize<ChatCompletionChunk>(data, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceInformation($"[LlamaServerClient] Chat stream chunk deserialization failed: {ex.Message}");
+                continue;
+            }
+
+            var choice = chunk?.Choices?.FirstOrDefault();
+            if (choice is null)
+                continue;
+
+            // Only yield if there's actual content
+            if (choice.Delta?.Content is not null ||
+                choice.Delta?.ToolCalls is { Count: > 0 } ||
+                choice.FinishReason is not null)
+            {
+                yield return new ChatStreamData
+                {
+                    TextDelta = choice.Delta?.Content,
+                    ToolCallDeltas = choice.Delta?.ToolCalls,
+                    FinishReason = choice.FinishReason
+                };
+            }
+        }
+    }
+
+    /// <summary>
     /// Generates a non-streaming chat completion.
     /// </summary>
     public async Task<string> GenerateChatCompleteAsync(
@@ -555,7 +646,7 @@ internal sealed class ChatCompletionDelta
 /// <summary>
 /// Tool call delta in streaming response.
 /// </summary>
-internal sealed class ToolCallDelta
+public sealed class ToolCallDelta
 {
     [JsonPropertyName("index")]
     public int Index { get; set; }
@@ -573,7 +664,7 @@ internal sealed class ToolCallDelta
 /// <summary>
 /// Function call delta in streaming response.
 /// </summary>
-internal sealed class FunctionCallDelta
+public sealed class FunctionCallDelta
 {
     [JsonPropertyName("name")]
     public string? Name { get; set; }
@@ -640,6 +731,28 @@ public sealed class FunctionDefinition
 
     [JsonPropertyName("parameters")]
     public JsonElement? Parameters { get; set; }
+}
+
+/// <summary>
+/// Structured streaming data from a chat completion.
+/// Exposed to LMSupply.Generator via InternalsVisibleTo for conversion to ChatStreamChunk.
+/// </summary>
+public sealed class ChatStreamData
+{
+    /// <summary>
+    /// Text content delta.
+    /// </summary>
+    public string? TextDelta { get; init; }
+
+    /// <summary>
+    /// Tool call deltas (raw SSE format).
+    /// </summary>
+    public List<ToolCallDelta>? ToolCallDeltas { get; init; }
+
+    /// <summary>
+    /// Finish reason (present only on the final chunk).
+    /// </summary>
+    public string? FinishReason { get; init; }
 }
 
 /// <summary>

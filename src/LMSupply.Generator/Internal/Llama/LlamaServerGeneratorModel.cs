@@ -453,6 +453,80 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         RuntimeVersion = _serverVersion
     };
 
+    /// <inheritdoc />
+    public async IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        options ??= GenerationOptions.Default;
+
+        await _concurrencyLimiter.WaitAsync(cancellationToken);
+        try
+        {
+            var serverMessages = ConvertMessages(messages);
+            var chatOptions = CreateChatOptions(options);
+
+            // Initialize reasoning token filter if needed
+            var useReasoningFilter = options.FilterReasoningTokens || options.ExtractReasoningTokens;
+            var reasoningFilter = useReasoningFilter
+                ? new ReasoningTokenFilter(options.ExtractReasoningTokens)
+                : null;
+
+            await foreach (var data in _serverLease.Client.GenerateChatStreamAsync(
+                serverMessages, chatOptions, cancellationToken))
+            {
+                // Convert tool call deltas from server types to Generator types
+                IReadOnlyList<ChatToolCallDelta>? toolCallDeltas = null;
+                if (data.ToolCallDeltas is { Count: > 0 })
+                {
+                    toolCallDeltas = data.ToolCallDeltas.Select(tc => new ChatToolCallDelta
+                    {
+                        Index = tc.Index,
+                        Id = tc.Id,
+                        Name = tc.Function?.Name,
+                        Arguments = tc.Function?.Arguments
+                    }).ToList();
+                }
+
+                // Apply reasoning filter to text delta
+                var text = data.TextDelta;
+                if (text is not null && reasoningFilter is not null)
+                {
+                    text = reasoningFilter.Process(text);
+                    if (string.IsNullOrEmpty(text))
+                        text = null;
+                }
+
+                // Yield structured chunk
+                if (text is not null || toolCallDeltas is not null || data.FinishReason is not null)
+                {
+                    yield return new ChatStreamChunk
+                    {
+                        Text = text,
+                        ToolCalls = toolCallDeltas,
+                        FinishReason = data.FinishReason
+                    };
+                }
+            }
+
+            // Flush remaining reasoning content
+            if (reasoningFilter is not null)
+            {
+                var remaining = reasoningFilter.Flush();
+                if (!string.IsNullOrEmpty(remaining))
+                {
+                    yield return new ChatStreamChunk { Text = remaining };
+                }
+            }
+        }
+        finally
+        {
+            _concurrencyLimiter.Release();
+        }
+    }
+
     /// <summary>
     /// Generates a chat completion with tool calling support.
     /// Returns structured result that may contain tool calls.

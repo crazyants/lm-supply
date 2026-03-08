@@ -393,6 +393,9 @@ public static class ChatEndpoints
         public Task<ChatCompletionResult> GenerateChatWithToolsAsync(IEnumerable<ChatMessage> messages, GenerationOptions? options = null, CancellationToken ct = default)
             => inner.GenerateChatWithToolsAsync(messages, options, ct);
 
+        public IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(IEnumerable<ChatMessage> messages, GenerationOptions? options = null, CancellationToken ct = default)
+            => inner.GenerateChatStreamAsync(messages, options, ct);
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask; // Does NOT dispose the underlying model
     }
 }

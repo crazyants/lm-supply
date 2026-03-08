@@ -1,0 +1,52 @@
+namespace LMSupply.Generator.Models;
+
+/// <summary>
+/// A structured chunk from a streaming chat completion.
+/// May contain text content, tool call deltas, and/or a finish reason.
+/// </summary>
+public sealed record ChatStreamChunk
+{
+    /// <summary>
+    /// Text content delta, or null if this chunk contains only tool calls.
+    /// </summary>
+    public string? Text { get; init; }
+
+    /// <summary>
+    /// Tool call deltas in this chunk, or null if no tool calls.
+    /// Multiple deltas may arrive across multiple chunks for the same tool call (identified by Index).
+    /// </summary>
+    public IReadOnlyList<ChatToolCallDelta>? ToolCalls { get; init; }
+
+    /// <summary>
+    /// Finish reason, present only on the final chunk.
+    /// Values: "stop", "tool_calls", "length".
+    /// </summary>
+    public string? FinishReason { get; init; }
+}
+
+/// <summary>
+/// A streaming delta for a tool call.
+/// Tool calls are accumulated across multiple chunks by matching on <see cref="Index"/>.
+/// </summary>
+public sealed record ChatToolCallDelta
+{
+    /// <summary>
+    /// Zero-based index identifying which tool call this delta belongs to.
+    /// </summary>
+    public required int Index { get; init; }
+
+    /// <summary>
+    /// Tool call ID (typically only present in the first delta for a given index).
+    /// </summary>
+    public string? Id { get; init; }
+
+    /// <summary>
+    /// Function name (typically only present in the first delta for a given index).
+    /// </summary>
+    public string? Name { get; init; }
+
+    /// <summary>
+    /// Partial JSON arguments string (accumulated across deltas).
+    /// </summary>
+    public string? Arguments { get; init; }
+}

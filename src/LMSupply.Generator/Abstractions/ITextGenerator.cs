@@ -74,6 +74,19 @@ public interface ITextGenerator : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Generates a streaming chat completion with structured chunks.
+    /// Returns text deltas, tool call deltas, and finish reason in a unified stream.
+    /// </summary>
+    /// <param name="messages">The chat messages.</param>
+    /// <param name="options">Generation options. If null, default options are used.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of structured stream chunks.</returns>
+    IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Pre-loads the model to avoid cold start latency on first inference.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 using LMSupply.Runtime;
@@ -326,6 +327,22 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
         }
 
         return result;
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        // ONNX models don't support native streaming tool calls.
+        // Wrap text-only streaming as ChatStreamChunk.
+        await foreach (var token in GenerateChatAsync(messages, options, cancellationToken))
+        {
+            yield return new ChatStreamChunk { Text = token };
+        }
+
+        yield return new ChatStreamChunk { FinishReason = "stop" };
     }
 
     /// <inheritdoc />

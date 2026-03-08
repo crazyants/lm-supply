@@ -167,6 +167,31 @@ public sealed class MemoryAwareGenerator : IGeneratorModel
     }
 
     /// <inheritdoc />
+    public async IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        CheckMemoryBudget();
+
+        var tokenCount = 0;
+        await foreach (var chunk in _inner.GenerateChatStreamAsync(messages, options, cancellationToken))
+        {
+            yield return chunk;
+
+            if (chunk.Text is not null)
+            {
+                tokenCount++;
+                if (tokenCount % _options.CheckIntervalTokens == 0)
+                {
+                    CheckMemoryDuringGeneration();
+                }
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<ChatCompletionResult> GenerateChatWithToolsAsync(
         IEnumerable<ChatMessage> messages,
         GenerationOptions? options = null,

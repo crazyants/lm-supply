@@ -1,4 +1,5 @@
 using LMSupply.Download;
+using LMSupply.Exceptions;
 
 namespace LMSupply.Core.Download;
 
@@ -77,6 +78,15 @@ public sealed class ModelPathResolver : IDisposable
         // Check if it's a local directory path
         if (Directory.Exists(modelIdOrPath))
         {
+            // Validate directory before using it
+            var validation = ModelDirectoryValidator.Validate(modelIdOrPath);
+            if (!validation.IsValid)
+            {
+                throw new ModelLoadException(
+                    $"Model directory validation failed: {validation.Reason}",
+                    modelIdOrPath);
+            }
+
             var localPath = Path.Combine(modelIdOrPath, expectedOnnxFile);
             if (File.Exists(localPath))
             {

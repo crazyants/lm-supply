@@ -1,5 +1,6 @@
 using FluentAssertions;
 using LMSupply.Core.Download;
+using LMSupply.Download;
 
 namespace LMSupply.Core.Tests.Download;
 
@@ -76,6 +77,17 @@ public class ModelPathResolverTests : IDisposable
         // Also create config in root
         await File.WriteAllTextAsync(Path.Combine(modelDir, "config.json"), "{}");
 
+        // Write a manifest so directory validation passes (subfolder ONNX files are not visible at root)
+        var manifest = new DownloadManifest
+        {
+            Files =
+            [
+                new ManifestFileEntry { Path = "onnx/model.onnx", Size = (new FileInfo(modelFile)).Length },
+                new ManifestFileEntry { Path = "config.json", Size = 2 }
+            ]
+        };
+        await DownloadManifest.WriteAsync(modelDir, manifest);
+
         using var resolver = new ModelPathResolver(_tempDir);
 
         // Act - when specified file not in root, should search subdirectories
@@ -103,7 +115,7 @@ public class ModelPathResolverTests : IDisposable
     }
 
     [Fact]
-    public async Task ResolveModelAsync_WithEmptyDirectory_ShouldThrowFileNotFound()
+    public async Task ResolveModelAsync_WithEmptyDirectory_ShouldThrowModelLoadException()
     {
         // Arrange
         var emptyDir = Path.Combine(_tempDir, "empty-model");
@@ -111,9 +123,9 @@ public class ModelPathResolverTests : IDisposable
 
         using var resolver = new ModelPathResolver(_tempDir);
 
-        // Act & Assert
+        // Act & Assert - validation rejects directories with no model files
         var act = async () => await resolver.ResolveModelAsync(emptyDir, "model.onnx");
-        await act.Should().ThrowAsync<FileNotFoundException>();
+        await act.Should().ThrowAsync<LMSupply.Exceptions.ModelLoadException>();
     }
 
     [Fact]

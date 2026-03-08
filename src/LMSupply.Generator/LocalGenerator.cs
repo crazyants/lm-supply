@@ -1,4 +1,6 @@
 using LMSupply.Generator.Abstractions;
+using LMSupply.Hardware;
+using LMSupply.Runtime;
 
 namespace LMSupply.Generator;
 
@@ -54,7 +56,13 @@ public static class LocalGenerator
         modelId = baseId;
         options.QuantizationHint ??= qualifier;
 
-        // Handle "auto" and standard aliases via the registry
+        // Handle "auto" — platform-based format selection
+        if (modelId.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return LoadAutoAsync(options, progress, cancellationToken);
+        }
+
+        // Handle standard aliases via the registry
         if (GeneratorModelRegistry.Default.TryResolve(modelId, out var resolvedModel))
         {
             modelId = resolvedModel!.ModelId;
@@ -111,5 +119,35 @@ public static class LocalGenerator
         CancellationToken cancellationToken = default)
     {
         return LoadAsync(DefaultModel, options, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// Auto-selects the optimal model based on hardware platform.
+    /// GGUF for most environments (CPU, CUDA, Metal).
+    /// ONNX only for Windows DirectML (non-NVIDIA) or NPU.
+    /// </summary>
+    private static Task<IGeneratorModel> LoadAutoAsync(
+        GeneratorOptions options,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var profile = HardwareProfile.Current;
+        var useOnnx = profile.RecommendedProvider == ExecutionProvider.DirectML &&
+                      profile.GpuInfo.Vendor != GpuVendor.Nvidia;
+
+        if (useOnnx)
+        {
+            // ONNX path: DirectML/NPU advantage
+            var model = GeneratorModelRegistry.Default.Resolve("auto");
+            return Internal.GeneratorModelLoader.LoadAsync(
+                model.ModelId, options, progress, cancellationToken);
+        }
+        else
+        {
+            // GGUF path: CPU, CUDA, Metal, Linux — all go here
+            var model = Internal.Llama.GgufModelRegistry.GetAutoModel();
+            return Internal.GeneratorModelLoader.LoadAsync(
+                model.RepoId, options, progress, cancellationToken);
+        }
     }
 }

@@ -412,7 +412,8 @@ public sealed class LlamaServerProcess : IAsyncDisposable
             "--batch-size", _config.BatchSize.ToString(CultureInfo.InvariantCulture),
             "--parallel", _config.Parallel.ToString(CultureInfo.InvariantCulture),
             "--host", "127.0.0.1", // Only listen on localhost for security
-            "--cont-batching"      // Enable continuous batching for better throughput
+            "--cont-batching",     // Enable continuous batching for better throughput
+            "--jinja"              // Enable Jinja template processing for native tool calling support
         };
 
         // Physical batch size for VRAM efficiency

@@ -59,7 +59,7 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
     {
         options ??= new GeneratorOptions();
 
-        var modelPath = await ResolveModelPathAsync(modelId, cancellationToken);
+        var (modelPath, configBasePath) = await ResolveModelPathWithBaseAsync(modelId, cancellationToken);
         var chatFormatter = ResolveChatFormatter(modelId, options.ChatFormat);
 
         // Merge default provider if not specified
@@ -76,7 +76,7 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
             };
         }
 
-        return new Internal.OnnxGeneratorModel(modelId, modelPath, chatFormatter, options);
+        return new Internal.OnnxGeneratorModel(modelId, modelPath, chatFormatter, options, configBasePath);
     }
 
     /// <inheritdoc />
@@ -206,14 +206,20 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
             .ToList();
     }
 
-    private async Task<string> ResolveModelPathAsync(string modelId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves model path and config base path.
+    /// Returns (modelPath, configBasePath) where configBasePath is the snapshot root
+    /// when the model is in a subfolder, or null when model is at the root.
+    /// </summary>
+    private async Task<(string modelPath, string? configBasePath)> ResolveModelPathWithBaseAsync(
+        string modelId, CancellationToken cancellationToken)
     {
         // Get proper HuggingFace cache path (models--{org}--{name}/snapshots/{revision})
         var snapshotPath = GetModelCachePath(modelId);
 
         // Check if model exists directly in snapshot
         if (IsValidModelDirectory(snapshotPath))
-            return snapshotPath;
+            return (snapshotPath, null);
 
         // Check registry subfolder directly — handles 2-level paths like cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4
         GeneratorModelRegistry.Default.TryResolve(modelId, out var registryInfo);
@@ -221,25 +227,25 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
         {
             var registrySubfolderPath = Path.Combine(snapshotPath, registryInfo.Subfolder);
             if (IsValidModelDirectory(registrySubfolderPath))
-                return registrySubfolderPath;
+                return (registrySubfolderPath, snapshotPath);
         }
 
         // Check for variant subdirectories within snapshot (cpu-int4, cuda-int4, etc.)
         var foundPath = FindVariantSubfolder(snapshotPath);
         if (foundPath != null)
-            return foundPath;
+            return (foundPath, snapshotPath);
 
         // Model not found - attempt download
         await DownloadModelAsync(modelId, null, cancellationToken);
 
         // After download, check again
         if (IsValidModelDirectory(snapshotPath))
-            return snapshotPath;
+            return (snapshotPath, null);
 
         // Check variants again after download
         foundPath = FindVariantSubfolder(snapshotPath);
         if (foundPath != null)
-            return foundPath;
+            return (foundPath, snapshotPath);
 
         throw new FileNotFoundException($"Model '{modelId}' not found at {snapshotPath}");
     }

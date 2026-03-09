@@ -18,6 +18,7 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
     private readonly IChatFormatter _chatFormatter;
     private readonly GeneratorOptions _options;
     private readonly string _modelPath;
+    private readonly string? _configBasePath;
     private readonly ExecutionProvider _resolvedProvider;
     private readonly SemaphoreSlim _concurrencyLimiter;
     private bool _disposed;
@@ -26,10 +27,12 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
         string modelId,
         string modelPath,
         IChatFormatter chatFormatter,
-        GeneratorOptions options)
+        GeneratorOptions options,
+        string? configBasePath = null)
     {
         ModelId = modelId;
         _modelPath = modelPath;
+        _configBasePath = configBasePath;
         _chatFormatter = chatFormatter;
         _options = options;
 
@@ -67,7 +70,7 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
         }
         else
         {
-            var configContextLength = GenAiConfigReader.ReadMaxContextLength(modelPath);
+            var configContextLength = GenAiConfigReader.ReadMaxContextLength(modelPath, configBasePath);
             var hwMaxContext = HardwareDetector.GetRecommendation().MaxContextLength;
             if (configContextLength > hwMaxContext)
             {
@@ -399,7 +402,7 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
         merged.AddRange(_chatFormatter.GetStopSequences());
         
         // 2. Stop sequences from config file (if defined in genai_config.json)
-        var configStops = GenAiConfigReader.ReadStopSequences(_modelPath);
+        var configStops = GenAiConfigReader.ReadStopSequences(_modelPath, _configBasePath);
         foreach (var stop in configStops)
         {
             if (!merged.Contains(stop, StringComparer.Ordinal))

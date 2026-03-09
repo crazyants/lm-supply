@@ -85,7 +85,10 @@ internal static class GeneratorModelLoader
             ? Path.Combine(basePath, discovery.Subfolder.Replace('/', Path.DirectorySeparatorChar))
             : basePath;
 
-        return await LoadFromPathAsync(modelPath, options, modelId);
+        // Pass basePath as configBasePath when subfolder is used,
+        // so GenAiConfigReader can find genai_config.json at either location
+        var configBasePath = discovery.Subfolder != null ? basePath : null;
+        return await LoadFromPathAsync(modelPath, options, modelId, configBasePath);
     }
 
     /// <summary>
@@ -147,7 +150,8 @@ internal static class GeneratorModelLoader
     public static async Task<IGeneratorModel> LoadFromPathAsync(
         string modelPath,
         GeneratorOptions options,
-        string? modelId = null)
+        string? modelId = null,
+        string? configBasePath = null)
     {
         // Detect model format from path
         var format = ModelFormatDetector.Detect(modelPath);
@@ -156,7 +160,7 @@ internal static class GeneratorModelLoader
         return format switch
         {
             ModelFormat.Gguf => await LoadGgufFromPathAsync(modelPath, options, modelId),
-            ModelFormat.Onnx => await LoadOnnxFromPathAsync(modelPath, options, modelId),
+            ModelFormat.Onnx => await LoadOnnxFromPathAsync(modelPath, options, modelId, configBasePath),
             ModelFormat.Unknown => await LoadGgufFromPathAsync(modelPath, options, modelId), // GGUF fallback (GGUF-first strategy)
             _ => throw new NotSupportedException($"Unsupported model format: {format}")
         };
@@ -168,7 +172,8 @@ internal static class GeneratorModelLoader
     private static async Task<IGeneratorModel> LoadOnnxFromPathAsync(
         string modelPath,
         GeneratorOptions options,
-        string? modelId = null)
+        string? modelId = null,
+        string? configBasePath = null)
     {
         // Ensure GenAI runtime binaries are available before loading the model
         await EnsureGenAiRuntimeAsync(options.Provider, progress: null, CancellationToken.None);
@@ -185,7 +190,8 @@ internal static class GeneratorModelLoader
             modelId,
             modelPath,
             chatFormatter,
-            options);
+            options,
+            configBasePath);
 
         return model;
     }

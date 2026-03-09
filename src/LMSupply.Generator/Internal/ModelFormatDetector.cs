@@ -88,10 +88,17 @@ internal static class ModelFormatDetector
             return ModelFormat.Gguf;
 
         // Check subdirectories for ONNX structure (common pattern: cpu-int4-*/model.onnx)
+        // Also check 2-level deep subdirectories (e.g., cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4/)
         foreach (var subdir in Directory.EnumerateDirectories(path))
         {
             if (HasOnnxGenAiStructure(subdir))
                 return ModelFormat.Onnx;
+
+            foreach (var subsubdir in Directory.EnumerateDirectories(subdir))
+            {
+                if (HasOnnxGenAiStructure(subsubdir))
+                    return ModelFormat.Onnx;
+            }
         }
 
         return ModelFormat.Unknown;

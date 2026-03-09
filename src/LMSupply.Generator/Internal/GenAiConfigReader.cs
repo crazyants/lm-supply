@@ -11,16 +11,35 @@ internal static class GenAiConfigReader
     private const int DefaultMaxContextLength = 4096;
 
     /// <summary>
+    /// Resolves the path to genai_config.json by searching the given directories in order.
+    /// </summary>
+    /// <param name="searchPaths">Directories to search, in priority order.</param>
+    /// <returns>The full path to the config file, or null if not found.</returns>
+    internal static string? ResolveConfigPath(params string[] searchPaths)
+    {
+        foreach (var dir in searchPaths)
+        {
+            var candidate = Path.Combine(dir, ConfigFileName);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Reads the maximum context length from the model's genai_config.json.
     /// Prioritizes model architecture limits (context_length, max_position_embeddings)
     /// over generation defaults (search.max_length) which are often set to small values.
     /// </summary>
-    /// <param name="modelPath">Path to the model directory.</param>
+    /// <param name="modelPath">Path to the model directory (ONNX files location).</param>
+    /// <param name="configBasePath">Optional base directory to search for genai_config.json if not found in modelPath.</param>
     /// <returns>The maximum context length, or default if not found.</returns>
-    public static int ReadMaxContextLength(string modelPath)
+    public static int ReadMaxContextLength(string modelPath, string? configBasePath = null)
     {
-        var configPath = Path.Combine(modelPath, ConfigFileName);
-        if (!File.Exists(configPath))
+        var configPath = configBasePath != null
+            ? ResolveConfigPath(modelPath, configBasePath)
+            : ResolveConfigPath(modelPath);
+        if (configPath == null)
         {
             return DefaultMaxContextLength;
         }
@@ -79,12 +98,15 @@ internal static class GenAiConfigReader
     /// <summary>
     /// Reads the model type/architecture from the config.
     /// </summary>
-    /// <param name="modelPath">Path to the model directory.</param>
+    /// <param name="modelPath">Path to the model directory (ONNX files location).</param>
+    /// <param name="configBasePath">Optional base directory to search for genai_config.json if not found in modelPath.</param>
     /// <returns>The model type, or null if not found.</returns>
-    public static string? ReadModelType(string modelPath)
+    public static string? ReadModelType(string modelPath, string? configBasePath = null)
     {
-        var configPath = Path.Combine(modelPath, ConfigFileName);
-        if (!File.Exists(configPath))
+        var configPath = configBasePath != null
+            ? ResolveConfigPath(modelPath, configBasePath)
+            : ResolveConfigPath(modelPath);
+        if (configPath == null)
         {
             return null;
         }
@@ -114,12 +136,15 @@ internal static class GenAiConfigReader
     /// <summary>
     /// Reads the vocabulary size from the config.
     /// </summary>
-    /// <param name="modelPath">Path to the model directory.</param>
+    /// <param name="modelPath">Path to the model directory (ONNX files location).</param>
+    /// <param name="configBasePath">Optional base directory to search for genai_config.json if not found in modelPath.</param>
     /// <returns>The vocabulary size, or null if not found.</returns>
-    public static int? ReadVocabSize(string modelPath)
+    public static int? ReadVocabSize(string modelPath, string? configBasePath = null)
     {
-        var configPath = Path.Combine(modelPath, ConfigFileName);
-        if (!File.Exists(configPath))
+        var configPath = configBasePath != null
+            ? ResolveConfigPath(modelPath, configBasePath)
+            : ResolveConfigPath(modelPath);
+        if (configPath == null)
         {
             return null;
         }
@@ -151,12 +176,15 @@ internal static class GenAiConfigReader
     /// Reads the EOS (End-of-Sequence) token IDs from the config.
     /// ONNX Runtime GenAI supports both single int and array formats for eos_token_id.
     /// </summary>
-    /// <param name="modelPath">Path to the model directory.</param>
+    /// <param name="modelPath">Path to the model directory (ONNX files location).</param>
+    /// <param name="configBasePath">Optional base directory to search for genai_config.json if not found in modelPath.</param>
     /// <returns>Array of EOS token IDs, or empty array if not found.</returns>
-    public static int[] ReadEosTokenIds(string modelPath)
+    public static int[] ReadEosTokenIds(string modelPath, string? configBasePath = null)
     {
-        var configPath = Path.Combine(modelPath, ConfigFileName);
-        if (!File.Exists(configPath))
+        var configPath = configBasePath != null
+            ? ResolveConfigPath(modelPath, configBasePath)
+            : ResolveConfigPath(modelPath);
+        if (configPath == null)
         {
             return [];
         }
@@ -196,12 +224,15 @@ internal static class GenAiConfigReader
     /// <summary>
     /// Reads stop sequences from the config if defined.
     /// </summary>
-    /// <param name="modelPath">Path to the model directory.</param>
+    /// <param name="modelPath">Path to the model directory (ONNX files location).</param>
+    /// <param name="configBasePath">Optional base directory to search for genai_config.json if not found in modelPath.</param>
     /// <returns>List of stop sequences, or empty list if not found.</returns>
-    public static IReadOnlyList<string> ReadStopSequences(string modelPath)
+    public static IReadOnlyList<string> ReadStopSequences(string modelPath, string? configBasePath = null)
     {
-        var configPath = Path.Combine(modelPath, ConfigFileName);
-        if (!File.Exists(configPath))
+        var configPath = configBasePath != null
+            ? ResolveConfigPath(modelPath, configBasePath)
+            : ResolveConfigPath(modelPath);
+        if (configPath == null)
         {
             return [];
         }

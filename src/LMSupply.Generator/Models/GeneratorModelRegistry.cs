@@ -9,6 +9,15 @@ namespace LMSupply.Generator;
 public sealed class GeneratorModelRegistry : ModelRegistryBase<ModelInfo>
 {
     /// <summary>
+    /// Auto-selection candidates sorted by size descending (largest first).
+    /// </summary>
+    private static readonly ModelInfo[] AutoCandidates =
+    [
+        DefaultGeneratorModels.Phi4,      // 14B params
+        DefaultGeneratorModels.Phi4Mini,  // 3.8B params
+    ];
+
+    /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static GeneratorModelRegistry Default { get; } = new(DefaultGeneratorModels.All);
@@ -32,28 +41,33 @@ public sealed class GeneratorModelRegistry : ModelRegistryBase<ModelInfo>
     }
 
     /// <summary>
-    /// Gets the optimal ONNX model based on current hardware profile.
-    /// Uses PerformanceTier to select appropriate model size.
+    /// Gets the optimal ONNX model based on available VRAM.
+    /// Selects the largest model that fits in available GPU memory,
+    /// falling back to the smallest model if none fit.
     /// All models are MIT-licensed Phi-4 series with function calling support.
     /// </summary>
-    /// <remarks>
-    /// Tier mapping:
-    /// - Ultra/High: Phi-4 (14B params) - highest quality
-    /// - Others:     Phi-4-mini (3.8B, 16K context) - default, good balance
-    /// </remarks>
     protected override ModelInfo GetAutoModel()
     {
-        var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[GeneratorModelRegistry] Auto-selecting ONNX model for tier: {tier}");
+        var gpu = HardwareProfile.Current.GpuInfo;
+        var availableVram = VramBudget.GetAvailableBytes(gpu);
+        Trace.TraceInformation($"[GeneratorModelRegistry] Auto-selecting ONNX model for VRAM: {availableVram / (1024 * 1024)} MB");
 
-        var model = tier switch
+        foreach (var candidate in AutoCandidates)
         {
-            PerformanceTier.Ultra => DefaultGeneratorModels.Phi4,      // 14B
-            PerformanceTier.High => DefaultGeneratorModels.Phi4,       // 14B
-            _ => DefaultGeneratorModels.Phi4Mini                       // 3.8B
-        };
+            var memInfo = (IModelMemoryInfo)candidate;
+            var size = ModelMemoryEstimator.EstimateModelSizeBytes(
+                memInfo.ParameterCount, memInfo.QuantizationType, memInfo.EstimatedSizeBytes);
+            if (size <= availableVram)
+            {
+                Trace.TraceInformation($"[GeneratorModelRegistry] Selected: {candidate.ModelId} ({size / (1024 * 1024)} MB)");
+                return candidate with { AliasName = "auto" };
+            }
+        }
 
-        return model with { AliasName = "auto" };
+        // Fallback to smallest model
+        var fallback = AutoCandidates[^1];
+        Trace.TraceInformation($"[GeneratorModelRegistry] Fallback to smallest: {fallback.ModelId}");
+        return fallback with { AliasName = "auto" };
     }
 
     /// <summary>

@@ -9,6 +9,17 @@ namespace LMSupply.Detector.Models;
 public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
 {
     /// <summary>
+    /// Auto-selection candidates sorted by size descending (largest first).
+    /// </summary>
+    private static readonly DetectorModelInfo[] AutoCandidates =
+    [
+        DefaultModels.RtDetrV2L,   // 42M params, 169MB
+        DefaultModels.RtDetrV2M,   // 36M params, 133MB
+        DefaultModels.RtDetrV2S,   // 20M params, 80MB
+        DefaultModels.RtDetrV2MS,  // 15M params, 126MB
+    ];
+
+    /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static DetectorModelRegistry Default { get; } = new(DefaultModels.All);
@@ -21,44 +32,46 @@ public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
         : base(systemModels) { }
 
     /// <summary>
-    /// Gets the optimal model based on current hardware profile.
-    /// Uses PerformanceTier to select appropriate model size.
+    /// Gets the optimal model based on available VRAM.
+    /// Selects the largest model that fits in available GPU memory,
+    /// falling back to the smallest model if none fit.
     /// </summary>
-    /// <remarks>
-    /// Tier mapping:
-    /// - Low:    RT-DETR v2 Mini-Small (15M params) - fast, lightweight
-    /// - Medium: RT-DETR v2 Small (20M params) - balanced
-    /// - High:   RT-DETR v2 Medium (36M params) - quality
-    /// - Ultra:  RT-DETR v2 Large (42M params) - highest accuracy
-    /// </remarks>
     protected override DetectorModelInfo GetAutoModel()
     {
-        var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[DetectorModelRegistry] Auto-selecting model for tier: {tier}");
+        var gpu = HardwareProfile.Current.GpuInfo;
+        var availableVram = VramBudget.GetAvailableBytes(gpu);
+        Trace.TraceInformation($"[DetectorModelRegistry] Auto-selecting model for VRAM: {availableVram / (1024 * 1024)} MB");
 
-        var model = tier switch
+        DetectorModelInfo selected = AutoCandidates[^1]; // default to smallest
+
+        foreach (var candidate in AutoCandidates)
         {
-            PerformanceTier.Ultra => DefaultModels.RtDetrV2L,
-            PerformanceTier.High => DefaultModels.RtDetrV2M,
-            PerformanceTier.Medium => DefaultModels.RtDetrV2S,
-            _ => DefaultModels.RtDetrV2MS
-        };
+            var memInfo = (IModelMemoryInfo)candidate;
+            var size = ModelMemoryEstimator.EstimateModelSizeBytes(
+                memInfo.ParameterCount, memInfo.QuantizationType, memInfo.EstimatedSizeBytes);
+            if (size <= availableVram)
+            {
+                selected = candidate;
+                Trace.TraceInformation($"[DetectorModelRegistry] Selected: {candidate.Id} ({size / (1024 * 1024)} MB)");
+                break;
+            }
+        }
 
         return new DetectorModelInfo
         {
-            Id = model.Id,
+            Id = selected.Id,
             AliasName = "auto",
-            DisplayName = model.DisplayName,
-            Architecture = model.Architecture,
-            ParametersM = model.ParametersM,
-            SizeBytes = model.SizeBytes,
-            MapCoco = model.MapCoco,
-            InputSize = model.InputSize,
-            NumClasses = model.NumClasses,
-            RequiresNms = model.RequiresNms,
-            OnnxFile = model.OnnxFile,
-            Description = model.Description,
-            License = model.License
+            DisplayName = selected.DisplayName,
+            Architecture = selected.Architecture,
+            ParametersM = selected.ParametersM,
+            SizeBytes = selected.SizeBytes,
+            MapCoco = selected.MapCoco,
+            InputSize = selected.InputSize,
+            NumClasses = selected.NumClasses,
+            RequiresNms = selected.RequiresNms,
+            OnnxFile = selected.OnnxFile,
+            Description = selected.Description,
+            License = selected.License
         };
     }
 

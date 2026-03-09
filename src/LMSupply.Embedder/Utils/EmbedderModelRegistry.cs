@@ -9,6 +9,16 @@ namespace LMSupply.Embedder.Utils;
 public sealed class EmbedderModelRegistry : ModelRegistryBase<ModelInfo>
 {
     /// <summary>
+    /// Auto-selection candidates sorted by size descending (largest first).
+    /// </summary>
+    private static readonly ModelInfo[] AutoCandidates =
+    [
+        DefaultModels.GteLargeEnV15,   // 434M params, 1024 dims, 8K context
+        DefaultModels.BgeBaseEnV15,     // 110M params, 768 dims
+        DefaultModels.BgeSmallEnV15,    // 33M params, 384 dims
+    ];
+
+    /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static EmbedderModelRegistry Default { get; } = new(DefaultModels.All);
@@ -21,29 +31,32 @@ public sealed class EmbedderModelRegistry : ModelRegistryBase<ModelInfo>
         : base(systemModels) { }
 
     /// <summary>
-    /// Gets the optimal model based on current hardware profile.
-    /// Uses PerformanceTier to select appropriate model size.
+    /// Gets the optimal model based on available VRAM.
+    /// Selects the largest model that fits in available GPU memory,
+    /// falling back to the smallest model if none fit.
     /// </summary>
-    /// <remarks>
-    /// Tier mapping:
-    /// - Low:    bge-small-en-v1.5 (33M params, 384 dims) - lightweight
-    /// - Medium: bge-base-en-v1.5 (110M params, 768 dims) - balanced
-    /// - High:   gte-large-en-v1.5 (434M params, 1024 dims, 8K context) - quality
-    /// - Ultra:  gte-large-en-v1.5 (434M params, 1024 dims, 8K context) - quality
-    /// </remarks>
     protected override ModelInfo GetAutoModel()
     {
-        var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[EmbedderModelRegistry] Auto-selecting model for tier: {tier}");
+        var gpu = HardwareProfile.Current.GpuInfo;
+        var availableVram = VramBudget.GetAvailableBytes(gpu);
+        Trace.TraceInformation($"[EmbedderModelRegistry] Auto-selecting model for VRAM: {availableVram / (1024 * 1024)} MB");
 
-        var model = tier switch
+        foreach (var candidate in AutoCandidates)
         {
-            PerformanceTier.Ultra or PerformanceTier.High => DefaultModels.GteLargeEnV15,
-            PerformanceTier.Medium => DefaultModels.BgeBaseEnV15,
-            _ => DefaultModels.BgeSmallEnV15
-        };
+            var memInfo = (IModelMemoryInfo)candidate;
+            var size = ModelMemoryEstimator.EstimateModelSizeBytes(
+                memInfo.ParameterCount, memInfo.QuantizationType, memInfo.EstimatedSizeBytes);
+            if (size <= availableVram)
+            {
+                Trace.TraceInformation($"[EmbedderModelRegistry] Selected: {candidate.RepoId} ({size / (1024 * 1024)} MB)");
+                return candidate with { AliasName = "auto" };
+            }
+        }
 
-        return model with { AliasName = "auto" };
+        // Fallback to smallest model
+        var fallback = AutoCandidates[^1];
+        Trace.TraceInformation($"[EmbedderModelRegistry] Fallback to smallest: {fallback.RepoId}");
+        return fallback with { AliasName = "auto" };
     }
 
     /// <summary>

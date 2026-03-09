@@ -9,6 +9,16 @@ namespace LMSupply.Segmenter.Models;
 public sealed class SegmenterModelRegistry : ModelRegistryBase<SegmenterModelInfo>
 {
     /// <summary>
+    /// Auto-selection candidates sorted by size descending (largest first).
+    /// </summary>
+    private static readonly SegmenterModelInfo[] AutoCandidates =
+    [
+        DefaultModels.MaskFormerResNet50,  // 44M params, 178MB
+        DefaultModels.SegFormerB0,          // 3.7M params, 15MB
+        DefaultModels.MediaPipeSelfie,      // 0.7M params, 3MB
+    ];
+
+    /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static SegmenterModelRegistry Default { get; } = new(DefaultModels.All);
@@ -21,45 +31,48 @@ public sealed class SegmenterModelRegistry : ModelRegistryBase<SegmenterModelInf
         : base(systemModels) { }
 
     /// <summary>
-    /// Gets the optimal model based on current hardware profile.
-    /// Uses PerformanceTier to select appropriate model size.
+    /// Gets the optimal model based on available VRAM.
+    /// Selects the largest model that fits in available GPU memory,
+    /// falling back to the smallest model if none fit.
     /// </summary>
-    /// <remarks>
-    /// Tier mapping (semantic segmentation focus):
-    /// - Low:    MediaPipe Selfie (0.7M params) - ultra lightweight, fast
-    /// - Medium: SegFormer-B0 (3.7M params) - balanced
-    /// - High:   MaskFormer ResNet50 (44M params) - quality
-    /// - Ultra:  MaskFormer ResNet50 (44M params) - highest accuracy
-    /// </remarks>
     protected override SegmenterModelInfo GetAutoModel()
     {
-        var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[SegmenterModelRegistry] Auto-selecting model for tier: {tier}");
+        var gpu = HardwareProfile.Current.GpuInfo;
+        var availableVram = VramBudget.GetAvailableBytes(gpu);
+        Trace.TraceInformation($"[SegmenterModelRegistry] Auto-selecting model for VRAM: {availableVram / (1024 * 1024)} MB");
 
-        var model = tier switch
+        SegmenterModelInfo selected = AutoCandidates[^1]; // default to smallest
+
+        foreach (var candidate in AutoCandidates)
         {
-            PerformanceTier.Ultra or PerformanceTier.High => DefaultModels.MaskFormerResNet50,
-            PerformanceTier.Medium => DefaultModels.SegFormerB0,
-            _ => DefaultModels.MediaPipeSelfie
-        };
+            var memInfo = (IModelMemoryInfo)candidate;
+            var size = ModelMemoryEstimator.EstimateModelSizeBytes(
+                memInfo.ParameterCount, memInfo.QuantizationType, memInfo.EstimatedSizeBytes);
+            if (size <= availableVram)
+            {
+                selected = candidate;
+                Trace.TraceInformation($"[SegmenterModelRegistry] Selected: {candidate.Id} ({size / (1024 * 1024)} MB)");
+                break;
+            }
+        }
 
         return new SegmenterModelInfo
         {
-            Id = model.Id,
+            Id = selected.Id,
             AliasName = "auto",
-            DisplayName = model.DisplayName,
-            Architecture = model.Architecture,
-            ParametersM = model.ParametersM,
-            SizeBytes = model.SizeBytes,
-            MIoU = model.MIoU,
-            InputSize = model.InputSize,
-            NumClasses = model.NumClasses,
-            OnnxFile = model.OnnxFile,
-            EncoderFile = model.EncoderFile,
-            DecoderFile = model.DecoderFile,
-            Dataset = model.Dataset,
-            Description = model.Description,
-            License = model.License
+            DisplayName = selected.DisplayName,
+            Architecture = selected.Architecture,
+            ParametersM = selected.ParametersM,
+            SizeBytes = selected.SizeBytes,
+            MIoU = selected.MIoU,
+            InputSize = selected.InputSize,
+            NumClasses = selected.NumClasses,
+            OnnxFile = selected.OnnxFile,
+            EncoderFile = selected.EncoderFile,
+            DecoderFile = selected.DecoderFile,
+            Dataset = selected.Dataset,
+            Description = selected.Description,
+            License = selected.License
         };
     }
 

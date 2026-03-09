@@ -9,6 +9,17 @@ namespace LMSupply.Transcriber.Models;
 public sealed class TranscriberModelRegistry : ModelRegistryBase<TranscriberModelInfo>
 {
     /// <summary>
+    /// Auto-selection candidates sorted by size descending (largest first).
+    /// </summary>
+    private static readonly TranscriberModelInfo[] AutoCandidates =
+    [
+        DefaultModels.WhisperLargeV3Turbo,  // 809M params, ~3.2GB
+        DefaultModels.WhisperSmall,          // 244M params, ~970MB
+        DefaultModels.WhisperBase,           // 74M params, ~290MB
+        DefaultModels.WhisperTiny,           // 39M params, ~150MB
+    ];
+
+    /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
     public static TranscriberModelRegistry Default { get; } = new(DefaultModels.All);
@@ -21,48 +32,50 @@ public sealed class TranscriberModelRegistry : ModelRegistryBase<TranscriberMode
         : base(systemModels) { }
 
     /// <summary>
-    /// Gets the optimal model based on current hardware profile.
-    /// Uses PerformanceTier to select appropriate model size.
+    /// Gets the optimal model based on available VRAM.
+    /// Selects the largest model that fits in available GPU memory,
+    /// falling back to the smallest model if none fit.
     /// </summary>
-    /// <remarks>
-    /// Tier mapping:
-    /// - Low:    Whisper Tiny (39M params) - ultra-fast
-    /// - Medium: Whisper Base (74M params) - balanced
-    /// - High:   Whisper Small (244M params) - quality
-    /// - Ultra:  Whisper Large V3 Turbo (809M params) - highest quality
-    /// </remarks>
     protected override TranscriberModelInfo GetAutoModel()
     {
-        var tier = HardwareProfile.Current.Tier;
-        Trace.TraceInformation($"[TranscriberModelRegistry] Auto-selecting model for tier: {tier}");
+        var gpu = HardwareProfile.Current.GpuInfo;
+        var availableVram = VramBudget.GetAvailableBytes(gpu);
+        Trace.TraceInformation($"[TranscriberModelRegistry] Auto-selecting model for VRAM: {availableVram / (1024 * 1024)} MB");
 
-        var model = tier switch
+        TranscriberModelInfo selected = AutoCandidates[^1]; // default to smallest
+
+        foreach (var candidate in AutoCandidates)
         {
-            PerformanceTier.Ultra => DefaultModels.WhisperLargeV3Turbo,
-            PerformanceTier.High => DefaultModels.WhisperSmall,
-            PerformanceTier.Medium => DefaultModels.WhisperBase,
-            _ => DefaultModels.WhisperTiny
-        };
+            var memInfo = (IModelMemoryInfo)candidate;
+            var size = ModelMemoryEstimator.EstimateModelSizeBytes(
+                memInfo.ParameterCount, memInfo.QuantizationType, memInfo.EstimatedSizeBytes);
+            if (size <= availableVram)
+            {
+                selected = candidate;
+                Trace.TraceInformation($"[TranscriberModelRegistry] Selected: {candidate.Id} ({size / (1024 * 1024)} MB)");
+                break;
+            }
+        }
 
         return new TranscriberModelInfo
         {
-            Id = model.Id,
+            Id = selected.Id,
             AliasName = "auto",
-            DisplayName = model.DisplayName,
-            Architecture = model.Architecture,
-            ParametersM = model.ParametersM,
-            SizeBytes = model.SizeBytes,
-            WerLibriSpeech = model.WerLibriSpeech,
-            MaxDurationSeconds = model.MaxDurationSeconds,
-            SampleRate = model.SampleRate,
-            NumMelBins = model.NumMelBins,
-            HiddenSize = model.HiddenSize,
-            EncoderFile = model.EncoderFile,
-            DecoderFile = model.DecoderFile,
-            SupportedLanguages = model.SupportedLanguages,
-            IsMultilingual = model.IsMultilingual,
-            Description = model.Description,
-            License = model.License
+            DisplayName = selected.DisplayName,
+            Architecture = selected.Architecture,
+            ParametersM = selected.ParametersM,
+            SizeBytes = selected.SizeBytes,
+            WerLibriSpeech = selected.WerLibriSpeech,
+            MaxDurationSeconds = selected.MaxDurationSeconds,
+            SampleRate = selected.SampleRate,
+            NumMelBins = selected.NumMelBins,
+            HiddenSize = selected.HiddenSize,
+            EncoderFile = selected.EncoderFile,
+            DecoderFile = selected.DecoderFile,
+            SupportedLanguages = selected.SupportedLanguages,
+            IsMultilingual = selected.IsMultilingual,
+            Description = selected.Description,
+            License = selected.License
         };
     }
 

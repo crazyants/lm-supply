@@ -1,4 +1,5 @@
 using LMSupply.Hardware;
+using LMSupply.Runtime;
 
 namespace LMSupply.Generator.Internal.Llama;
 
@@ -123,25 +124,33 @@ public static class GgufModelRegistry
 
     /// <summary>
     /// Gets the optimal GGUF model based on current hardware profile.
+    /// Delegates to the VRAM-aware overload using the current GPU.
     /// </summary>
-    /// <remarks>
-    /// Model selection based on performance tier:
-    /// - Ultra: Qwen 3 32B (highest quality, needs 24GB+ VRAM)
-    /// - High: Mistral Nemo 12B (quality model, 8-16GB VRAM)
-    /// - Medium: Hermes 3 8B (balanced, 4-8GB VRAM)
-    /// - Low: Ministral 3 3B (fast, minimal resources)
-    /// </remarks>
     public static GgufModelInfo GetAutoModel()
-    {
-        var tier = HardwareProfile.Current.Tier;
+        => GetAutoModel(HardwareProfile.Current.GpuInfo);
 
-        return tier switch
+    /// <summary>
+    /// Gets the optimal GGUF model based on actual available VRAM.
+    /// Models are sorted by size descending; selects largest that fits.
+    /// Falls back to smallest model if nothing fits (CPU fallback).
+    /// </summary>
+    public static GgufModelInfo GetAutoModel(GpuInfo gpu)
+    {
+        var availableVram = VramBudget.GetAvailableBytes(gpu);
+
+        var candidates = _models.Values
+            .Where(m => m.EstimatedSizeBytes.HasValue)
+            .OrderByDescending(m => m.EstimatedSizeBytes!.Value)
+            .ToList();
+
+        foreach (var model in candidates)
         {
-            PerformanceTier.Ultra => _models["gguf:large"],    // Qwen3 32B
-            PerformanceTier.High => _models["gguf:quality"],   // Mistral Nemo 12B
-            PerformanceTier.Medium => _models["gguf:default"], // Hermes 3 8B
-            _ => _models["gguf:fast"]                          // Ministral 3 3B
-        };
+            if (model.EstimatedSizeBytes!.Value <= availableVram)
+                return model;
+        }
+
+        // Nothing fits in VRAM → return smallest (will use CPU or partial offload)
+        return candidates.LastOrDefault() ?? _models["gguf:fast"];
     }
 
     /// <summary>

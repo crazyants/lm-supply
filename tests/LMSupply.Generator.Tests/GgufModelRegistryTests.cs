@@ -1,5 +1,6 @@
 using FluentAssertions;
 using LMSupply.Generator.Internal.Llama;
+using LMSupply.Runtime;
 using Xunit;
 
 namespace LMSupply.Generator.Tests;
@@ -95,6 +96,72 @@ public class GgufModelRegistryTests
         aliases.Should().Contain("gguf:quality");
         aliases.Should().Contain("gguf:large");
         aliases.Should().Contain("gguf:xlarge");
+    }
+
+    [Fact]
+    public void GetAutoModel_LargeVram_SelectsLargestFitting()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 22L * 1024 * 1024 * 1024
+        };
+
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void GetAutoModel_LargeVram_SelectsLarge()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 24L * 1024 * 1024 * 1024
+        };
+        // 24GB × 0.85 = 20.4GB → gguf:large (19GB) fits
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.ParameterCount.Should().Be(32_000_000_000);
+    }
+
+    [Fact]
+    public void GetAutoModel_MediumVram_SelectsDefault()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 6L * 1024 * 1024 * 1024
+        };
+        // 6GB × 0.85 = 5.1GB → gguf:default (4.92GB) fits
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.ParameterCount.Should().BeLessThanOrEqualTo(8_000_000_000);
+    }
+
+    [Fact]
+    public void GetAutoModel_TinyVram_SelectsSmallest()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Intel,
+            TotalMemoryBytes = 2L * 1024 * 1024 * 1024
+        };
+        // 2GB × 0.85 = 1.7GB → gguf:fast (2GB) doesn't fit → still returns smallest
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.ParameterCount.Should().Be(3_000_000_000);
+    }
+
+    [Fact]
+    public void GetAutoModel_CpuOnly_SelectsSmallest()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Unknown
+        };
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.ParameterCount.Should().Be(3_000_000_000);
     }
 
     [Theory]

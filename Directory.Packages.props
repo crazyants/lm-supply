@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <!-- Core Dependencies -->
-    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.24.2" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.24.3" />
     <PackageVersion Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.3" />
 
@@ -20,7 +20,7 @@
     <PackageVersion Include="NAudio.Lame" Version="2.1.0" />
 
     <!-- ONNX Runtime GenAI for LLM Inference -->
-    <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI" Version="0.12.1" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI" Version="0.12.2" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="0.11.3" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.DirectML" Version="0.11.3" />
 
@@ -53,7 +53,7 @@
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.4.1" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.4.0" />
   </ItemGroup>
 
 </Project>

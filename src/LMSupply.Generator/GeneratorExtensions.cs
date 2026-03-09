@@ -74,12 +74,12 @@ public static class GeneratorExtensions
     }
 
     /// <summary>
-    /// Counts tokens in a text using the generator's internal tokenizer if available,
-    /// otherwise falls back to estimation.
+    /// Counts tokens in a text using heuristic estimation (~4 chars per token).
     /// </summary>
     /// <param name="generator">The generator model.</param>
     /// <param name="text">The text to count tokens for.</param>
     /// <returns>Estimated token count.</returns>
+    [Obsolete("Use IGeneratorModel.CountTokensAsync() for exact token counting. This method uses heuristic estimation only.")]
     public static int CountTokens(this ITextGenerator generator, string text)
     {
         // Currently using estimation; could be enhanced with actual tokenizer access

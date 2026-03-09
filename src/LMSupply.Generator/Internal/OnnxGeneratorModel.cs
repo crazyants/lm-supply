@@ -370,6 +370,26 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
         _chatFormatter.FormatName,
         _resolvedProvider.ToString());
 
+    /// <inheritdoc />
+    public Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        if (string.IsNullOrEmpty(text))
+            return Task.FromResult(0);
+
+        using var sequences = _tokenizer.Encode(text);
+        var tokenCount = sequences[0].Length;
+        return Task.FromResult(tokenCount);
+    }
+
+    /// <inheritdoc />
+    public Task<int> CountTokensAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken = default)
+    {
+        var prompt = _chatFormatter.FormatPrompt(messages);
+        return CountTokensAsync(prompt, cancellationToken);
+    }
+
     private GeneratorParams CreateGeneratorParams(GenerationOptions options, int effectiveMaxLength)
     {
         var generatorParams = new GeneratorParams(_model);

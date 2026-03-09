@@ -1,4 +1,5 @@
 using LMSupply.Generator.Internal.Llama;
+using LMSupply.Generator.Models;
 
 namespace LMSupply.Generator.Abstractions;
 
@@ -42,6 +43,23 @@ public interface IGeneratorModel : ITextGenerator
     /// Gets information about the model.
     /// </summary>
     GeneratorModelInfo GetModelInfo();
+
+    /// <summary>
+    /// Counts the exact number of tokens in the given text using the model's tokenizer.
+    /// </summary>
+    /// <param name="text">The text to tokenize and count.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The exact token count.</returns>
+    Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Counts the exact number of tokens for formatted chat messages using the model's tokenizer.
+    /// Messages are formatted using the model's chat template before tokenization.
+    /// </summary>
+    /// <param name="messages">The chat messages to format and count.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The exact token count of the formatted prompt.</returns>
+    Task<int> CountTokensAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

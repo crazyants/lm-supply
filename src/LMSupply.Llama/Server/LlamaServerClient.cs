@@ -369,6 +369,34 @@ public sealed class LlamaServerClient : IDisposable
         }
     }
 
+    #region Tokenize API
+
+    /// <summary>
+    /// Counts the number of tokens in the given text using the server's tokenizer.
+    /// </summary>
+    public async Task<int> CountTokensAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new { content = text };
+        var json = JsonSerializer.Serialize(request, JsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.PostAsync(
+            $"{_baseUrl}/tokenize",
+            content,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+        var result = JsonSerializer.Deserialize<TokenizeResponse>(responseJson, JsonOptions);
+
+        return result?.Tokens?.Count ?? 0;
+    }
+
+    #endregion
+
     #region Embedding API
 
     /// <summary>
@@ -909,6 +937,15 @@ public sealed class RerankResult
     /// Relevance score (higher is more relevant).
     /// </summary>
     public float RelevanceScore { get; set; }
+}
+
+#endregion
+
+#region Tokenize Response Models
+
+internal sealed class TokenizeResponse
+{
+    public List<int>? Tokens { get; set; }
 }
 
 #endregion

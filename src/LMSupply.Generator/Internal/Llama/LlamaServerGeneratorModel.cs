@@ -455,6 +455,24 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
     };
 
     /// <inheritdoc />
+    public async Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        return await _serverLease.Client.CountTokensAsync(text, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountTokensAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken = default)
+    {
+        var prompt = _chatFormatter.FormatPrompt(messages);
+        return await CountTokensAsync(prompt, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(
         IEnumerable<ChatMessage> messages,
         GenerationOptions? options = null,

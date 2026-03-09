@@ -154,6 +154,52 @@ public class InferenceException : LMSupplyException
 }
 
 /// <summary>
+/// Exception thrown when input exceeds the model's maximum context length.
+/// </summary>
+public class ContextLengthExceededException : InferenceException
+{
+    /// <summary>
+    /// Gets the number of tokens in the input (if known).
+    /// </summary>
+    public int? TokenCount { get; }
+
+    /// <summary>
+    /// Gets the maximum context length supported by the model.
+    /// </summary>
+    public int MaxContextLength { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ContextLengthExceededException"/> class.
+    /// </summary>
+    /// <param name="tokenCount">The number of tokens in the input (null if unknown).</param>
+    /// <param name="maxContextLength">The maximum context length supported by the model.</param>
+    public ContextLengthExceededException(int? tokenCount, int maxContextLength)
+        : base(FormatMessage(tokenCount, maxContextLength))
+    {
+        TokenCount = tokenCount;
+        MaxContextLength = maxContextLength;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ContextLengthExceededException"/> class.
+    /// </summary>
+    /// <param name="tokenCount">The number of tokens in the input (null if unknown).</param>
+    /// <param name="maxContextLength">The maximum context length supported by the model.</param>
+    /// <param name="innerException">The exception that is the cause of the current exception.</param>
+    public ContextLengthExceededException(int? tokenCount, int maxContextLength, Exception innerException)
+        : base(FormatMessage(tokenCount, maxContextLength), innerException)
+    {
+        TokenCount = tokenCount;
+        MaxContextLength = maxContextLength;
+    }
+
+    private static string FormatMessage(int? tokenCount, int maxContextLength) =>
+        tokenCount.HasValue
+            ? $"Input length ({tokenCount.Value} tokens) exceeds model's maximum context length ({maxContextLength} tokens). Reduce the input or use a model with larger context support."
+            : $"Input exceeds model's maximum context length ({maxContextLength} tokens). Reduce the input or use a model with larger context support.";
+}
+
+/// <summary>
 /// Exception thrown when tokenization fails.
 /// </summary>
 public class TokenizationException : LMSupplyException

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using LMSupply.Exceptions;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 using LMSupply.Runtime;
@@ -145,11 +146,13 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
             catch (Microsoft.ML.OnnxRuntimeGenAI.OnnxRuntimeGenAIException ex)
                 when (ex.Message.Contains("exceeds max length"))
             {
-                // Parse token count from error message if possible
-                throw new InvalidOperationException(
-                    $"Input prompt exceeds model's maximum context length ({MaxContextLength} tokens). " +
-                    $"Please reduce the prompt length or use a model with larger context support. " +
-                    $"Original error: {ex.Message}", ex);
+                // Parse token count from error message: "input_ids size (2066) + current sequence length (0) exceeds max length (2048)"
+                int? tokenCount = null;
+                var match = System.Text.RegularExpressions.Regex.Match(ex.Message, @"input_ids size \((\d+)\)");
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var parsed))
+                    tokenCount = parsed;
+
+                throw new ContextLengthExceededException(tokenCount, MaxContextLength, ex);
             }
 
             var generatedTokenCount = 0;

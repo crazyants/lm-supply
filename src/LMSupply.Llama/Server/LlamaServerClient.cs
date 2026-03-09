@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LMSupply.Exceptions;
 
 namespace LMSupply.Llama.Server;
 
@@ -83,7 +84,7 @@ public sealed class LlamaServerClient : IDisposable
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -163,7 +164,7 @@ public sealed class LlamaServerClient : IDisposable
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -266,7 +267,7 @@ public sealed class LlamaServerClient : IDisposable
             content,
             cancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
 
         var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
         var result = JsonSerializer.Deserialize<ChatCompletionFullResponse>(responseJson, JsonOptions);
@@ -315,7 +316,7 @@ public sealed class LlamaServerClient : IDisposable
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -458,6 +459,41 @@ public sealed class LlamaServerClient : IDisposable
     }
 
     #endregion
+
+    /// <summary>
+    /// Ensures the HTTP response is successful, converting context overflow errors
+    /// to <see cref="ContextLengthExceededException"/>.
+    /// </summary>
+    private static async Task EnsureSuccessOrThrowContextExceptionAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        // Read error body for context overflow detection
+        var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest &&
+            IsContextOverflowError(errorBody))
+        {
+            throw new ContextLengthExceededException(null, 0);
+        }
+
+        // Fallback to default behavior for non-context errors
+        response.EnsureSuccessStatusCode();
+    }
+
+    private static bool IsContextOverflowError(string errorBody)
+    {
+        // llama-server returns errors like:
+        // "the prompt is too long" / "input exceeds context" / "context length exceeded"
+        return errorBody.Contains("too long", StringComparison.OrdinalIgnoreCase) ||
+               errorBody.Contains("context", StringComparison.OrdinalIgnoreCase) &&
+               (errorBody.Contains("exceed", StringComparison.OrdinalIgnoreCase) ||
+                errorBody.Contains("overflow", StringComparison.OrdinalIgnoreCase) ||
+                errorBody.Contains("too large", StringComparison.OrdinalIgnoreCase));
+    }
 
     public void Dispose()
     {

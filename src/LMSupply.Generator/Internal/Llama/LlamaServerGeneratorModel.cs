@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using LMSupply.Download;
+using LMSupply.Exceptions;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 using LMSupply.Llama.Server;

@@ -48,4 +48,5 @@ public sealed record ModelInfo : IModelInfoBase
 
     // IModelInfoBase implementation
     string IModelInfoBase.Id => RepoId;
+    int? IModelInfoBase.ContextLength => MaxSequenceLength;
 }

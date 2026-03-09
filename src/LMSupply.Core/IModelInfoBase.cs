@@ -20,6 +20,11 @@ public interface IModelInfoBase
     /// Gets a human-readable description of the model.
     /// </summary>
     string? Description { get; }
+
+    /// <summary>
+    /// Maximum context length in tokens, if applicable.
+    /// </summary>
+    int? ContextLength => null;
 }
 
 /// <summary>

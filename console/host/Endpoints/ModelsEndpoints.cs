@@ -38,7 +38,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["embeddings"]
+                    Capabilities = ["embeddings"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -48,7 +49,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["reranking"]
+                    Capabilities = ["reranking"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -59,7 +61,7 @@ public static class ModelsEndpoints
                 {
                     Id = m.AliasName,
                     Capabilities = ["chat.completions", "text.generation"],
-                    ContextLength = m.RecommendedContextLength
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -69,7 +71,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["translation"]
+                    Capabilities = ["translation"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -79,7 +82,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["transcription"]
+                    Capabilities = ["transcription"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -89,7 +93,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["speech.synthesis"]
+                    Capabilities = ["speech.synthesis"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -99,7 +104,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["image.captioning"]
+                    Capabilities = ["image.captioning"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -109,7 +115,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["object.detection"]
+                    Capabilities = ["object.detection"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -119,7 +126,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["image.segmentation"]
+                    Capabilities = ["image.segmentation"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -129,7 +137,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["image.generation"]
+                    Capabilities = ["image.generation"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -139,7 +148,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["ocr.detection"]
+                    Capabilities = ["ocr.detection"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
             foreach (var m in LocalOcr.RecognitionRegistry.GetAvailableModels())
@@ -147,7 +157,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["ocr.recognition"]
+                    Capabilities = ["ocr.recognition"],
+                    ContextLength = ((IModelInfoBase)m).ContextLength
                 });
             }
 
@@ -184,18 +195,11 @@ public static class ModelsEndpoints
             if (found is null)
                 return ApiHelper.Error($"Model '{model}' not found", "model_not_found", 404);
 
-            // Extract context length from Generator model metadata
-            int? contextLength = found switch
-            {
-                Generator.ModelInfo genModel => genModel.RecommendedContextLength,
-                _ => null
-            };
-
             return Results.Ok(new Models.OpenAI.ModelInfo
             {
                 Id = found.AliasName,
                 Capabilities = [],
-                ContextLength = contextLength
+                ContextLength = found.ContextLength
             });
         })
         .WithName("GetModel")

@@ -27,6 +27,7 @@ public sealed record ModelInfo : IModelInfoBase
 
     // IModelInfoBase implementation
     string IModelInfoBase.Id => ModelId;
+    int? IModelInfoBase.ContextLength => RecommendedContextLength;
 
     /// <summary>
     /// Gets the alias name for this model.

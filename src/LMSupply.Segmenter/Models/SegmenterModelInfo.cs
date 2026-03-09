@@ -1,9 +1,11 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Segmenter.Models;
 
 /// <summary>
 /// Information about a segmentation model.
 /// </summary>
-public sealed class SegmenterModelInfo : IModelInfoBase
+public sealed class SegmenterModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets or sets the model identifier (HuggingFace repo or local path).
@@ -85,4 +87,9 @@ public sealed class SegmenterModelInfo : IModelInfoBase
     /// Gets or sets the license identifier.
     /// </summary>
     public string License { get; init; } = "Unknown";
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes;
+    long IModelMemoryInfo.ParameterCount => (long)(ParametersM * 1_000_000);
+    string? IModelMemoryInfo.QuantizationType => null;
 }

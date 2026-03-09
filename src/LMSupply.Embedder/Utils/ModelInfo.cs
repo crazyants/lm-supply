@@ -1,9 +1,11 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Embedder.Utils;
 
 /// <summary>
 /// Configuration information for a pre-configured embedding model.
 /// </summary>
-public sealed record ModelInfo : IModelInfoBase
+public sealed record ModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets the unique identifier for this model (HuggingFace repository ID).
@@ -46,7 +48,22 @@ public sealed record ModelInfo : IModelInfoBase
     /// </summary>
     public string? Subfolder { get; init; }
 
+    /// <summary>
+    /// Gets the approximate model size in bytes.
+    /// </summary>
+    public long SizeBytes { get; init; }
+
+    /// <summary>
+    /// Gets the number of model parameters.
+    /// </summary>
+    public long Parameters { get; init; }
+
     // IModelInfoBase implementation
     string IModelInfoBase.Id => RepoId;
     int? IModelInfoBase.ContextLength => MaxSequenceLength;
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes > 0 ? SizeBytes : null;
+    long IModelMemoryInfo.ParameterCount => Parameters > 0 ? Parameters : SizeBytes / 2;
+    string? IModelMemoryInfo.QuantizationType => null;
 }

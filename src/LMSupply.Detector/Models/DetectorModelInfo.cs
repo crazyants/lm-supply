@@ -1,9 +1,11 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Detector.Models;
 
 /// <summary>
 /// Metadata about a detector model.
 /// </summary>
-public sealed class DetectorModelInfo : IModelInfoBase
+public sealed class DetectorModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets or sets the model ID (HuggingFace repo ID or local path).
@@ -80,4 +82,9 @@ public sealed class DetectorModelInfo : IModelInfoBase
         >= 1_000 => $"{SizeBytes / 1_000.0:F0} KB",
         _ => $"{SizeBytes} B"
     };
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes;
+    long IModelMemoryInfo.ParameterCount => (long)(ParametersM * 1_000_000);
+    string? IModelMemoryInfo.QuantizationType => null;
 }

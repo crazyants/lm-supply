@@ -1,9 +1,11 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Synthesizer.Models;
 
 /// <summary>
 /// Information about a TTS model configuration.
 /// </summary>
-public sealed record SynthesizerModelInfo : IModelInfoBase
+public sealed record SynthesizerModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets the HuggingFace model ID or local path.
@@ -69,4 +71,9 @@ public sealed record SynthesizerModelInfo : IModelInfoBase
     /// Gets the model license.
     /// </summary>
     public string License { get; init; } = "MIT";
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes;
+    long IModelMemoryInfo.ParameterCount => SizeBytes / 4;
+    string? IModelMemoryInfo.QuantizationType => null;
 }

@@ -1,9 +1,11 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Reranker.Models;
 
 /// <summary>
 /// Contains metadata and configuration for a reranker model.
 /// </summary>
-public sealed record ModelInfo : IModelInfoBase
+public sealed record ModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets the unique identifier for the model (e.g., "cross-encoder/ms-marco-MiniLM-L-6-v2").
@@ -75,6 +77,11 @@ public sealed record ModelInfo : IModelInfoBase
     /// </summary>
     public override string ToString() =>
         $"{DisplayName} ({SizeMB:F0}MB, {MaxSequenceLength} tokens)";
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes;
+    long IModelMemoryInfo.ParameterCount => Parameters;
+    string? IModelMemoryInfo.QuantizationType => null;
 }
 
 /// <summary>

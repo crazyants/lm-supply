@@ -1,3 +1,4 @@
+using LMSupply.Hardware;
 using LMSupply.Transcriber.Internal;
 
 namespace LMSupply.Transcriber.Models;
@@ -5,7 +6,7 @@ namespace LMSupply.Transcriber.Models;
 /// <summary>
 /// Information about a transcriber model configuration.
 /// </summary>
-public sealed class TranscriberModelInfo : IModelInfoBase
+public sealed class TranscriberModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets or sets the HuggingFace model ID.
@@ -92,6 +93,10 @@ public sealed class TranscriberModelInfo : IModelInfoBase
     /// </summary>
     public string License { get; init; } = "MIT";
 
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes;
+    long IModelMemoryInfo.ParameterCount => (long)(ParametersM * 1_000_000);
+    string? IModelMemoryInfo.QuantizationType => null;
 
     /// <summary>
     /// Creates a new instance with parameters overridden from a parsed Whisper config.

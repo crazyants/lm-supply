@@ -1,11 +1,12 @@
 using LMSupply.Core.Download;
+using LMSupply.Hardware;
 
 namespace LMSupply.Translator.Models;
 
 /// <summary>
 /// Information about a translation model.
 /// </summary>
-public sealed class TranslatorModelInfo : IModelInfoBase
+public sealed class TranslatorModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Gets or sets the model identifier (HuggingFace repo or local path).
@@ -103,4 +104,9 @@ public sealed class TranslatorModelInfo : IModelInfoBase
     /// Gets or sets the license identifier.
     /// </summary>
     public string License { get; init; } = "Unknown";
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => SizeBytes;
+    long IModelMemoryInfo.ParameterCount => (long)(ParametersM * 1_000_000);
+    string? IModelMemoryInfo.QuantizationType => null;
 }

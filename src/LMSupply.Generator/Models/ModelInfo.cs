@@ -1,3 +1,5 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Generator;
 
 /// <summary>
@@ -18,7 +20,7 @@ public enum LicenseTier
 /// <summary>
 /// Model metadata and configuration.
 /// </summary>
-public sealed record ModelInfo : IModelInfoBase
+public sealed record ModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// Unique model identifier (HuggingFace format: org/model-name).
@@ -112,4 +114,9 @@ public sealed record ModelInfo : IModelInfoBase
     /// Checks if this model has usage restrictions.
     /// </summary>
     public bool HasRestrictions => License != LicenseTier.MIT;
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => null;
+    long IModelMemoryInfo.ParameterCount => ParameterCount;
+    string? IModelMemoryInfo.QuantizationType => null;
 }

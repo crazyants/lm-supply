@@ -134,6 +134,42 @@ public sealed class LlamaOptions
     #endregion
 
     /// <summary>
+    /// Gets optimal LlamaOptions based on actual model size and available VRAM.
+    /// Uses VramFitResult for precise GPU offload and batch settings.
+    /// </summary>
+    public static LlamaOptions GetOptimalForHardware(
+        GpuInfo gpu,
+        long modelSizeBytes,
+        int totalLayers = 32)
+    {
+        var fitResult = VramFitResult.Evaluate(
+            VramBudget.GetAvailableBytes(gpu),
+            modelSizeBytes,
+            totalLayers);
+
+        var profile = HardwareProfile.Current;
+        var flashAttention = fitResult.GpuLayerCount != 0 && ShouldEnableFlashAttention(profile);
+
+        return new LlamaOptions
+        {
+            GpuLayerCount = fitResult.GpuLayerCount,
+            GpuOffloadRatio = fitResult.GpuLayerCount switch
+            {
+                -1 => null,
+                0 => 0f,
+                _ => fitResult.OffloadRatio
+            },
+            BatchSize = fitResult.RecommendedBatchSize,
+            UBatchSize = Math.Min(fitResult.RecommendedBatchSize, 512),
+            FlashAttention = flashAttention,
+            UseMemoryMap = true,
+            UseMemoryLock = false,
+            TypeK = fitResult.RecommendedKvQuantType,
+            TypeV = fitResult.RecommendedKvQuantType
+        };
+    }
+
+    /// <summary>
     /// Gets optimal LlamaOptions based on current hardware profile.
     /// </summary>
     /// <returns>LlamaOptions configured for optimal performance on detected hardware.</returns>

@@ -106,7 +106,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             Phase = DownloadPhase.Extracting
         });
 
-        var llamaOpts = options.LlamaOptions ?? LlamaOptions.GetOptimalForHardware();
+        var llamaOpts = options.LlamaOptions ?? GetVramAwareLlamaOptions(modelPath, ggufMetadata);
         var contextLength = options.MaxContextLength ?? 4096;
 
         // Auto-calculate GPU layer count based on actual VRAM budget when using default (-1 = all)
@@ -823,6 +823,34 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             || msg.Contains("CUDA_ERROR_OUT_OF_MEMORY", StringComparison.OrdinalIgnoreCase)
             || msg.Contains("Could not allocate")
             || msg.Contains("ggml_backend_cuda_buffer_type_alloc_buffer");
+    }
+
+    /// <summary>
+    /// Gets VRAM-aware LlamaOptions using actual model size and GPU information.
+    /// Uses GgufModelInfo metadata when available, falls back to file-size estimation.
+    /// </summary>
+    private static LlamaOptions GetVramAwareLlamaOptions(string modelPath, GgufMetadata? ggufMetadata)
+    {
+        var gpu = Hardware.HardwareProfile.Current.GpuInfo;
+
+        // Determine model size: prefer GGUF metadata, fall back to file size
+        long modelSizeBytes;
+        if (ggufMetadata is not null)
+        {
+            // Use file size as the most accurate measure of on-disk model weight size
+            modelSizeBytes = new FileInfo(modelPath).Length;
+        }
+        else
+        {
+            // No metadata: estimate from file size with runtime overhead factor
+            var fileSize = new FileInfo(modelPath).Length;
+            modelSizeBytes = (long)(fileSize * 1.1); // ~10% runtime overhead
+        }
+
+        // Determine total layers from metadata or estimate from file size
+        var totalLayers = ggufMetadata?.LayerCount ?? EstimateTotalLayers(new FileInfo(modelPath).Length);
+
+        return LlamaOptions.GetOptimalForHardware(gpu, modelSizeBytes, totalLayers);
     }
 
     /// <summary>

@@ -1,9 +1,11 @@
+using LMSupply.Hardware;
+
 namespace LMSupply.Generator.Internal.Llama;
 
 /// <summary>
 /// Metadata for a registered GGUF model.
 /// </summary>
-public sealed record GgufModelInfo : IModelInfoBase
+public sealed record GgufModelInfo : IModelInfoBase, IModelMemoryInfo
 {
     /// <summary>
     /// HuggingFace repository ID (e.g., "bartowski/Llama-3.2-3B-Instruct-GGUF").
@@ -67,6 +69,21 @@ public sealed record GgufModelInfo : IModelInfoBase
     /// Optional subfolder within the repository.
     /// </summary>
     public string? Subfolder { get; init; }
+
+    /// <summary>
+    /// Estimated model file size in bytes for VRAM budget calculations.
+    /// </summary>
+    public long? EstimatedSizeBytes { get; init; }
+
+    /// <summary>
+    /// Quantization type string (e.g., "Q4_K_M", "Q8_0").
+    /// </summary>
+    public string? QuantizationType { get; init; }
+
+    // IModelMemoryInfo explicit implementation
+    long? IModelMemoryInfo.EstimatedSizeBytes => EstimatedSizeBytes;
+    long IModelMemoryInfo.ParameterCount => ParameterCount;
+    string? IModelMemoryInfo.QuantizationType => QuantizationType;
 }
 
 /// <summary>

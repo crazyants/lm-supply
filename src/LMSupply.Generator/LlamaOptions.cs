@@ -4,34 +4,6 @@ using LMSupply.Runtime;
 namespace LMSupply.Generator;
 
 /// <summary>
-/// Quantization types for KV cache memory optimization.
-/// </summary>
-public enum KvCacheQuantizationType
-{
-    /// <summary>
-    /// 16-bit floating point (default, highest quality).
-    /// </summary>
-    F16 = 0,
-
-    /// <summary>
-    /// 8-bit quantization. Good balance of memory savings and quality.
-    /// Reduces KV cache memory by ~50% with minimal quality loss.
-    /// </summary>
-    Q8_0 = 1,
-
-    /// <summary>
-    /// 4-bit quantization. Maximum memory savings.
-    /// Reduces KV cache memory by ~75% but may affect output quality.
-    /// </summary>
-    Q4_0 = 2,
-
-    /// <summary>
-    /// 32-bit floating point. Maximum quality, highest memory usage.
-    /// </summary>
-    F32 = 3
-}
-
-/// <summary>
 /// Advanced configuration options for GGUF model loading and inference via llama-server.
 /// These options provide fine-grained control over llama.cpp backend behavior.
 /// </summary>

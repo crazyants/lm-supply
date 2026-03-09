@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using LMSupply.Download;
 using LMSupply.Exceptions;
 using LMSupply.Generator.Abstractions;
+using LMSupply.Hardware;
 using LMSupply.Generator.Models;
 using LMSupply.Llama.Server;
 

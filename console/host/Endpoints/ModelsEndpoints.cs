@@ -58,7 +58,8 @@ public static class ModelsEndpoints
                 models.Add(new Models.OpenAI.ModelInfo
                 {
                     Id = m.AliasName,
-                    Capabilities = ["chat.completions", "text.generation"]
+                    Capabilities = ["chat.completions", "text.generation"],
+                    ContextLength = m.RecommendedContextLength
                 });
             }
 
@@ -183,10 +184,18 @@ public static class ModelsEndpoints
             if (found is null)
                 return ApiHelper.Error($"Model '{model}' not found", "model_not_found", 404);
 
+            // Extract context length from Generator model metadata
+            int? contextLength = found switch
+            {
+                Generator.ModelInfo genModel => genModel.RecommendedContextLength,
+                _ => null
+            };
+
             return Results.Ok(new Models.OpenAI.ModelInfo
             {
                 Id = found.AliasName,
-                Capabilities = []
+                Capabilities = [],
+                ContextLength = contextLength
             });
         })
         .WithName("GetModel")

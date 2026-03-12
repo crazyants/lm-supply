@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" />
+    <PackageReference Include="MathNet.Numerics" />
   </ItemGroup>
 
 </Project>

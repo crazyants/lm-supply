@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Numerics;
+using MathNet.Numerics.IntegralTransforms;
 using NAudio.Wave;
 
 namespace LMSupply.Transcriber.Audio;
@@ -190,29 +192,26 @@ internal static class AudioProcessor
     {
         var window = CreateHannWindow(nFft);
         var stft = new float[(nFft / 2 + 1) * numFrames];
+        var fftBuffer = new Complex[nFft];
 
         for (int frame = 0; frame < numFrames; frame++)
         {
             var start = frame * hopLength;
-            var frameData = new float[nFft];
 
-            for (int i = 0; i < nFft && start + i < samples.Length; i++)
+            for (int i = 0; i < nFft; i++)
             {
-                frameData[i] = samples[start + i] * window[i];
+                float sample = (start + i < samples.Length) ? samples[start + i] * window[i] : 0f;
+                fftBuffer[i] = new Complex(sample, 0);
             }
 
-            // Simple DFT (for production, use FFT library)
+            Fourier.Forward(fftBuffer, FourierOptions.NoScaling);
+
+            // Whisper expects power spectrum: |STFT|² = magnitude squared
             for (int k = 0; k <= nFft / 2; k++)
             {
-                float real = 0, imag = 0;
-                for (int n = 0; n < nFft; n++)
-                {
-                    var angle = -2.0f * MathF.PI * k * n / nFft;
-                    real += frameData[n] * MathF.Cos(angle);
-                    imag += frameData[n] * MathF.Sin(angle);
-                }
-                // Whisper expects power spectrum: |STFT|² = magnitude squared
-                stft[k * numFrames + frame] = real * real + imag * imag;
+                var re = (float)fftBuffer[k].Real;
+                var im = (float)fftBuffer[k].Imaginary;
+                stft[k * numFrames + frame] = re * re + im * im;
             }
         }
 
@@ -322,6 +321,27 @@ internal static class AudioProcessor
             return SlaneyFMin + SlaneyFSp * mel;
         return SlaneyMinLogHz * MathF.Exp(SlaneyLogStep * (mel - SlaneyMinLogMel));
     }
+
+    /// <summary>
+    /// Extracts a 30-second chunk starting at the given sample position.
+    /// The chunk is zero-padded if there aren't enough remaining samples.
+    /// </summary>
+    /// <param name="samples">Full audio samples.</param>
+    /// <param name="startPosition">Start position in samples.</param>
+    /// <returns>A 30-second (480000 samples) chunk.</returns>
+    public static float[] ExtractChunk(float[] samples, int startPosition)
+    {
+        var chunk = new float[NumSamples];
+        var remaining = Math.Min(NumSamples, samples.Length - startPosition);
+        if (remaining > 0)
+            Array.Copy(samples, startPosition, chunk, 0, remaining);
+        return chunk;
+    }
+
+    /// <summary>
+    /// Converts seconds to sample position.
+    /// </summary>
+    public static int SecondsToSamples(double seconds) => (int)(seconds * WhisperSampleRate);
 
     /// <summary>
     /// Gets the duration of audio samples in seconds.

@@ -106,12 +106,12 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         var compressionThreshold = options?.CompressionRatioThreshold ?? 2.4f;
         var noSpeechThreshold = options?.NoSpeechThreshold ?? 0.6f;
 
-        foreach (var chunk in chunks)
+        for (int i = 0; i < chunks.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var chunkStartTime = segmentId * 30.0;
-            var result = await TranscribeChunkAsync(chunk, options, cancellationToken);
+            var chunkStartTime = i * 30.0;
+            var result = await TranscribeChunkAsync(chunks[i], options, cancellationToken);
 
             foreach (var segment in result.Segments)
             {
@@ -175,7 +175,9 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             };
         }
 
-        // For longer audio, process in chunks
+        // For longer audio, process in fixed 30-second chunks.
+        // With WordTimestamps enabled, the decoder produces natural segment boundaries
+        // within each chunk. Fixed chunking preserves performance (no redundant encoding).
         var chunks = AudioProcessor.SplitIntoChunks(samples);
         var allSegments = new List<TranscriptionSegment>();
         var textParts = new List<string>();
@@ -487,6 +489,10 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
     private void ConfigureSessionOptions(SessionOptions options)
     {
+        options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+        options.EnableMemoryPattern = true;
+        options.EnableCpuMemArena = true;
+
         if (_options.ThreadCount.HasValue)
         {
             options.IntraOpNumThreads = _options.ThreadCount.Value;

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using LMSupply.Download;
+using LMSupply.Exceptions;
 
 namespace LMSupply.Runtime;
 
@@ -235,6 +236,15 @@ public sealed class RuntimeManager : IAsyncDisposable
             (ver, prog, ct) => _nugetDownloader.DownloadAsync(provider, _platform!, ver, prog, packageType, ct),
             progress,
             cancellationToken);
+
+        // Validate runtime path before registration
+        if (string.IsNullOrEmpty(binaryPath))
+        {
+            throw new ModelLoadException(
+                $"Runtime binary path resolved to null for provider '{provider}'. " +
+                "This may indicate a corrupted runtime state file. " +
+                "Try deleting the runtime cache directory and retrying.");
+        }
 
         // Track current state
         _currentVersion = currentVersion;

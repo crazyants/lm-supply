@@ -493,7 +493,12 @@ public static class OnnxSessionFactory
 
         var options = new SessionOptions();
 
-        // Apply user configuration first
+        // Default to Error level to suppress expected ORT warnings
+        // (e.g., "Some nodes were not assigned to the preferred execution providers").
+        // Callers can override via configureOptions callback.
+        options.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
+
+        // Apply user configuration (may override log level)
         configureOptions?.Invoke(options);
 
         // Configure execution provider

@@ -35,6 +35,14 @@ public abstract class LMSupplyOptionsBase
     public int? ThreadCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the ONNX Runtime log severity level for inference sessions.
+    /// <para>Default: <see cref="OrtLogLevel.Error"/> (suppresses provider fallback warnings)</para>
+    /// <para>Set to <see cref="OrtLogLevel.Warning"/> to see ONNX Runtime's default diagnostics,
+    /// or <see cref="OrtLogLevel.Verbose"/> for full debugging output.</para>
+    /// </summary>
+    public OrtLogLevel LogLevel { get; set; } = OrtLogLevel.Error;
+
+    /// <summary>
     /// Gets or sets the quantization hint for model variant selection during download.
     /// Overrides hardware-adaptive default when explicitly specified.
     /// <para>Set automatically when using the qualifier syntax (e.g., "large:fp16").</para>

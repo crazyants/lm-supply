@@ -65,7 +65,10 @@ internal sealed class DbNetDetector : IDisposable
         DetectionModelInfo modelInfo,
         OcrOptions options)
     {
-        var result = await OnnxSessionFactory.CreateWithInfoAsync(modelPath, options.Provider)
+        var result = await OnnxSessionFactory.CreateWithInfoAsync(
+                modelPath,
+                options.Provider,
+                so => so.LogSeverityLevel = (OrtLoggingLevel)(int)options.LogLevel)
             .ConfigureAwait(false);
 
         return new DbNetDetector(

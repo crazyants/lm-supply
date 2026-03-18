@@ -487,6 +487,8 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
     private void ConfigureSessionOptions(SessionOptions options)
     {
+        options.LogSeverityLevel = (OrtLoggingLevel)(int)_options.LogLevel;
+
         if (_options.ThreadCount.HasValue)
         {
             options.IntraOpNumThreads = _options.ThreadCount.Value;

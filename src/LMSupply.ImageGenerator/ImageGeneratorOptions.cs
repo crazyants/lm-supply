@@ -42,4 +42,10 @@ public sealed class ImageGeneratorOptions
     /// Default: 0
     /// </summary>
     public int DeviceId { get; set; }
+
+    /// <summary>
+    /// ONNX Runtime log severity level.
+    /// Default: <see cref="OrtLogLevel.Error"/> (suppresses provider fallback warnings)
+    /// </summary>
+    public OrtLogLevel LogLevel { get; set; } = OrtLogLevel.Error;
 }

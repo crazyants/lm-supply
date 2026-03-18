@@ -104,8 +104,9 @@ internal sealed class VitGpt2Captioner : ICaptionerModel
             throw new ModelNotFoundException($"Decoder file not found: {decoderPath}", modelInfo.AliasName);
 
         // Load ONNX sessions
-        var encoderResult = await OnnxSessionFactory.CreateWithInfoAsync(encoderPath, options.Provider).ConfigureAwait(false);
-        var decoder = await OnnxSessionFactory.CreateAsync(decoderPath, options.Provider).ConfigureAwait(false);
+        Action<SessionOptions> configureLog = so => so.LogSeverityLevel = (OrtLoggingLevel)(int)options.LogLevel;
+        var encoderResult = await OnnxSessionFactory.CreateWithInfoAsync(encoderPath, options.Provider, configureLog).ConfigureAwait(false);
+        var decoder = await OnnxSessionFactory.CreateAsync(decoderPath, options.Provider, configureLog).ConfigureAwait(false);
 
         // Load tokenizer from Text.Core - tokenizer files may be in a different directory (e.g., base dir for HuggingFace repos)
         var tokenizer = Text.TokenizerFactory.CreateGpt2(tokenizerDir ?? modelDir);

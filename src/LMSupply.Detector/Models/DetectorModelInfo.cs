@@ -58,6 +58,13 @@ public sealed class DetectorModelInfo : IModelInfoBase, IModelMemoryInfo
     public bool RequiresNms { get; init; }
 
     /// <summary>
+    /// Gets or sets the number of keypoints for pose estimation models.
+    /// Set to 0 for standard object detection models (default).
+    /// Set to 17 for COCO skeleton pose models (e.g., YOLOv8-pose).
+    /// </summary>
+    public int NumKeypoints { get; init; }
+
+    /// <summary>
     /// Gets or sets the ONNX file path relative to model directory.
     /// </summary>
     public string OnnxFile { get; init; } = "model.onnx";

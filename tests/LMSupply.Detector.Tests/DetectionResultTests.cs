@@ -29,6 +29,116 @@ public class DetectionResultTests
 
         result1.Should().Be(result2);
     }
+
+    [Fact]
+    public void DetectionResult_WithoutKeypoints_HasKeypointsShouldBeFalse()
+    {
+        var result = new DetectionResult(0, "person", 0.95f, new BoundingBox(0, 0, 100, 100));
+
+        result.HasKeypoints.Should().BeFalse();
+        result.Keypoints.Should().BeNull();
+    }
+
+    [Fact]
+    public void DetectionResult_WithKeypoints_HasKeypointsShouldBeTrue()
+    {
+        var keypoints = new[]
+        {
+            new Keypoint(50, 30, 0.9f),
+            new Keypoint(45, 35, 0.8f),
+            new Keypoint(55, 35, 0.85f)
+        };
+        var result = new DetectionResult(0, "person", 0.95f, new BoundingBox(0, 0, 100, 200), keypoints);
+
+        result.HasKeypoints.Should().BeTrue();
+        result.Keypoints.Should().HaveCount(3);
+        result.Keypoints![0].X.Should().Be(50);
+        result.Keypoints![0].Y.Should().Be(30);
+        result.Keypoints![0].Confidence.Should().Be(0.9f);
+    }
+
+    [Fact]
+    public void DetectionResult_BackwardCompatible_FourArgConstructor()
+    {
+        // Existing code creating DetectionResult with 4 args should still compile and work
+        var box = new BoundingBox(10, 20, 100, 200);
+        var result = new DetectionResult(0, "car", 0.8f, box);
+
+        result.ClassId.Should().Be(0);
+        result.Label.Should().Be("car");
+        result.Keypoints.Should().BeNull();
+        result.HasKeypoints.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DetectionResult_ToString_WithKeypoints_IncludesKeypointCount()
+    {
+        var keypoints = new Keypoint[17];
+        var result = new DetectionResult(0, "person", 0.95f, new BoundingBox(0, 0, 100, 200), keypoints);
+
+        result.ToString().Should().Contain("17 keypoints");
+    }
+}
+
+public class KeypointTests
+{
+    [Fact]
+    public void Keypoint_ShouldStoreAllProperties()
+    {
+        var kp = new Keypoint(100.5f, 200.3f, 0.95f);
+
+        kp.X.Should().Be(100.5f);
+        kp.Y.Should().Be(200.3f);
+        kp.Confidence.Should().Be(0.95f);
+    }
+
+    [Fact]
+    public void IsVisible_AboveThreshold_ShouldReturnTrue()
+    {
+        var kp = new Keypoint(0, 0, 0.8f);
+
+        kp.IsVisible().Should().BeTrue();
+        kp.IsVisible(0.7f).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsVisible_BelowThreshold_ShouldReturnFalse()
+    {
+        var kp = new Keypoint(0, 0, 0.3f);
+
+        kp.IsVisible().Should().BeFalse();
+        kp.IsVisible(0.5f).Should().BeFalse();
+    }
+}
+
+public class PoseSkeletonTests
+{
+    [Fact]
+    public void Count_ShouldBe17()
+    {
+        PoseSkeleton.Count.Should().Be(17);
+    }
+
+    [Fact]
+    public void Names_ShouldHave17Entries()
+    {
+        PoseSkeleton.Names.Should().HaveCount(17);
+    }
+
+    [Fact]
+    public void Bones_ShouldHaveCorrectConnections()
+    {
+        PoseSkeleton.Bones.Should().NotBeEmpty();
+        PoseSkeleton.Bones.Should().Contain((PoseSkeleton.LeftShoulder, PoseSkeleton.RightShoulder));
+    }
+
+    [Fact]
+    public void KeypointIndices_ShouldBeCorrect()
+    {
+        PoseSkeleton.Nose.Should().Be(0);
+        PoseSkeleton.LeftShoulder.Should().Be(5);
+        PoseSkeleton.RightAnkle.Should().Be(16);
+    }
 }
 
 public class BoundingBoxTests

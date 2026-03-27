@@ -599,17 +599,12 @@ internal sealed class OnnxDetectorModel : IDetectorModel
 
     private async Task<string> ResolveModelPathAsync(CancellationToken cancellationToken)
     {
-        // Use centralized ModelPathResolver for consistent subfolder handling
+        // Use centralized ModelPathResolver for consistent subfolder handling.
+        // Variant suffix stripping (e.g., "owner/repo:variant") is handled by ModelPathResolver.
         using var resolver = new ModelPathResolver(_options.CacheDirectory);
 
-        // Strip variant suffix (e.g. "xnorpx/rt-detr2-onnx:s" → "xnorpx/rt-detr2-onnx")
-        // The variant is captured in OnnxFile; the repo ID is the part before ':'
-        var repoId = _modelInfo.Id.Contains(':')
-            ? _modelInfo.Id[.._modelInfo.Id.IndexOf(':')]
-            : _modelInfo.Id;
-
         var result = await resolver.ResolveModelAsync(
-            repoId,
+            _modelInfo.Id,
             expectedOnnxFile: _modelInfo.OnnxFile,
             cancellationToken: cancellationToken);
 

@@ -124,11 +124,15 @@ public sealed class ModelPathResolver : IDisposable
                 expectedOnnxFile);
         }
 
+        // Strip variant suffix from HuggingFace repo IDs (e.g., "owner/repo:variant" → "owner/repo")
+        // Variant selects a specific file within the repo; the file is identified by expectedOnnxFile.
+        var repoId = StripVariantSuffix(modelIdOrPath);
+
         // Download from HuggingFace using discovery for proper subfolder handling
         preferences ??= ModelPreferences.ForCurrentHardware();
 
         var (modelDir, discovery) = await _downloader.DownloadWithDiscoveryAsync(
-            modelIdOrPath,
+            repoId,
             preferences: preferences,
             cancellationToken: cancellationToken);
 
@@ -195,11 +199,14 @@ public sealed class ModelPathResolver : IDisposable
             }
         }
 
+        // Strip variant suffix from HuggingFace repo IDs
+        var repoId = StripVariantSuffix(modelIdOrPath);
+
         // Download from HuggingFace using discovery
         preferences ??= ModelPreferences.ForCurrentHardware();
 
         var (modelDir, discovery) = await _downloader.DownloadWithDiscoveryAsync(
-            modelIdOrPath,
+            repoId,
             preferences: preferences,
             cancellationToken: cancellationToken);
 
@@ -267,6 +274,29 @@ public sealed class ModelPathResolver : IDisposable
         /// Discovery result if downloaded from HuggingFace.
         /// </summary>
         public ModelDiscoveryResult? Discovery { get; init; }
+    }
+
+    /// <summary>
+    /// Strips variant suffix from a model ID (e.g., "owner/repo:variant" → "owner/repo").
+    /// Only strips when the colon appears after the last '/' in a HuggingFace-style repo ID.
+    /// Preserves Windows drive letters (e.g., "D:\path"), local paths, and plain aliases.
+    /// </summary>
+    internal static string StripVariantSuffix(string modelIdOrPath)
+    {
+        // Must contain '/' to be a HuggingFace repo ID
+        if (!modelIdOrPath.Contains('/'))
+            return modelIdOrPath;
+
+        var colonIdx = modelIdOrPath.LastIndexOf(':');
+        if (colonIdx <= 0 || colonIdx == modelIdOrPath.Length - 1)
+            return modelIdOrPath;
+
+        // Only strip if the colon comes after the last '/' (variant part of repo ID)
+        var lastSlash = modelIdOrPath.LastIndexOf('/');
+        if (colonIdx > lastSlash)
+            return modelIdOrPath[..colonIdx];
+
+        return modelIdOrPath;
     }
 
     /// <inheritdoc />

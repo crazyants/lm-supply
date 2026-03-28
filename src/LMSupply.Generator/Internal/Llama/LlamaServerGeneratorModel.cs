@@ -307,6 +307,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
                 JsonSchema = options.JsonSchema
             };
 
+            // Client-side token limit as safety net (server enforces too, but may fail)
+            var maxTokens = completionOptions.MaxTokens;
+            var tokenCount = 0;
+
             // Initialize reasoning token filter if needed
             var useReasoningFilter = options.FilterReasoningTokens || options.ExtractReasoningTokens;
             var reasoningFilter = useReasoningFilter
@@ -315,6 +319,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
 
             await foreach (var token in _serverLease.Client.GenerateAsync(prompt, completionOptions, cancellationToken))
             {
+                if (maxTokens > 0 && ++tokenCount > maxTokens)
+                    break;
+
                 if (reasoningFilter != null)
                 {
                     var filtered = reasoningFilter.Process(token);
@@ -361,6 +368,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             var serverMessages = ConvertMessages(messages);
             var chatOptions = CreateChatOptions(options);
 
+            // Client-side token limit as safety net
+            var maxTokens = options.MaxNewTokens ?? options.MaxTokens;
+            var tokenCount = 0;
+
             // Initialize reasoning token filter if needed
             var useReasoningFilter = options.FilterReasoningTokens || options.ExtractReasoningTokens;
             var reasoningFilter = useReasoningFilter
@@ -369,6 +380,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
 
             await foreach (var token in _serverLease.Client.GenerateChatAsync(serverMessages, chatOptions, cancellationToken))
             {
+                if (maxTokens > 0 && ++tokenCount > maxTokens)
+                    break;
+
                 if (reasoningFilter != null)
                 {
                     var filtered = reasoningFilter.Process(token);
@@ -488,6 +502,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             var serverMessages = ConvertMessages(messages);
             var chatOptions = CreateChatOptions(options);
 
+            // Client-side token limit as safety net
+            var maxTokens = options.MaxNewTokens ?? options.MaxTokens;
+            var tokenCount = 0;
+
             // Initialize reasoning token filter if needed
             var useReasoningFilter = options.FilterReasoningTokens || options.ExtractReasoningTokens;
             var reasoningFilter = useReasoningFilter
@@ -497,6 +515,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             await foreach (var data in _serverLease.Client.GenerateChatStreamAsync(
                 serverMessages, chatOptions, cancellationToken))
             {
+                // Safety net: stop if token limit exceeded (finish_reason chunks still pass through)
+                if (data.TextDelta is not null && maxTokens > 0 && ++tokenCount > maxTokens)
+                {
+                    yield return new ChatStreamChunk { FinishReason = "length" };
+                    break;
+                }
+
                 // Convert tool call deltas from server types to Generator types
                 IReadOnlyList<ChatToolCallDelta>? toolCallDeltas = null;
                 if (data.ToolCallDeltas is { Count: > 0 })

@@ -7,16 +7,16 @@
 
   <ItemGroup>
     <!-- Core Dependencies -->
-    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.24.3" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
     <PackageVersion Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
-    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.3" />
+    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.5" />
 
     <!-- Vision Dependencies -->
     <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageVersion Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
 
     <!-- Audio Dependencies -->
-    <PackageVersion Include="NAudio" Version="2.2.1" />
+    <PackageVersion Include="NAudio" Version="2.3.0" />
     <PackageVersion Include="NAudio.Lame" Version="2.1.0" />
 
     <!-- ONNX Runtime GenAI for LLM Inference -->
@@ -25,7 +25,7 @@
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.DirectML" Version="0.11.3" />
 
     <!-- llama-server process management -->
-    <PackageVersion Include="ChildProcessGuard" Version="1.0.4" />
+    <PackageVersion Include="ChildProcessGuard" Version="1.1.1" />
 
     <!-- GPU Providers (optional, user installs separately) -->
     <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.23.2" />
@@ -36,10 +36,10 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.61" />
-    <PackageVersion Include="coverlet.collector" Version="8.0.0" />
-    <PackageVersion Include="FluentAssertions" Version="8.8.0" />
+    <PackageVersion Include="coverlet.collector" Version="8.0.1" />
+    <PackageVersion Include="FluentAssertions" Version="8.9.0" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.5" />
 
     <!-- Benchmarking -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
@@ -48,12 +48,12 @@
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.103" />
 
     <!-- Console Host -->
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.4" />
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.0" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.5.0" />
   </ItemGroup>
 
 </Project>

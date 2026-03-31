@@ -13,9 +13,10 @@ public sealed class EmbedderModelRegistry : ModelRegistryBase<ModelInfo>
     /// </summary>
     private static readonly ModelInfo[] AutoCandidates =
     [
-        DefaultModels.GteLargeEnV15,   // 434M params, 1024 dims, 8K context
-        DefaultModels.BgeBaseEnV15,     // 110M params, 768 dims
-        DefaultModels.BgeSmallEnV15,    // 33M params, 384 dims
+        DefaultModels.BgeM3Alias,               // 568M params, 1024 dims, 8K context
+        DefaultModels.MultilingualE5LargeAlias,  // 560M params, 1024 dims
+        DefaultModels.MultilingualE5BaseAlias,   // 278M params, 768 dims
+        DefaultModels.MultilingualE5SmallAlias,  // 118M params, 384 dims
     ];
 
     /// <summary>

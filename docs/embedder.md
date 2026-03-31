@@ -43,11 +43,10 @@ float[][] embeddings = await model.EmbedAsync(new[]
 | Alias | Model | Dimensions | Params | Context | Best For |
 |-------|-------|------------|--------|---------|----------|
 | `auto` | Hardware-optimized | varies | varies | varies | Auto-select by hardware |
-| `default` | bge-small-en-v1.5 | 384 | 33M | 512 | Balanced speed/quality |
-| `fast` | all-MiniLM-L6-v2 | 384 | 22M | 256 | Ultra-low latency |
-| `quality` | gte-base-en-v1.5 | 768 | 109M | 8192 | Higher accuracy, long context |
-| `large` | nomic-embed-text-v1.5 | 768 | 137M | 8192 | Long context RAG |
-| `multilingual` | bge-m3 | 1024 | 568M | 8192 | 100+ languages, SOTA |
+| `default` | multilingual-e5-base | 768 | 278M | 512 | Balanced quality/speed, 100+ langs |
+| `fast` | multilingual-e5-small | 384 | 118M | 512 | Lightweight, 100+ langs |
+| `quality` | bge-m3 | 1024 | 568M | 8192 | SOTA multilingual, dense+sparse |
+| `large` | multilingual-e5-large | 1024 | 560M | 512 | Highest dense quality, 100+ langs |
 
 ### Using HuggingFace Repository ID
 

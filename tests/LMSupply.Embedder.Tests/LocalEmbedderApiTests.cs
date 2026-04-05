@@ -129,7 +129,6 @@ public class LocalEmbedderApiTests
     [InlineData("fast")]
     [InlineData("quality")]
     [InlineData("large")]
-    [InlineData("multilingual")]
     public void GetAvailableModels_ContainsExpectedAliases(string expectedAlias)
     {
         var models = LocalEmbedder.GetAvailableModels().ToList();

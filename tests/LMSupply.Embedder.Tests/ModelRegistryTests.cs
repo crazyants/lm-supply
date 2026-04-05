@@ -11,11 +11,11 @@ public class ModelRegistryTests
     [Fact]
     public void TryResolve_ReturnsTrue_ForKnownShortName()
     {
-        var result = _registry.TryResolve("all-MiniLM-L6-v2", out var info);
+        var result = _registry.TryResolve("multilingual-e5-small", out var info);
 
         result.Should().BeTrue();
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("sentence-transformers/all-MiniLM-L6-v2");
+        info!.RepoId.Should().Be("intfloat/multilingual-e5-small");
         info.Dimensions.Should().Be(384);
     }
 
@@ -31,7 +31,7 @@ public class ModelRegistryTests
     [Fact]
     public void TryResolve_IsCaseInsensitive()
     {
-        var result = _registry.TryResolve("ALL-MINILM-L6-V2", out var info);
+        var result = _registry.TryResolve("MULTILINGUAL-E5-SMALL", out var info);
 
         result.Should().BeTrue();
         info.Should().NotBeNull();
@@ -49,10 +49,10 @@ public class ModelRegistryTests
     }
 
     [Theory]
-    [InlineData("all-MiniLM-L6-v2", 384, PoolingMode.Mean)]
     [InlineData("all-mpnet-base-v2", 768, PoolingMode.Mean)]
-    [InlineData("bge-small-en-v1.5", 384, PoolingMode.Cls)]
+    [InlineData("bge-base-en-v1.5", 768, PoolingMode.Cls)]
     [InlineData("multilingual-e5-small", 384, PoolingMode.Mean)]
+    [InlineData("multilingual-e5-large", 1024, PoolingMode.Mean)]
     public void KnownModels_HaveCorrectConfiguration(string modelId, int dimensions, PoolingMode pooling)
     {
         _registry.TryResolve(modelId, out var info);
@@ -63,30 +63,30 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void DefaultAlias_PointsToBgeSmall()
+    public void DefaultAlias_PointsToMultilingualE5Base()
     {
         _registry.TryResolve("default", out var info);
 
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("BAAI/bge-small-en-v1.5");
+        info!.RepoId.Should().Be("intfloat/multilingual-e5-base");
     }
 
     [Fact]
-    public void FastAlias_PointsToMiniLM()
+    public void FastAlias_PointsToMultilingualE5Small()
     {
         _registry.TryResolve("fast", out var info);
 
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("sentence-transformers/all-MiniLM-L6-v2");
+        info!.RepoId.Should().Be("intfloat/multilingual-e5-small");
     }
 
     [Fact]
-    public void QualityAlias_PointsToGteBase()
+    public void QualityAlias_PointsToBgeM3()
     {
         _registry.TryResolve("quality", out var info);
 
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("Alibaba-NLP/gte-base-en-v1.5");
+        info!.RepoId.Should().Be("BAAI/bge-m3");
     }
 
     [Fact]
@@ -120,24 +120,24 @@ public class ModelRegistryTests
     [Fact]
     public void FullRepoId_ResolvesCorrectly()
     {
-        var result = _registry.TryResolve("BAAI/bge-small-en-v1.5", out var info);
+        var result = _registry.TryResolve("BAAI/bge-base-en-v1.5", out var info);
 
         result.Should().BeTrue();
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("BAAI/bge-small-en-v1.5");
+        info!.RepoId.Should().Be("BAAI/bge-base-en-v1.5");
     }
 
     [Fact]
     public void RegisterAlias_WorksForUserAlias()
     {
         var registry = new EmbedderModelRegistry(DefaultModels.All);
-        registry.RegisterAlias("my-embed", "BAAI/bge-small-en-v1.5");
+        registry.RegisterAlias("my-embed", "BAAI/bge-base-en-v1.5");
 
         var result = registry.TryResolve("my-embed", out var info);
 
         result.Should().BeTrue();
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("BAAI/bge-small-en-v1.5");
+        info!.RepoId.Should().Be("BAAI/bge-base-en-v1.5");
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class ModelRegistryTests
     public void RemoveAlias_WorksForUserAlias()
     {
         var registry = new EmbedderModelRegistry(DefaultModels.All);
-        registry.RegisterAlias("my-embed", "BAAI/bge-small-en-v1.5");
+        registry.RegisterAlias("my-embed", "BAAI/bge-base-en-v1.5");
 
         registry.RemoveAlias("my-embed").Should().BeTrue();
         registry.TryResolve("my-embed", out _).Should().BeFalse();

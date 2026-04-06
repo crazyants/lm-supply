@@ -33,6 +33,10 @@ public static class ChatFormatterFactory
             // Qwen models (use ChatML)
             var n when n.Contains("qwen") => new ChatMLFormatter(),
 
+            // Gemma models (Gemma 4 before generic gemma to match version-specific first)
+            var n when n.Contains("gemma-4") || n.Contains("gemma4") => new Gemma4ChatFormatter(),
+            var n when n.Contains("gemma") => new GemmaChatFormatter(),
+
             // Mistral models using ChatML
             var n when n.Contains("mistral") && n.Contains("instruct") => new ChatMLFormatter(),
 
@@ -56,6 +60,7 @@ public static class ChatFormatterFactory
             "llama3" or "llama-3" or "llama" or "llama2" => new Llama3ChatFormatter(),
             "chatml" or "qwen" or "yi" or "internlm" or "openchat" => new ChatMLFormatter(),
             "gemma" => new GemmaChatFormatter(),
+            "gemma4" or "gemma-4" => new Gemma4ChatFormatter(),
             "exaone" => new ExaoneChatFormatter(),
             "deepseek" => new DeepSeekChatFormatter(),
             "mistral" or "mixtral" => new MistralChatFormatter(),

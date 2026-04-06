@@ -76,6 +76,72 @@ public class ChatMessageTests
         msg.Role.Should().Be(ChatRole.System); // enum default = 0 = System
         msg.Content.Should().BeNull();
     }
+
+    // --- Multimodal content parts ---
+
+    [Fact]
+    public void TextOnlyMessage_HasNoContentParts()
+    {
+        var msg = ChatMessage.User("Hello");
+
+        msg.ContentParts.Should().BeNull();
+        msg.IsMultimodal.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UserWithImage_CreatesMultimodalMessage()
+    {
+        var imageUrl = "data:image/jpeg;base64,abc123";
+        var msg = ChatMessage.UserWithImage("What is this?", imageUrl);
+
+        msg.Role.Should().Be(ChatRole.User);
+        msg.Content.Should().Be("What is this?"); // text fallback for non-vision formatters
+        msg.IsMultimodal.Should().BeTrue();
+        msg.ContentParts.Should().HaveCount(2);
+        msg.ContentParts![0].Should().BeOfType<TextContentPart>()
+            .Which.Text.Should().Be("What is this?");
+        msg.ContentParts![1].Should().BeOfType<ImageContentPart>()
+            .Which.Url.Should().Be(imageUrl);
+    }
+
+    [Fact]
+    public void UserWithContent_MixedParts_ExtractsTextFallback()
+    {
+        var parts = new ContentPart[]
+        {
+            new TextContentPart("First"),
+            new ImageContentPart { Url = "http://example.com/img.jpg" },
+            new TextContentPart("Second"),
+        };
+
+        var msg = ChatMessage.UserWithContent(parts);
+
+        msg.Content.Should().Be("First Second");
+        msg.IsMultimodal.Should().BeTrue();
+        msg.ContentParts.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void IsMultimodal_OnlyTextParts_ReturnsFalse()
+    {
+        var parts = new ContentPart[] { new TextContentPart("Hello") };
+        var msg = ChatMessage.UserWithContent(parts);
+
+        msg.IsMultimodal.Should().BeFalse();
+        msg.ContentParts.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void TextContentPart_TypeIsText()
+    {
+        new TextContentPart("hi").Type.Should().Be("text");
+    }
+
+    [Fact]
+    public void ImageContentPart_TypeIsImageUrl()
+    {
+        new ImageContentPart { Url = "http://x.y/z.png" }.Type.Should().Be("image_url");
+    }
 }
 
 public class ChatRoleEnumTests

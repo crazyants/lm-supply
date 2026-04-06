@@ -30,7 +30,9 @@ internal static class GgufChatFormatDetector
         if (filename.Contains("mistral") || filename.Contains("mixtral"))
             return "mistral";
 
-        // Gemma family
+        // Gemma family (Gemma 4+ supports native system role)
+        if (filename.Contains("gemma-4") || filename.Contains("gemma4"))
+            return "gemma4";
         if (filename.Contains("gemma"))
             return "gemma";
 
@@ -82,7 +84,7 @@ internal static class GgufChatFormatDetector
             "llama3" or "llama2" => true,
             "chatml" => true,
             "mistral" => true,
-            "gemma" => true,
+            "gemma" or "gemma4" => true,
             "phi3" => true,
             "exaone" => true,
             "deepseek" => true,

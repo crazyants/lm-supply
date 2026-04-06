@@ -6,6 +6,33 @@
 
 ---
 
+## ✅ Version 0.26.x (Current)
+
+**Theme**: Gemma 4 Native Support & Multimodal Foundations
+
+### Highlights
+
+- **Gemma 4 Chat Format**: Native `system` role support via `Gemma4ChatFormatter`
+- **llama-server Version Validation**: Architecture-aware minimum version checks (`b8672+` required for Gemma 4)
+- **VRAM Gap Coverage**: New `gguf:balanced` alias (E4B Q8_0, 7.5GB) fills the 8-16GB VRAM range
+- **Split GGUF Downloads**: `gguf:xlarge` (Qwen 3.5 122B, 3 shards) now downloads correctly
+- **Multimodal `ChatMessage`**: Additive `ContentParts` API with `TextContentPart`/`ImageContentPart` for vision models
+- **Backward Compatible**: All existing text-only `ChatMessage` usage unchanged
+
+### Completed Cycles
+
+| Cycle | Description | Status |
+|-------|-------------|--------|
+| **#1** | `Gemma4ChatFormatter` (native system role) | ✅ |
+| **#2** | llama-server minimum version validation by architecture | ✅ |
+| **#3** | `gguf:balanced` alias for 8-16GB VRAM gap | ✅ |
+| **#4** | Split GGUF download support (`ShardCount`, `Q4_K_M/` subfolder) | ✅ |
+| **#5** | `ChatMessage.ContentParts` multimodal model | ✅ |
+
+Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
+
+---
+
 ## ✅ Version 0.10.0 (Released)
 
 **Theme**: Local Performance Maximization & Developer Experience
@@ -18,30 +45,19 @@
 - **IModelInfoBase**: 통합 모델 정보 인터페이스
 - **Documentation**: MODEL_LIFECYCLE.md, GPU_PROVIDERS.md, MEMORY_REQUIREMENTS.md, TROUBLESHOOTING.md
 
-### Completed Tasks
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| **Phase 1** | Core Infrastructure (HardwareProfile, IModelRuntimeInfo, ThreadCount) | ✅ |
-| **Phase 2** | Runtime Diagnostics (IsGpuActive, ModelInfo 통일) | ✅ |
-| **Phase 3** | Adaptive Model Selection ("auto" mode) | ✅ |
-| **Phase 4** | Advanced Features (EstimatedMemoryBytes, HTTP Resume) | ✅ |
-| **Phase 5** | Documentation | ✅ |
-
 ---
 
-## 🔮 Version 0.11.0 (Planning)
+## 🔮 Next Cycles (Planning)
 
-**Theme**: TBD
+**Theme**: Vision Pipeline Completion
 
-*다음 버전 계획은 커뮤니티 피드백을 기반으로 수립됩니다.*
+### Planned
 
-### Potential Features
-
-- [ ] Batched inference optimization
-- [ ] Model quantization utilities
-- [ ] Extended multi-modal support
-- [ ] Performance benchmarking tools
+- [ ] Wire `ContentParts` through `LlamaServerClient` (OpenAI vision JSON serialization)
+- [ ] mmproj file auto-discovery and loading for Gemma 4 multimodal
+- [ ] CUDA backend verification (NVIDIA GPU)
+- [ ] First-token latency optimization
+- [ ] KV cache quantization testing
 
 ---
 
@@ -50,12 +66,5 @@
 | Version | Theme | Status |
 |---------|-------|--------|
 | 0.9.2 | ONNX Runtime Management | Released |
-| 0.10.0 | Local Performance Max & DX | **Released** |
-| 0.11.0 | TBD | Planning |
-
----
-
-## Related Issues
-
-- `claudedocs/issues/ISSUE-20260122-adaptive-model-selection.md` (Completed)
-- `claudedocs/issues/ISSUE-20260122-cachedmodelinfo-metadata-extension.md` (Completed)
+| 0.10.0 | Local Performance Max & DX | Released |
+| 0.26.x | Gemma 4 & Multimodal Foundations | **Current** |

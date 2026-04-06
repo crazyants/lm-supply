@@ -297,4 +297,29 @@ rm -rf ~/.local/share/LMSupply/cache/llama-server
 ## Version Information
 
 - **llama-server**: Downloaded from [llama.cpp GitHub releases](https://github.com/ggml-org/llama.cpp/releases)
-- Binaries are versioned and cached by build number
+- Binaries are versioned and cached by build number (tag format: `b<NNNN>`, e.g., `b8672`)
+
+### Minimum Version Requirements
+
+`LlamaServerVersionRequirements` validates that the installed llama-server is new enough for the model architecture being loaded. Requirements are keyed by chat format name and checked at model load time.
+
+| Chat Format | Minimum Build | Reason |
+|-------------|---------------|--------|
+| `gemma4` | `b8672` | Native Gemma 4 architecture support (GGUF metadata auto-detect) |
+
+If the cached binary is too old, `LoadAsync()` throws `InvalidOperationException` with a clear remediation hint:
+
+```
+llama-server b7898 is too old for gemma4 models. Minimum required: b8672.
+Delete the cached llama-server to trigger a fresh download of the latest version.
+```
+
+Validation degrades gracefully — if the version string can't be parsed, model loading is allowed to proceed.
+
+## Split GGUF Downloads
+
+Some large models are distributed as multiple shards using the `-NNNNN-of-NNNNN.gguf` naming convention (e.g., Qwen 3.5 122B comes as 3 parts in a `Q4_K_M/` subfolder). The `GgufModelDownloader` handles this automatically:
+
+- Models in the registry declare `ShardCount` and point `DefaultFile` at the first shard
+- All shards are fetched sequentially with progress reporting per shard
+- llama-server is started with the first shard path and auto-loads the remaining parts from the same directory

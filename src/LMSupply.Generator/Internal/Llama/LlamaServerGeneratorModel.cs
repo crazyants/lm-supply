@@ -86,6 +86,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
         var serverPath = updateResult.ServerPath;
         var backend = updateResult.Backend;
 
+        // 1b. Validate server version meets model requirements
+        LlamaServerVersionRequirements.Validate(
+            updateResult.NewVersion ?? updateResult.PreviousVersion, chatFormatter.FormatName);
+
         // 2. Read GGUF metadata (best effort)
         GgufMetadata? ggufMetadata = null;
         try

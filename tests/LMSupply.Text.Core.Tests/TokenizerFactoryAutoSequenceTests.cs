@@ -60,8 +60,61 @@ public class TokenizerFactoryAutoSequenceTests : IDisposable
         ex.Which.Message.Should().Contain("sentencepiece.bpe.model");
     }
 
+    /// <summary>
+    /// Regression for ISSUE-lm-supply-1775552000-unigram-tokenizer-fallback:
+    /// when tokenizer.json declares Unigram and no SentencePiece protobuf is on disk,
+    /// the factory must fail loudly with an actionable error rather than silently
+    /// constructing a WordPieceTokenizer (which crashes on XLM-Roberta-style `&lt;unk&gt;`).
+    /// </summary>
+    [Fact]
+    public async Task CreateAutoSequenceAsync_TokenizerJsonUnigramWithoutSpm_ThrowsDescriptive()
+    {
+        WriteFile("tokenizer.json", BuildUnigramTokenizerJson());
+
+        var act = () => TokenizerFactory.CreateAutoSequenceAsync(_tempDir);
+
+        var ex = await act.Should().ThrowAsync<InvalidOperationException>();
+        ex.Which.Message.Should().Contain("Unigram");
+        ex.Which.Message.Should().Contain("sentencepiece.bpe.model");
+        ex.Which.Message.Should().Contain(_tempDir);
+        // Must NOT mention WordPiece or [UNK] — that was the buggy fallback path.
+        ex.Which.Message.Should().NotContain("[UNK]");
+    }
+
     private void WriteFile(string name, string content)
         => File.WriteAllText(Path.Combine(_tempDir, name), content);
+
+    /// <summary>
+    /// Builds a minimal tokenizer.json with model.type="Unigram" mimicking the XLM-Roberta /
+    /// multilingual-e5 family — special tokens are `&lt;s&gt;` / `&lt;/s&gt;` / `&lt;unk&gt;` / `&lt;pad&gt;`,
+    /// not the BERT `[UNK]` family.
+    /// </summary>
+    private static string BuildUnigramTokenizerJson()
+    {
+        return /* lang=json */ """
+        {
+          "version": "1.0",
+          "added_tokens": [
+            { "id": 0, "content": "<s>", "special": true },
+            { "id": 1, "content": "<pad>", "special": true },
+            { "id": 2, "content": "</s>", "special": true },
+            { "id": 3, "content": "<unk>", "special": true }
+          ],
+          "model": {
+            "type": "Unigram",
+            "unk_id": 3,
+            "vocab": [
+              ["<s>", 0.0],
+              ["<pad>", 0.0],
+              ["</s>", 0.0],
+              ["<unk>", 0.0],
+              ["▁hello", -1.0],
+              ["▁world", -1.0]
+            ]
+          }
+        }
+        """;
+    }
 
     /// <summary>
     /// Builds a minimal tokenizer.json with model.type="WordPiece" and the BERT special tokens.

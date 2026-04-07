@@ -77,7 +77,12 @@ public static class LocalEmbedder
         }
 
         string modelPath;
-        string vocabPath;
+        // Directories to probe for tokenizer files (model dir first, then repo root if different).
+        // The first entry must contain model.onnx; subsequent entries are fall-back search roots
+        // for tokenizer assets that HuggingFace repos commonly place at the repo root rather than
+        // inside the onnx/ subfolder (e.g. tokenizer.json, sentencepiece.bpe.model).
+        string tokenizerPrimaryDir;
+        string? tokenizerFallbackDir;
         string modelId;
 
         ModelInfo? loadedModelInfo = null;
@@ -88,15 +93,8 @@ public static class LocalEmbedder
             modelPath = modelIdOrPath;
             modelId = Path.GetFileNameWithoutExtension(modelPath);
 
-            var modelDir = Path.GetDirectoryName(modelPath) ?? ".";
-            vocabPath = Path.Combine(modelDir, "vocab.txt");
-
-            if (!File.Exists(vocabPath))
-            {
-                throw new ModelNotFoundException(
-                    $"Vocabulary file not found. Expected at: {vocabPath}",
-                    modelId);
-            }
+            tokenizerPrimaryDir = Path.GetDirectoryName(modelPath) ?? ".";
+            tokenizerFallbackDir = null;
         }
         // Check if it's a known model ID
         else if (EmbedderModelRegistry.Default.TryResolve(modelIdOrPath, out var modelInfo))
@@ -122,7 +120,10 @@ public static class LocalEmbedder
                 cancellationToken: cancellationToken);
 
             modelPath = Path.Combine(modelDir, "model.onnx");
-            vocabPath = Path.Combine(modelDir, "vocab.txt");
+            // DownloadModelAsync flattens all files into modelDir (subfolder only affects HTTP path),
+            // so tokenizer assets fetched via root-fallback already live alongside model.onnx.
+            tokenizerPrimaryDir = modelDir;
+            tokenizerFallbackDir = null;
             modelId = modelIdOrPath;
         }
         // Assume it's a HuggingFace repo ID (e.g., "sentence-transformers/all-MiniLM-L6-v2")
@@ -163,15 +164,12 @@ public static class LocalEmbedder
             // Preserve full path including subfolder (e.g., "onnx/model.onnx")
             modelPath = Path.Combine(downloadedDir, mainOnnxFile);
 
-            // Look for vocab.txt in the same directory as the model
-            var modelDir = Path.GetDirectoryName(modelPath)!;
-            vocabPath = Path.Combine(modelDir, "vocab.txt");
-
-            // Fall back to root if not in model directory
-            if (!File.Exists(vocabPath))
-            {
-                vocabPath = Path.Combine(downloadedDir, "vocab.txt");
-            }
+            // DownloadWithDiscoveryAsync preserves directory structure, so the model may live in
+            // a subfolder (e.g. onnx/) while tokenizer assets sit at the repo root.
+            tokenizerPrimaryDir = Path.GetDirectoryName(modelPath)!;
+            tokenizerFallbackDir = string.Equals(tokenizerPrimaryDir, downloadedDir, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : downloadedDir;
 
             modelId = modelIdOrPath.Split('/').Last();
         }
@@ -184,15 +182,16 @@ public static class LocalEmbedder
                 modelIdOrPath);
         }
 
-        // Validate files exist
+        // Validate model file exists
         if (!File.Exists(modelPath))
             throw new ModelNotFoundException("Model file not found", modelPath);
-        if (!File.Exists(vocabPath))
-            throw new ModelNotFoundException("Vocabulary file not found", vocabPath);
 
-        // Load tokenizer using Text.Core
-        var tokenizerDir = Path.GetDirectoryName(vocabPath)!;
-        var tokenizer = await TokenizerFactory.CreateWordPieceAsync(tokenizerDir, options.MaxSequenceLength);
+        // Resolve tokenizer directory: prefer the directory that actually contains tokenizer
+        // assets. Probe primary first, then fall back to the repo root.
+        var tokenizerDir = ResolveTokenizerDir(tokenizerPrimaryDir, tokenizerFallbackDir, modelId);
+
+        // Load tokenizer using Text.Core (auto-detects WordPiece vs SentencePiece)
+        var tokenizer = await TokenizerFactory.CreateAutoSequenceAsync(tokenizerDir, options.MaxSequenceLength);
 
         // Load inference engine (use async to ensure RuntimeManager initializes native binaries)
         var engine = await OnnxInferenceEngine.CreateAsync(modelPath, options.Provider, cancellationToken: cancellationToken);
@@ -237,6 +236,58 @@ public static class LocalEmbedder
     public static float DotProduct(ReadOnlySpan<float> embedding1, ReadOnlySpan<float> embedding2)
     {
         return VectorOperations.DotProduct(embedding1, embedding2);
+    }
+
+    /// <summary>
+    /// Tokenizer file names recognised by <see cref="TokenizerFactory.CreateAutoSequenceAsync"/>.
+    /// Used to detect which directory actually contains tokenizer assets.
+    /// </summary>
+    private static readonly string[] _tokenizerProbeFiles =
+    [
+        "vocab.txt",
+        "tokenizer.json",
+        "sentencepiece.bpe.model",
+    ];
+
+    /// <summary>
+    /// Picks the directory that contains tokenizer assets, preferring the model directory and
+    /// falling back to the repo root when present. Throws a descriptive
+    /// <see cref="ModelNotFoundException"/> when nothing usable is found.
+    /// </summary>
+    private static string ResolveTokenizerDir(string primaryDir, string? fallbackDir, string modelId)
+    {
+        if (DirectoryHasTokenizer(primaryDir))
+            return primaryDir;
+
+        if (fallbackDir is not null && DirectoryHasTokenizer(fallbackDir))
+            return fallbackDir;
+
+        // Build a helpful error listing every path we tried.
+        var triedDirs = fallbackDir is null
+            ? new[] { primaryDir }
+            : new[] { primaryDir, fallbackDir };
+        var triedFiles = string.Join(", ", triedDirs.SelectMany(d => _tokenizerProbeFiles.Select(f => Path.Combine(d, f))));
+
+        throw new ModelNotFoundException(
+            $"No tokenizer file found for '{modelId}'. " +
+            $"Tried: {triedFiles}. Expected one of: vocab.txt (WordPiece), " +
+            "tokenizer.json (WordPiece/Unigram/BPE), sentencepiece.bpe.model (SentencePiece).",
+            modelId);
+    }
+
+    private static bool DirectoryHasTokenizer(string dir)
+    {
+        if (!Directory.Exists(dir))
+            return false;
+
+        foreach (var name in _tokenizerProbeFiles)
+        {
+            if (File.Exists(Path.Combine(dir, name)))
+                return true;
+        }
+
+        // Also accept any *.spm file (used by translation/multilingual models)
+        return Directory.EnumerateFiles(dir, "*.spm").Any();
     }
 
     /// <summary>

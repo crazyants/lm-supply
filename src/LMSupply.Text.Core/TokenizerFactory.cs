@@ -172,6 +172,69 @@ public static class TokenizerFactory
     }
 
     /// <summary>
+    /// Creates a SentencePiece/Unigram sequence tokenizer (for encoders with non-WordPiece models).
+    /// Reuses <see cref="SentencePiecePairTokenizer"/> since <see cref="IPairTokenizer"/> implements
+    /// <see cref="ISequenceTokenizer"/> — embedder-only callers ignore the pair methods.
+    /// </summary>
+    /// <param name="modelDir">Path to model directory.</param>
+    /// <param name="maxSequenceLength">Maximum sequence length.</param>
+    /// <returns>A sequence tokenizer instance.</returns>
+    public static async Task<ISequenceTokenizer> CreateSentencePieceSequenceAsync(
+        string modelDir,
+        int maxSequenceLength = 512)
+    {
+        return await CreateSentencePiecePairAsync(modelDir, maxSequenceLength);
+    }
+
+    /// <summary>
+    /// Auto-detects tokenizer type and creates appropriate sequence tokenizer from model directory.
+    /// Supports WordPiece (vocab.txt or tokenizer.json with WordPiece type) and SentencePiece
+    /// (Unigram/BPE tokenizer.json, sentencepiece.bpe.model, *.spm).
+    /// </summary>
+    /// <param name="modelDir">Path to model directory.</param>
+    /// <param name="maxSequenceLength">Maximum sequence length.</param>
+    /// <returns>A sequence tokenizer instance.</returns>
+    public static async Task<ISequenceTokenizer> CreateAutoSequenceAsync(
+        string modelDir,
+        int maxSequenceLength = 512)
+    {
+        var vocabTxtPath = Path.Combine(modelDir, "vocab.txt");
+        var tokenizerJsonPath = Path.Combine(modelDir, "tokenizer.json");
+
+        // vocab.txt is a definitive WordPiece signal
+        if (File.Exists(vocabTxtPath))
+        {
+            return await CreateWordPieceAsync(modelDir, maxSequenceLength);
+        }
+
+        // Inspect tokenizer.json model.type when present
+        if (File.Exists(tokenizerJsonPath))
+        {
+            var tokenizerType = DetectTokenizerType(tokenizerJsonPath);
+
+            return tokenizerType switch
+            {
+                "WordPiece" => await CreateWordPieceAsync(modelDir, maxSequenceLength),
+                "Unigram" or "BPE" => await CreateSentencePieceSequenceAsync(modelDir, maxSequenceLength),
+                // Unknown type: prefer SentencePiece if a model file is present, otherwise WordPiece
+                _ => FindSentencePieceModel(modelDir) != null
+                    ? await CreateSentencePieceSequenceAsync(modelDir, maxSequenceLength)
+                    : await CreateWordPieceAsync(modelDir, maxSequenceLength)
+            };
+        }
+
+        // No tokenizer.json: fall back to SentencePiece file probe
+        if (FindSentencePieceModel(modelDir) != null)
+        {
+            return await CreateSentencePieceSequenceAsync(modelDir, maxSequenceLength);
+        }
+
+        throw new FileNotFoundException(
+            $"Could not determine tokenizer type from: {modelDir}. " +
+            "Expected vocab.txt, tokenizer.json, sentencepiece.bpe.model, or *.spm.");
+    }
+
+    /// <summary>
     /// Creates a SentencePiece/Unigram pair tokenizer (for cross-encoders/rerankers with non-WordPiece models).
     /// </summary>
     /// <param name="modelDir">Path to model directory.</param>

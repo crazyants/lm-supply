@@ -60,6 +60,36 @@ public class LocalEmbedderApiTests
         await act.Should().ThrowAsync<ModelNotFoundException>();
     }
 
+    /// <summary>
+    /// Regression for ISSUE-lm-supply-1775535000-multilingual-embedder-vocab:
+    /// when a local model.onnx exists but no tokenizer files are present, the error must
+    /// list every probed path and mention the supported tokenizer formats — not just
+    /// "Vocabulary file not found".
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_LocalModelWithoutTokenizer_ListsAllProbePaths()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"embedder-tk-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var modelPath = Path.Combine(tempDir, "model.onnx");
+            await File.WriteAllBytesAsync(modelPath, [0x00]); // placeholder so File.Exists is true
+
+            var act = () => LocalEmbedder.LoadAsync(modelPath);
+
+            var ex = await act.Should().ThrowAsync<ModelNotFoundException>();
+            ex.Which.Message.Should().Contain("vocab.txt");
+            ex.Which.Message.Should().Contain("tokenizer.json");
+            ex.Which.Message.Should().Contain("sentencepiece.bpe.model");
+            ex.Which.Message.Should().Contain("model"); // model id appears
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task LoadAsync_AcceptsCustomOptions()
     {

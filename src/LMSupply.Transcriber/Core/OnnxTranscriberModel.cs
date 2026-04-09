@@ -98,6 +98,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
+        ValidateTranslateSupport(options);
         var samples = await AudioProcessor.LoadAudioAsync(audioPath, cancellationToken);
 
         var chunks = AudioProcessor.SplitIntoChunks(samples);
@@ -146,12 +147,31 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
         }
     }
 
+    /// <summary>
+    /// Validates that the loaded model supports the translate task when requested.
+    /// Fails fast with a clear message instead of silently producing a source-language transcript.
+    /// </summary>
+    private void ValidateTranslateSupport(TranscribeOptions? options)
+    {
+        if (options?.Translate != true)
+            return;
+
+        if (_modelInfo is { IsTranslateSupported: false })
+        {
+            throw new NotSupportedException(
+                $"Model '{_modelInfo.Id}' is English-only and does not support the Whisper translate task. " +
+                $"Whisper translate (speech → English text) requires a multilingual model. " +
+                $"Use an alias such as 'default', 'quality', 'large', or 'turbo' instead.");
+        }
+    }
+
     private async Task<TranscriptionResult> TranscribeCoreAsync(
         float[] samples,
         TranscribeOptions? options,
         CancellationToken cancellationToken)
     {
         await EnsureInitializedAsync(cancellationToken);
+        ValidateTranslateSupport(options);
 
         var sw = Stopwatch.StartNew();
         var duration = AudioProcessor.GetDurationSeconds(samples);

@@ -126,7 +126,8 @@ internal sealed class WhisperDecoder
         {
             // Initialize tokens with SOT sequence
             var useTimestamps = options?.WordTimestamps ?? false;
-            var initialTokens = _tokenizer.GetSotSequence(options?.Language, useTimestamps);
+            var translate = options?.Translate ?? false;
+            var initialTokens = _tokenizer.GetSotSequence(options?.Language, useTimestamps, translate);
             var tokens = new List<int>(initialTokens);
 
             var segments = new List<TranscriptionSegment>();

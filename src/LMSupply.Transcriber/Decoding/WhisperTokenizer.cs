@@ -300,12 +300,17 @@ internal sealed class WhisperTokenizer : IDisposable
     }
 
     /// <summary>
-    /// Gets the SOT (start of transcript) sequence for transcription.
+    /// Gets the SOT (start of transcript) sequence for transcription or translation.
     /// </summary>
-    /// <param name="language">ISO 639-1 language code (e.g., "en", "zh", "ja").</param>
+    /// <param name="language">ISO 639-1 language code (e.g., "en", "zh", "ja"). Null to auto-detect.</param>
     /// <param name="timestamps">Whether to include timestamps in output.</param>
+    /// <param name="translate">
+    /// When true, uses the translate task token instead of transcribe. Whisper's translate task
+    /// converts speech in any supported language into English text. Only meaningful for multilingual
+    /// models; English-only (.en) variants must use transcribe.
+    /// </param>
     /// <returns>Array of token IDs for the SOT sequence.</returns>
-    public int[] GetSotSequence(string? language = null, bool timestamps = false)
+    public int[] GetSotSequence(string? language = null, bool timestamps = false, bool translate = false)
     {
         var tokens = new List<int> { StartOfTranscriptToken };
 
@@ -331,8 +336,8 @@ internal sealed class WhisperTokenizer : IDisposable
             Trace.TraceInformation("[WhisperTokenizer] No language specified, model will auto-detect language.");
         }
 
-        // Add task token (transcribe)
-        tokens.Add(TranscribeToken);
+        // Add task token (transcribe or translate)
+        tokens.Add(translate ? TranslateToken : TranscribeToken);
 
         // Add no timestamps token if not using timestamps
         if (!timestamps)

@@ -88,6 +88,18 @@ public sealed record GgufModelInfo : IModelInfoBase, IModelMemoryInfo
     /// </summary>
     public int? ShardCount { get; init; }
 
+    /// <summary>
+    /// Number of transformer layers. Used for KV cache size estimation.
+    /// Populate from the model's config.json / HF model card.
+    /// </summary>
+    public int NumLayers { get; init; }
+
+    /// <summary>
+    /// Hidden dimension size (d_model). Used for KV cache size estimation.
+    /// Populate from the model's config.json / HF model card.
+    /// </summary>
+    public int HiddenSize { get; init; }
+
     // IModelMemoryInfo explicit implementation
     long? IModelMemoryInfo.EstimatedSizeBytes => EstimatedSizeBytes;
     long IModelMemoryInfo.ParameterCount => ParameterCount;

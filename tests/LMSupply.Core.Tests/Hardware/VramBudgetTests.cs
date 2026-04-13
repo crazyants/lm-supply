@@ -1,12 +1,83 @@
 using FluentAssertions;
 using LMSupply.Hardware;
 using LMSupply.Runtime;
+using System.Runtime.InteropServices;
 
 namespace LMSupply.Core.Tests.Hardware;
 
 public class VramBudgetTests
 {
     private const long GB = 1024L * 1024 * 1024;
+
+    [Fact]
+    public void GetRecommendedSafetyMargin_LowVramNvidiaOnWindows_Returns25Percent()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return; // Behavior is Windows-specific
+
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "NVIDIA RTX 4060 Laptop GPU",
+            TotalMemoryBytes = 4 * GB,
+            FreeMemoryBytes = 3 * GB,
+        };
+
+        var margin = VramBudget.GetRecommendedSafetyMargin(gpu);
+
+        margin.Should().Be(0.25);
+    }
+
+    [Fact]
+    public void GetRecommendedSafetyMargin_HighVramNvidia_ReturnsDefault()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "NVIDIA RTX 4090",
+            TotalMemoryBytes = 24 * GB,
+            FreeMemoryBytes = 22 * GB,
+        };
+
+        var margin = VramBudget.GetRecommendedSafetyMargin(gpu);
+
+        margin.Should().Be(VramBudget.DefaultSafetyMargin);
+    }
+
+    [Fact]
+    public void GetRecommendedSafetyMargin_NoGpu_ReturnsDefault()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Unknown,
+            TotalMemoryBytes = null,
+            FreeMemoryBytes = null,
+        };
+
+        var margin = VramBudget.GetRecommendedSafetyMargin(gpu);
+
+        margin.Should().Be(VramBudget.DefaultSafetyMargin);
+    }
+
+    [Fact]
+    public void GetAvailableBytes_NoMarginArg_AppliesRecommendedMargin()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "NVIDIA RTX 4060 Laptop GPU",
+            TotalMemoryBytes = 4 * GB,
+            FreeMemoryBytes = 3 * GB,
+        };
+
+        var available = VramBudget.GetAvailableBytes(gpu);
+
+        // Should use recommended (0.25), not default (0.15) → 3GB * 0.75
+        available.Should().Be((long)(3 * GB * 0.75));
+    }
 
     [Fact]
     public void GetAvailableBytes_WithFreeMemory_ReturnsFreeMemoryWithSafetyMargin()

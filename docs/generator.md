@@ -319,30 +319,43 @@ await foreach (var token in model.GenerateAsync("Hello, my name is"))
 
 The default GGUF registry centers on **Gemma 4** (Apache 2.0, multimodal-capable, native function calling). Loading any Gemma 4 alias requires **llama.cpp b8672+** — the minimum version is automatically validated at load time.
 
-| Alias | Model | Parameters | Quant | Size | Use Case |
-|-------|-------|------------|-------|------|----------|
-| `gguf:auto` | Hardware-optimized | varies | varies | varies | Auto-select by VRAM |
-| `gguf:fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | <4GB iGPU/mobile |
-| `gguf:default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | 4-8GB VRAM |
-| `gguf:balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | 8-16GB VRAM (higher quality E4B) |
-| `gguf:quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | 16-20GB VRAM |
-| `gguf:large` | Gemma 4 31B Instruct | 31B (Dense) | Q4_K_M | ~18.7 GB | 20-48GB VRAM |
-| `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | 48GB+ server |
+| Alias | Model | Parameters | Quant | Weights | KV @ 4k | Total | Use Case |
+|-------|-------|------------|-------|---------|---------|-------|----------|
+| `gguf:auto` | Hardware-optimized | varies | varies | varies | varies | varies | Auto-select by VRAM |
+| `gguf:fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | ~1.0 GB | ~4.1 GB | 4-6GB VRAM, iGPU/mobile |
+| `gguf:default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | ~1.4 GB | ~6.7 GB | 8GB VRAM |
+| `gguf:balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | ~1.4 GB | ~8.9 GB | 12GB VRAM (higher quality E4B) |
+| `gguf:quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | ~2.9 GB | ~19.7 GB | 24GB VRAM |
+| `gguf:large` | Gemma 4 31B Instruct | 31B (Dense) | Q4_K_M | ~18.7 GB | ~5.1 GB | ~23.8 GB | 32GB+ VRAM (or KV quantization) |
+| `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | ~3.1 GB | ~79.6 GB | 96GB+ server |
+
+> **KV cache footprint is included in auto-selection.** The `KV @ 4k` column shows the FP16 KV cache size at the default 4096 budget context length. llama-server reserves the full `--ctx-size` KV cache at load time, so a model that fits in weights but not in weights + KV will OOM at runtime. Use `LlamaOptions.TypeK = TypeV = KvCacheQuantizationType.Q8_0` (or `Q4_0`) to halve/quarter KV memory at the cost of slight quality loss.
 
 > **Split GGUF support**: `gguf:xlarge` is distributed as 3 shards (`-00001-of-00003`, etc.) in a `Q4_K_M/` subfolder. The downloader automatically fetches all shards; llama-server auto-loads the remaining parts when given the first shard path.
 
 #### Hardware-Optimized Selection (`gguf:auto`)
 
-`gguf:auto` selects the largest model that fits in available VRAM (after a 15% safety margin):
+`gguf:auto` selects the largest model whose **weights + KV cache** fit in the available VRAM budget. Budget = `freeVRAM × (1 − safetyMargin)` where the safety margin is platform-aware:
 
-| Available VRAM | Selected Model |
-|----------------|----------------|
-| <4GB or CPU | Gemma 4 E2B (Q4_K_M, 3.1 GB) |
-| 4-8GB | Gemma 4 E4B (Q4_K_M, 5.3 GB) |
-| 8-16GB | **Gemma 4 E4B (Q8_0, 7.5 GB)** ← `gguf:balanced` |
-| 16-20GB | Gemma 4 26B MoE (Q4_K_M, 16.8 GB) |
-| 20-48GB | Gemma 4 31B Dense (Q4_K_M, 18.7 GB) |
-| 48GB+ | Qwen 3.5 122B MoE (76.5 GB) |
+| Platform | Safety margin | Reason |
+|----------|---------------|--------|
+| Windows + NVIDIA + total VRAM ≤ 6GB | 25% | Compositor + driver overhead is proportionally larger on small dedicated cards (e.g., RTX 4060 Laptop 4GB) |
+| Everything else | 15% | Default for desktop / server / Apple Silicon / Linux |
+
+KV cache is estimated at the default budget context length (4096 tokens, FP16), see `GgufModelRegistry.DefaultBudgetContextLength`.
+
+| Free VRAM | Budget | Selected Model | Reason |
+|-----------|--------|----------------|--------|
+| 0 / CPU only | 0 | `gguf:fast` (Gemma 4 E2B) | FallbackToSmallest — runtime CPU offload |
+| 4 GB Windows laptop | ~3.0 GB | `gguf:fast` | FallbackToSmallest — fast itself (~4.1 GB) exceeds 3 GB budget |
+| 6 GB | ~5.1 GB | `gguf:fast` | Fits — default (~6.7 GB) over budget |
+| 8 GB | ~6.8 GB | `gguf:default` | Fits — balanced (~8.9 GB) over budget |
+| 12 GB | ~10.2 GB | `gguf:balanced` | Fits — quality (~19.7 GB) over budget |
+| 24 GB | ~20.4 GB | `gguf:quality` | Fits — large (~23.8 GB) over budget at FP16 KV |
+| 32 GB | ~27.2 GB | `gguf:large` | Fits |
+| 96 GB+ | ~81.6 GB | `gguf:xlarge` | Fits |
+
+> **Low-VRAM laptop guidance.** On Windows laptops with ≤4 GB NVIDIA VRAM (RTX 4050/4060 Laptop, etc.), the auto path will still select `gguf:fast` and emit a `FallbackToSmallest` warning to `Trace`. Even E2B may exceed budget once Windows compositor + driver reserve their share. For these hosts, prefer the ONNX path explicitly: `LocalGenerator.LoadAsync("phi-4-mini")` (DirectML or CPU). The Trace line `[LocalGenerator.auto] WARNING: ...` indicates this fallback so downstream consumers can intercept it.
 
 ```csharp
 // Let LMSupply choose the optimal model for your hardware

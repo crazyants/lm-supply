@@ -27,6 +27,8 @@ public static class GgufModelRegistry
             ParameterCount = 2_300_000_000,
             EstimatedSizeBytes = 3_110_000_000L,
             QuantizationType = "Q4_K_M",
+            NumLayers = 26,
+            HiddenSize = 2304,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
@@ -42,6 +44,8 @@ public static class GgufModelRegistry
             ParameterCount = 4_500_000_000,
             EstimatedSizeBytes = 5_335_285_440L,
             QuantizationType = "Q4_K_M",
+            NumLayers = 34,
+            HiddenSize = 2560,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
@@ -58,6 +62,8 @@ public static class GgufModelRegistry
             ParameterCount = 4_500_000_000,
             EstimatedSizeBytes = 7_500_000_000L,
             QuantizationType = "Q8_0",
+            NumLayers = 34,
+            HiddenSize = 2560,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
@@ -73,6 +79,8 @@ public static class GgufModelRegistry
             ParameterCount = 26_000_000_000,
             EstimatedSizeBytes = 16_796_010_720L,
             QuantizationType = "Q4_K_M",
+            NumLayers = 46,
+            HiddenSize = 4096,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
@@ -88,6 +96,8 @@ public static class GgufModelRegistry
             ParameterCount = 31_000_000_000,
             EstimatedSizeBytes = 18_687_057_376L,
             QuantizationType = "Q4_K_M",
+            NumLayers = 62,
+            HiddenSize = 5376,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
@@ -103,6 +113,8 @@ public static class GgufModelRegistry
             ParameterCount = 122_000_000_000,
             EstimatedSizeBytes = 76_536_573_608L,
             QuantizationType = "Q4_K_M",
+            NumLayers = 48,
+            HiddenSize = 6144,
             ShardCount = 3,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
@@ -110,11 +122,19 @@ public static class GgufModelRegistry
     };
 
     /// <summary>
+    /// Default context length used to estimate KV cache size when computing the VRAM budget.
+    /// llama-server reserves the full <c>--ctx-size</c> KV cache at load time, so a model
+    /// that exceeds this budget at this context will OOM. 4096 is conservative and matches
+    /// the practical default for most chat workloads.
+    /// </summary>
+    public const int DefaultBudgetContextLength = 4096;
+
+    /// <summary>
     /// Resolves an alias to model information.
     /// Supports both "gguf:alias" format and plain "alias" format.
     /// </summary>
     /// <param name="aliasOrRepoId">The alias (e.g., "gguf:default", "default", "gguf:auto") or full repo ID.</param>
-    /// <returns>Model information if found, null otherwise.</returns>
+    /// <returns>Model information if found, null otherwise. The <see cref="GgufModelInfo.AliasName"/> is populated for registered aliases.</returns>
     public static GgufModelInfo? Resolve(string aliasOrRepoId)
     {
         if (string.IsNullOrWhiteSpace(aliasOrRepoId))
@@ -126,17 +146,21 @@ public static class GgufModelRegistry
 
         // Try direct lookup with gguf: prefix
         if (_models.TryGetValue(aliasOrRepoId, out var info))
-            return info;
+            return WithAlias(info, aliasOrRepoId);
 
         // Try with gguf: prefix added
         if (!aliasOrRepoId.StartsWith("gguf:", StringComparison.OrdinalIgnoreCase))
         {
-            if (_models.TryGetValue($"gguf:{aliasOrRepoId}", out info))
-                return info;
+            var prefixed = $"gguf:{aliasOrRepoId}";
+            if (_models.TryGetValue(prefixed, out info))
+                return WithAlias(info, prefixed);
         }
 
         return null;
     }
+
+    private static GgufModelInfo WithAlias(GgufModelInfo info, string alias)
+        => info with { AliasName = alias.ToLowerInvariant() };
 
     /// <summary>
     /// Gets the optimal GGUF model based on current hardware profile.
@@ -146,27 +170,85 @@ public static class GgufModelRegistry
         => GetAutoModel(HardwareProfile.Current.GpuInfo);
 
     /// <summary>
-    /// Gets the optimal GGUF model based on actual available VRAM.
-    /// Models are sorted by size descending; selects largest that fits.
-    /// Falls back to smallest model if nothing fits (CPU fallback).
+    /// Gets the optimal GGUF model based on actual available VRAM, including KV cache footprint.
+    /// Sorts candidates by total VRAM footprint (weights + KV @ default context) descending,
+    /// selects largest that fits, falls back to smallest if nothing fits.
     /// </summary>
     public static GgufModelInfo GetAutoModel(GpuInfo gpu)
-    {
-        var availableVram = VramBudget.GetAvailableBytes(gpu);
+        => GetAutoSelection(gpu).Selected;
 
-        var candidates = _models.Values
-            .Where(m => m.EstimatedSizeBytes.HasValue)
-            .OrderByDescending(m => m.EstimatedSizeBytes!.Value)
+    /// <summary>
+    /// Performs auto-selection and returns the full diagnostic <see cref="ModelSelectionResult"/>
+    /// including budget breakdown, candidate list with fit info, and the selection reason.
+    /// Uses <see cref="DefaultBudgetContextLength"/> for KV cache estimation.
+    /// </summary>
+    public static ModelSelectionResult GetAutoSelection(GpuInfo gpu)
+        => GetAutoSelection(gpu, DefaultBudgetContextLength);
+
+    /// <summary>
+    /// Performs auto-selection with an explicit budget context length for KV cache estimation.
+    /// </summary>
+    public static ModelSelectionResult GetAutoSelection(GpuInfo gpu, int budgetContextLength)
+    {
+        var safetyMargin = VramBudget.GetRecommendedSafetyMargin(gpu);
+        var availableVram = VramBudget.GetAvailableBytes(gpu, safetyMargin);
+
+        var candidates = _models
+            .Select(kv => EvaluateCandidate(WithAlias(kv.Value, kv.Key), availableVram, budgetContextLength))
+            .OrderByDescending(c => c.TotalBytes)
             .ToList();
 
-        foreach (var model in candidates)
+        var fitting = candidates.FirstOrDefault(c => c.Fits);
+        GgufModelInfo selected;
+        ModelSelectionReason reason;
+
+        if (fitting is not null)
         {
-            if (model.EstimatedSizeBytes!.Value <= availableVram)
-                return model;
+            selected = fitting.Model;
+            reason = ModelSelectionReason.Fits;
+        }
+        else
+        {
+            // Nothing fits in VRAM → return smallest (will use CPU or partial offload)
+            var smallest = candidates.LastOrDefault()?.Model
+                ?? WithAlias(_models["gguf:fast"], "gguf:fast");
+            selected = smallest;
+            reason = ModelSelectionReason.FallbackToSmallest;
         }
 
-        // Nothing fits in VRAM → return smallest (will use CPU or partial offload)
-        return candidates.LastOrDefault() ?? _models["gguf:fast"];
+        return new ModelSelectionResult
+        {
+            Selected = selected,
+            Reason = reason,
+            AvailableVramBytes = availableVram,
+            SafetyMargin = safetyMargin,
+            BudgetContextLength = budgetContextLength,
+            Candidates = candidates,
+        };
+    }
+
+    private static ModelSelectionCandidate EvaluateCandidate(
+        GgufModelInfo model, long availableVram, int budgetContextLength)
+    {
+        var weights = ModelMemoryEstimator.EstimateModelSizeBytes(
+            model.ParameterCount,
+            model.QuantizationType,
+            model.EstimatedSizeBytes);
+
+        // KV cache only computable when architecture fields are set.
+        long kvCache = (model.NumLayers > 0 && model.HiddenSize > 0)
+            ? ModelMemoryEstimator.EstimateKvCacheBytes(
+                budgetContextLength, model.NumLayers, model.HiddenSize)
+            : 0L;
+
+        var total = weights + kvCache;
+        return new ModelSelectionCandidate
+        {
+            Model = model,
+            WeightsBytes = weights,
+            KvCacheBytes = kvCache,
+            Fits = total <= availableVram,
+        };
     }
 
     /// <summary>

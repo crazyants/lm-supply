@@ -140,32 +140,68 @@ public static class LocalGenerator
                       profile.GpuInfo.Vendor != GpuVendor.Nvidia;
 
         string selectedModelId;
-        string selectedFormat;
 
         if (useOnnx)
         {
             var model = GeneratorModelRegistry.Default.Resolve("auto");
             selectedModelId = model.ModelId;
-            selectedFormat = "ONNX";
+            LogOnnxAutoSelection(profile, model.ModelId);
         }
         else
         {
-            var model = Internal.Llama.GgufModelRegistry.GetAutoModel();
-            selectedModelId = model.RepoId;
-            selectedFormat = "GGUF";
+            var selection = Internal.Llama.GgufModelRegistry.GetAutoSelection(profile.GpuInfo);
+            selectedModelId = selection.Selected.RepoId;
+            LogGgufAutoSelection(profile, selection);
         }
 
-        LogAutoSelection(profile, selectedFormat, selectedModelId);
         return Internal.GeneratorModelLoader.LoadAsync(
             selectedModelId, options, progress, cancellationToken);
     }
 
-    private static void LogAutoSelection(HardwareProfile profile, string format, string modelId)
+    private static void LogOnnxAutoSelection(HardwareProfile profile, string modelId)
     {
         var vramMb = VramBudget.GetAvailableBytes(profile.GpuInfo) / (1024 * 1024);
         System.Diagnostics.Trace.TraceInformation(
             $"[LocalGenerator.auto] Provider={profile.RecommendedProvider}, " +
             $"GPU={profile.GpuInfo.Vendor} {profile.GpuInfo.DeviceName ?? "n/a"}, " +
-            $"VRAM={vramMb}MB → {format} path, selected={modelId}");
+            $"VRAM={vramMb}MB → ONNX path, selected={modelId}");
+    }
+
+    private static void LogGgufAutoSelection(
+        HardwareProfile profile, Internal.Llama.ModelSelectionResult selection)
+    {
+        const double mb = 1024.0 * 1024.0;
+        var freeMb = (profile.GpuInfo.FreeMemoryBytes ?? profile.GpuInfo.TotalMemoryBytes ?? 0) / mb;
+        var budgetMb = selection.AvailableVramBytes / mb;
+        var marginPct = selection.SafetyMargin * 100;
+
+        System.Diagnostics.Trace.TraceInformation(
+            $"[LocalGenerator.auto] Provider={profile.RecommendedProvider}, " +
+            $"GPU={profile.GpuInfo.Vendor} {profile.GpuInfo.DeviceName ?? "n/a"}, " +
+            $"VRAM raw={freeMb:F0}MB → budget={budgetMb:F0}MB (margin={marginPct:F0}%, " +
+            $"KV ctx={selection.BudgetContextLength}) → GGUF path, " +
+            $"selected={selection.Selected.AliasName} ({selection.Selected.RepoId}), " +
+            $"reason={selection.Reason}");
+
+        // Verbose breakdown of all candidates considered
+        foreach (var c in selection.Candidates)
+        {
+            var weightsMb = c.WeightsBytes / mb;
+            var kvMb = c.KvCacheBytes / mb;
+            var totalMb = c.TotalBytes / mb;
+            System.Diagnostics.Trace.TraceInformation(
+                $"[LocalGenerator.auto]   candidate {c.Model.AliasName,-14} " +
+                $"weights={weightsMb,7:F0}MB + KV={kvMb,6:F0}MB = {totalMb,7:F0}MB " +
+                $"({(c.Fits ? "fits" : "OVER BUDGET")})");
+        }
+
+        if (selection.Reason == Internal.Llama.ModelSelectionReason.FallbackToSmallest)
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                $"[LocalGenerator.auto] WARNING: no registered model fits in {budgetMb:F0}MB budget. " +
+                $"Selected smallest ({selection.Selected.AliasName}) as fallback — " +
+                $"runtime may OOM or partial-offload to CPU. " +
+                $"Override with explicit alias (e.g., \"phi-4-mini\") for low-VRAM hosts.");
+        }
     }
 }

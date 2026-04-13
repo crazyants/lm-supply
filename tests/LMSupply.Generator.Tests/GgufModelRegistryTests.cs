@@ -100,6 +100,107 @@ public class GgufModelRegistryTests
         aliases.Should().Contain("gguf:xlarge");
     }
 
+    [Theory]
+    [InlineData("gguf:fast")]
+    [InlineData("gguf:default")]
+    [InlineData("gguf:balanced")]
+    [InlineData("gguf:quality")]
+    [InlineData("gguf:large")]
+    public void RegisteredGemmaModels_HaveArchitectureFields(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.NumLayers.Should().BeGreaterThan(0,
+            because: $"{alias} must declare NumLayers for KV cache budgeting");
+        model.HiddenSize.Should().BeGreaterThan(0,
+            because: $"{alias} must declare HiddenSize for KV cache budgeting");
+    }
+
+    [Fact]
+    public void GetAutoSelection_ReturnsResultWithCandidatesAndReason()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "Test GPU",
+            TotalMemoryBytes = 12L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 11L * 1024 * 1024 * 1024,
+        };
+
+        var result = GgufModelRegistry.GetAutoSelection(gpu);
+
+        result.Should().NotBeNull();
+        result.Selected.Should().NotBeNull();
+        result.AvailableVramBytes.Should().BeGreaterThan(0);
+        result.BudgetContextLength.Should().BeGreaterThan(0);
+        result.Reason.Should().BeOneOf(
+            ModelSelectionReason.Fits,
+            ModelSelectionReason.FallbackToSmallest);
+        result.Candidates.Should().NotBeEmpty();
+        result.Candidates.Should().AllSatisfy(c =>
+        {
+            c.Model.Should().NotBeNull();
+            c.WeightsBytes.Should().BeGreaterThan(0);
+            c.KvCacheBytes.Should().BeGreaterThan(0);
+            c.TotalBytes.Should().Be(c.WeightsBytes + c.KvCacheBytes);
+        });
+    }
+
+    [Fact]
+    public void GetAutoSelection_LowVramLaptop_FallsBackWithReason()
+    {
+        // 4GB Windows NVIDIA laptop: smallest fast (3.1GB weights + ~1GB KV) won't fit.
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "NVIDIA RTX 4060 Laptop GPU",
+            TotalMemoryBytes = 4L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 3L * 1024 * 1024 * 1024,
+        };
+
+        var result = GgufModelRegistry.GetAutoSelection(gpu);
+
+        result.Selected.AliasName.Should().Be("gguf:fast",
+            because: "smallest available model is the safest fallback");
+        // On Windows the recommended margin is 25% for 4GB cards
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Windows))
+        {
+            result.Reason.Should().Be(ModelSelectionReason.FallbackToSmallest);
+        }
+    }
+
+    [Fact]
+    public void GetAutoSelection_KvCacheCountedInBudget()
+    {
+        // 7GB free Nvidia (non-laptop high-end card scenario):
+        // budget = 7 * 0.85 = 5.95 GB
+        // gguf:default weights = 5.3GB, KV @ 4096 ctx ≈ 1.4GB → total ~6.7GB (over budget)
+        // → must demote to gguf:fast (3.1GB + ~1GB KV ≈ 4.1GB)
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "Test 8GB",
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 7L * 1024 * 1024 * 1024,
+        };
+
+        var result = GgufModelRegistry.GetAutoSelection(gpu);
+
+        result.Selected.AliasName.Should().Be("gguf:fast",
+            because: "with KV cache @ 4096 included, default (E4B) exceeds 5.95 GB budget");
+        result.Reason.Should().Be(ModelSelectionReason.Fits);
+    }
+
+    [Fact]
+    public void Resolve_PopulatesAliasName()
+    {
+        var model = GgufModelRegistry.Resolve("gguf:default");
+        model.Should().NotBeNull();
+        model!.AliasName.Should().Be("gguf:default");
+    }
+
     [Fact]
     public void GetAutoModel_LargeVram_SelectsLargestFitting()
     {
@@ -115,7 +216,7 @@ public class GgufModelRegistryTests
     }
 
     [Fact]
-    public void GetAutoModel_LargeVram_SelectsLarge()
+    public void GetAutoModel_LargeVram_SelectsQuality()
     {
         var gpu = new GpuInfo
         {
@@ -123,9 +224,11 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 24L * 1024 * 1024 * 1024
         };
-        // 24GB × 0.85 = 20.4GB → gguf:large (18.7GB Gemma 4 31B) fits
+        // 24GB × 0.85 = 20.4GB budget. Including KV @ 4096:
+        // - large (18.7GB + ~5.1GB KV) = 23.8GB → does NOT fit
+        // - quality (16.8GB + ~2.9GB KV) = 19.7GB → fits
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(31_000_000_000);
+        model.ParameterCount.Should().Be(26_000_000_000);
     }
 
     [Fact]
@@ -137,14 +240,15 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 12L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 11L * 1024 * 1024 * 1024
         };
-        // 11GB × 0.85 = 9.35GB → gguf:balanced (7.5GB E4B Q8_0) fits, quality (16.8GB) doesn't
+        // 11GB × 0.85 = 9.35GB. Balanced (7.5GB Q8_0 + ~1.4GB KV @ 4096 ≈ 8.9GB) fits.
+        // Quality (16.8GB + KV) doesn't fit.
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q8_0");
         model.ParameterCount.Should().Be(4_500_000_000);
     }
 
     [Fact]
-    public void GetAutoModel_MediumVram_SelectsDefault()
+    public void GetAutoModel_MediumVram_SelectsFast()
     {
         var gpu = new GpuInfo
         {
@@ -152,7 +256,24 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 7L * 1024 * 1024 * 1024
         };
-        // 7GB × 0.85 = 5.95GB → gguf:default (5.34GB Gemma 4 E4B Q4_K_M) fits, balanced (7.5GB) doesn't
+        // 7GB × 0.85 = 5.95GB. With KV @ 4096:
+        // - default (5.3GB + ~1.4GB KV ≈ 6.7GB) does NOT fit
+        // - fast (3.1GB + ~1GB KV ≈ 4.1GB) fits
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.QuantizationType.Should().Be("Q4_K_M");
+        model.ParameterCount.Should().Be(2_300_000_000);
+    }
+
+    [Fact]
+    public void GetAutoModel_8GBFreeVram_SelectsDefault()
+    {
+        // Need ~8GB free to actually fit gguf:default (5.3 + 1.4 = 6.7GB) under 0.85 margin (~6.8GB budget).
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 10L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 8L * 1024 * 1024 * 1024
+        };
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q4_K_M");
         model.ParameterCount.Should().Be(4_500_000_000);

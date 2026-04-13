@@ -11,6 +11,7 @@ public class GgufModelRegistryTests
     [InlineData("gguf:default")]
     [InlineData("gguf:fast")]
     [InlineData("gguf:quality")]
+    [InlineData("gguf:balanced")]
     [InlineData("gguf:large")]
     [InlineData("gguf:xlarge")]
     public void Resolve_WithPrefixedAlias_ReturnsModelInfo(string alias)
@@ -67,8 +68,8 @@ public class GgufModelRegistryTests
         var model = GgufModelRegistry.Resolve("gguf:default");
 
         model.Should().NotBeNull();
-        model!.RepoId.Should().Contain("Hermes");
-        model.ChatFormat.Should().Be("chatml");
+        model!.RepoId.Should().Contain("gemma-4");
+        model.ChatFormat.Should().Be("gemma4");
         model.DefaultFile.Should().Contain("Q4_K_M");
         model.ContextLength.Should().BeGreaterThanOrEqualTo(4096);
     }
@@ -76,7 +77,7 @@ public class GgufModelRegistryTests
     [Fact]
     public void AllModels_HaveValidChatFormats()
     {
-        var validFormats = new[] { "chatml", "mistral-nemo" };
+        var validFormats = new[] { "chatml", "gemma", "gemma4" };
         var models = GgufModelRegistry.GetAllModels();
 
         models.Should().AllSatisfy(m =>
@@ -94,6 +95,7 @@ public class GgufModelRegistryTests
         aliases.Should().Contain("gguf:default");
         aliases.Should().Contain("gguf:fast");
         aliases.Should().Contain("gguf:quality");
+        aliases.Should().Contain("gguf:balanced");
         aliases.Should().Contain("gguf:large");
         aliases.Should().Contain("gguf:xlarge");
     }
@@ -121,9 +123,24 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 24L * 1024 * 1024 * 1024
         };
-        // 24GB × 0.85 = 20.4GB → gguf:large (19GB) fits
+        // 24GB × 0.85 = 20.4GB → gguf:large (18.7GB Gemma 4 31B) fits
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(32_000_000_000);
+        model.ParameterCount.Should().Be(31_000_000_000);
+    }
+
+    [Fact]
+    public void GetAutoModel_12GBVram_SelectsBalanced()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 12L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 11L * 1024 * 1024 * 1024
+        };
+        // 11GB × 0.85 = 9.35GB → gguf:balanced (7.5GB E4B Q8_0) fits, quality (16.8GB) doesn't
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.QuantizationType.Should().Be("Q8_0");
+        model.ParameterCount.Should().Be(4_500_000_000);
     }
 
     [Fact]
@@ -133,11 +150,12 @@ public class GgufModelRegistryTests
         {
             Vendor = GpuVendor.Nvidia,
             TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
-            FreeMemoryBytes = 6L * 1024 * 1024 * 1024
+            FreeMemoryBytes = 7L * 1024 * 1024 * 1024
         };
-        // 6GB × 0.85 = 5.1GB → gguf:default (4.92GB) fits
+        // 7GB × 0.85 = 5.95GB → gguf:default (5.34GB Gemma 4 E4B Q4_K_M) fits, balanced (7.5GB) doesn't
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().BeLessThanOrEqualTo(8_000_000_000);
+        model.QuantizationType.Should().Be("Q4_K_M");
+        model.ParameterCount.Should().Be(4_500_000_000);
     }
 
     [Fact]
@@ -148,9 +166,9 @@ public class GgufModelRegistryTests
             Vendor = GpuVendor.Intel,
             TotalMemoryBytes = 2L * 1024 * 1024 * 1024
         };
-        // 2GB × 0.85 = 1.7GB → gguf:fast (2GB) doesn't fit → still returns smallest
+        // 2GB × 0.85 = 1.7GB → gguf:fast (3.1GB) doesn't fit → still returns smallest
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(3_000_000_000);
+        model.ParameterCount.Should().Be(2_300_000_000);
     }
 
     [Fact]
@@ -161,7 +179,17 @@ public class GgufModelRegistryTests
             Vendor = GpuVendor.Unknown
         };
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(3_000_000_000);
+        model.ParameterCount.Should().Be(2_300_000_000);
+    }
+
+    [Fact]
+    public void XLargeModel_HasSplitShardConfiguration()
+    {
+        var model = GgufModelRegistry.Resolve("gguf:xlarge");
+        model.Should().NotBeNull();
+        model!.ShardCount.Should().Be(3);
+        model.DefaultFile.Should().Contain("-00001-of-00003");
+        model.DefaultFile.Should().StartWith("Q4_K_M/");
     }
 
     [Theory]

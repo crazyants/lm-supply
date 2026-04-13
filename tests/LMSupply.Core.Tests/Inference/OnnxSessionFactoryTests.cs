@@ -1,4 +1,5 @@
 using FluentAssertions;
+using LMSupply.Exceptions;
 using LMSupply.Inference;
 using LMSupply.Runtime;
 
@@ -163,5 +164,32 @@ public class OnnxSessionFactoryTests
         {
             fallbackChain[i].Should().NotBe(ExecutionProvider.Cpu, $"Position {i} should be a GPU provider");
         }
+    }
+
+    [Fact]
+    public void CheckOnnxRuntimeAvailability_ShouldReturnWithoutCrash()
+    {
+        // The key invariant: this method should NEVER crash the process.
+        // On dev machines with VC++ Redistributable, returns true.
+        // On fresh machines without it, returns false with a helpful message.
+        var (available, errorMessage) = OnnxSessionFactory.CheckOnnxRuntimeAvailability();
+
+        if (available)
+        {
+            errorMessage.Should().BeNull();
+        }
+        else
+        {
+            errorMessage.Should().NotBeNullOrEmpty("should provide actionable guidance when unavailable");
+        }
+    }
+
+    [Fact]
+    public void CheckOnnxRuntimeAvailability_ShouldNotCrashProcess_EvenWhenUnavailable()
+    {
+        // The method should always return a tuple without crashing,
+        // regardless of native library availability.
+        var action = () => OnnxSessionFactory.CheckOnnxRuntimeAvailability();
+        action.Should().NotThrow("pre-check must never crash the process");
     }
 }

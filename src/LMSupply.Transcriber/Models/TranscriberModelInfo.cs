@@ -84,6 +84,17 @@ public sealed class TranscriberModelInfo : IModelInfoBase, IModelMemoryInfo
     public bool IsMultilingual { get; init; } = true;
 
     /// <summary>
+    /// Gets whether this model supports the Whisper translate task (speech → English text).
+    /// </summary>
+    /// <remarks>
+    /// Whisper's translate task is only available on multilingual checkpoints. English-only
+    /// variants (e.g., <c>whisper-base.en</c>) do not include the translate token in their
+    /// decoder vocabulary and must use the transcribe task exclusively. This is a fixed
+    /// capability of the model architecture, not a runtime option.
+    /// </remarks>
+    public bool IsTranslateSupported => IsMultilingual;
+
+    /// <summary>
     /// Gets or sets the model description.
     /// </summary>
     public string? Description { get; init; }

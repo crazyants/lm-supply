@@ -118,7 +118,78 @@ public sealed class GgufModelDownloader : IDisposable
             }
         }
 
+        // Handle split GGUF models (multiple shards)
+        if (modelInfo.ShardCount is > 1)
+        {
+            return await DownloadSplitModelAsync(
+                modelInfo.RepoId, filename, modelInfo.ShardCount.Value,
+                progress, cancellationToken);
+        }
+
         return await DownloadAsync(modelInfo.RepoId, filename, preferredQuantization, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// Downloads all shards of a split GGUF model.
+    /// Returns the path to the first shard (llama-server auto-loads the rest).
+    /// </summary>
+    private async Task<string> DownloadSplitModelAsync(
+        string repoId,
+        string firstShardFilename,
+        int shardCount,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var shardFilenames = GenerateShardFilenames(firstShardFilename, shardCount);
+        string? firstShardPath = null;
+
+        for (int i = 0; i < shardFilenames.Count; i++)
+        {
+            var shardFile = shardFilenames[i];
+            progress?.Report(new DownloadProgress
+            {
+                FileName = $"{Path.GetFileName(shardFile)} ({i + 1}/{shardCount})",
+                BytesDownloaded = 0,
+                TotalBytes = 0
+            });
+
+            var path = await DownloadAsync(repoId, shardFile, preferredQuantization: null,
+                progress, cancellationToken);
+
+            firstShardPath ??= path;
+        }
+
+        return firstShardPath!;
+    }
+
+    /// <summary>
+    /// Generates all shard filenames from the first shard filename.
+    /// E.g., "Q4_K_M/model-00001-of-00003.gguf" → ["...00001...", "...00002...", "...00003..."]
+    /// </summary>
+    internal static IReadOnlyList<string> GenerateShardFilenames(string firstShardFilename, int shardCount)
+    {
+        var filenames = new List<string>(shardCount);
+
+        // Find the shard number pattern in the filename
+        var match = System.Text.RegularExpressions.Regex.Match(
+            firstShardFilename, @"-(\d{5})-of-(\d{5})\.gguf$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            // Not a split pattern — return as single file
+            return [firstShardFilename];
+        }
+
+        var prefix = firstShardFilename[..match.Index];
+        var totalStr = match.Groups[2].Value;
+
+        for (int i = 1; i <= shardCount; i++)
+        {
+            filenames.Add($"{prefix}-{i:D5}-of-{totalStr}.gguf");
+        }
+
+        return filenames;
     }
 
     /// <summary>

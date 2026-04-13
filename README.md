@@ -271,14 +271,17 @@ GGUF reranker models are auto-detected by `-GGUF` or `_gguf` in repo name.
 
 ### Generator (GGUF via llama-server)
 
-| Alias | Model | Params | Context | Best For |
-|-------|-------|--------|---------|----------|
-| `gguf:auto` | Hardware-optimized | varies | varies | Auto-select by hardware |
-| `gguf:fast` | Ministral 3 3B | 3B | 32K | Quick responses, tool calling |
-| `gguf:default` | Hermes 3 Llama 3.1 8B | 8B | 8K | Balanced, stable tool calling |
-| `gguf:quality` | Mistral Nemo 12B | 12B | 32K | Higher quality, tool calling |
-| `gguf:large` | Qwen 3 32B | 32B | 32K | Best quality |
-| `gguf:xlarge` | Qwen 3.5 122B MoE | 122B (10B active) | 32K | Server-grade |
+Gemma 4 중심 레지스트리 (Apache 2.0, 멀티모달, 네이티브 function calling). llama.cpp **b8672+** 필요 — `gguf:fast`/`default`/`balanced`/`quality`/`large` 로딩 시 최소 버전이 자동 검증됩니다.
+
+| Alias | Model | Params | Quant | Size | VRAM Target |
+|-------|-------|--------|-------|------|-------------|
+| `gguf:auto` | Hardware-optimized | varies | varies | varies | Auto-select |
+| `gguf:fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | <4GB iGPU/mobile |
+| `gguf:default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | 4-8GB |
+| `gguf:balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | 8-16GB (RTX 3060 12GB 등) |
+| `gguf:quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | 16-20GB |
+| `gguf:large` | Gemma 4 31B Instruct | 31B | Q4_K_M | ~18.7 GB | 20-48GB |
+| `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | 48GB+ server |
 
 ### Translator
 

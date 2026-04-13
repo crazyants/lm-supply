@@ -17,6 +17,7 @@ internal sealed class OnnxDetectorModel : IDetectorModel
 {
     private readonly DetectorOptions _options;
     private readonly DetectorModelInfo _modelInfo;
+    private readonly int _numKeypoints;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
     private InferenceSession? _session;
@@ -51,6 +52,7 @@ internal sealed class OnnxDetectorModel : IDetectorModel
     {
         _options = options.Clone();
         _modelInfo = DetectorModelRegistry.Default.Resolve(options.ModelId);
+        _numKeypoints = options.NumKeypoints ?? _modelInfo.NumKeypoints;
     }
 
     public async Task WarmupAsync(CancellationToken cancellationToken = default)
@@ -107,6 +109,40 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         return results;
     }
 
+    public async Task<IReadOnlyList<IReadOnlyList<DetectionResult>>> DetectBatchAsync(
+        IEnumerable<byte[]> imageDataList,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(imageDataList);
+
+        var results = new List<IReadOnlyList<DetectionResult>>();
+
+        foreach (var imageData in imageDataList)
+        {
+            var detections = await DetectAsync(imageData, cancellationToken);
+            results.Add(detections);
+        }
+
+        return results;
+    }
+
+    public async Task<IReadOnlyList<IReadOnlyList<DetectionResult>>> DetectBatchAsync(
+        IEnumerable<Stream> imageStreams,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(imageStreams);
+
+        var results = new List<IReadOnlyList<DetectionResult>>();
+
+        foreach (var stream in imageStreams)
+        {
+            var detections = await DetectAsync(stream, cancellationToken);
+            results.Add(detections);
+        }
+
+        return results;
+    }
+
     private async Task<IReadOnlyList<DetectionResult>> DetectCoreAsync(
         Image<Rgb24> image,
         CancellationToken cancellationToken)
@@ -124,9 +160,11 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         var outputs = await RunInferenceAsync(inputTensor, originalWidth, originalHeight, cancellationToken);
 
         // Parse detections based on model architecture
-        var detections = _modelInfo.RequiresNms
-            ? ParseWithNms(outputs, originalWidth, originalHeight, inputSize)
-            : ParseNmsFree(outputs, originalWidth, originalHeight, inputSize);
+        var detections = _numKeypoints > 0
+            ? ParsePoseOutput(outputs, originalWidth, originalHeight, inputSize)
+            : _modelInfo.RequiresNms
+                ? ParseWithNms(outputs, originalWidth, originalHeight, inputSize)
+                : ParseNmsFree(outputs, originalWidth, originalHeight, inputSize);
 
         // Apply confidence threshold and max detections
         var filtered = detections
@@ -457,6 +495,76 @@ internal sealed class OnnxDetectorModel : IDetectorModel
         return results;
     }
 
+    /// <summary>
+    /// Parses pose estimation output (e.g., YOLOv8-pose).
+    /// Expected output format: [1, features, num_boxes] where features = 4(bbox) + 1(conf) + num_keypoints*3.
+    /// Also handles [1, num_boxes, features] format.
+    /// </summary>
+    private List<DetectionResult> ParsePoseOutput(
+        IDisposableReadOnlyCollection<DisposableNamedOnnxValue> outputs,
+        int originalWidth,
+        int originalHeight,
+        int inputSize)
+    {
+        var results = new List<DetectionResult>();
+        var output = outputs[0].AsTensor<float>();
+
+        var dim0 = (int)output.Dimensions[1];
+        var dim1 = (int)output.Dimensions[2];
+
+        var expectedFeatures = 4 + 1 + _numKeypoints * 3;
+
+        // Auto-detect orientation: [1, features, boxes] vs [1, boxes, features]
+        bool transposed = dim0 == expectedFeatures && dim1 != expectedFeatures;
+        int numBoxes = transposed ? dim1 : dim0;
+        int features = transposed ? dim0 : dim1;
+
+        if (features < expectedFeatures)
+            return results;
+
+        var scaleX = originalWidth / (float)inputSize;
+        var scaleY = originalHeight / (float)inputSize;
+
+        for (int i = 0; i < numBoxes; i++)
+        {
+            float Val(int f) => transposed ? output[0, f, i] : output[0, i, f];
+
+            var conf = Val(4);
+            if (conf < _options.ConfidenceThreshold)
+                continue;
+
+            // Box: [cx, cy, w, h]
+            var cx = Val(0) * scaleX;
+            var cy = Val(1) * scaleY;
+            var w = Val(2) * scaleX;
+            var h = Val(3) * scaleY;
+
+            var box = BoundingBox.FromCenterSize(cx, cy, w, h)
+                .Clamp(originalWidth, originalHeight);
+
+            // Parse keypoints: (x, y, confidence) × numKeypoints
+            var keypoints = new Keypoint[_numKeypoints];
+            var kpOffset = 5;
+            for (int k = 0; k < _numKeypoints; k++)
+            {
+                var kx = Val(kpOffset + k * 3) * scaleX;
+                var ky = Val(kpOffset + k * 3 + 1) * scaleY;
+                var kc = Val(kpOffset + k * 3 + 2);
+                keypoints[k] = new Keypoint(kx, ky, kc);
+            }
+
+            results.Add(new DetectionResult(
+                ClassId: 0,
+                Label: CocoLabels.GetLabel(0), // "person"
+                Confidence: conf,
+                Box: box,
+                Keypoints: keypoints));
+        }
+
+        // Apply NMS if needed
+        return _modelInfo.RequiresNms ? ApplyNms(results) : results;
+    }
+
     private static float Sigmoid(float x) => 1f / (1f + MathF.Exp(-x));
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
@@ -491,17 +599,12 @@ internal sealed class OnnxDetectorModel : IDetectorModel
 
     private async Task<string> ResolveModelPathAsync(CancellationToken cancellationToken)
     {
-        // Use centralized ModelPathResolver for consistent subfolder handling
+        // Use centralized ModelPathResolver for consistent subfolder handling.
+        // Variant suffix stripping (e.g., "owner/repo:variant") is handled by ModelPathResolver.
         using var resolver = new ModelPathResolver(_options.CacheDirectory);
 
-        // Strip variant suffix (e.g. "xnorpx/rt-detr2-onnx:s" → "xnorpx/rt-detr2-onnx")
-        // The variant is captured in OnnxFile; the repo ID is the part before ':'
-        var repoId = _modelInfo.Id.Contains(':')
-            ? _modelInfo.Id[.._modelInfo.Id.IndexOf(':')]
-            : _modelInfo.Id;
-
         var result = await resolver.ResolveModelAsync(
-            repoId,
+            _modelInfo.Id,
             expectedOnnxFile: _modelInfo.OnnxFile,
             cancellationToken: cancellationToken);
 
@@ -510,6 +613,8 @@ internal sealed class OnnxDetectorModel : IDetectorModel
 
     private void ConfigureSessionOptions(SessionOptions options)
     {
+        options.LogSeverityLevel = (OrtLoggingLevel)(int)_options.LogLevel;
+
         if (_options.ThreadCount.HasValue)
         {
             options.IntraOpNumThreads = _options.ThreadCount.Value;

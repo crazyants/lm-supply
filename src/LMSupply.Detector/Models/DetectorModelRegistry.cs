@@ -69,6 +69,7 @@ public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
             InputSize = selected.InputSize,
             NumClasses = selected.NumClasses,
             RequiresNms = selected.RequiresNms,
+            NumKeypoints = selected.NumKeypoints,
             OnnxFile = selected.OnnxFile,
             Description = selected.Description,
             License = selected.License
@@ -136,6 +137,7 @@ public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
         };
 
         var requiresNms = architecture is not ("RT-DETR" or "DETR");
+        var isPose = name.Contains("pose", StringComparison.OrdinalIgnoreCase);
 
         return new DetectorModelInfo
         {
@@ -147,8 +149,9 @@ public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
             SizeBytes = 0,
             MapCoco = 0,
             InputSize = 640,
-            NumClasses = 80,
+            NumClasses = isPose ? 1 : 80,
             RequiresNms = requiresNms,
+            NumKeypoints = isPose ? 17 : 0,
             OnnxFile = "model.onnx",
             Description = $"HuggingFace model: {modelId}",
             License = "Unknown"

@@ -324,6 +324,19 @@ public sealed class NativeLoader : IDisposable
     }
 
     /// <summary>
+    /// Checks if a library has been successfully loaded into memory.
+    /// Unlike IsRegistered, this confirms the native binary is actually usable.
+    /// </summary>
+    public bool IsLoaded(string libraryName)
+    {
+        lock (_lock)
+        {
+            var normalizedName = NormalizeLibraryName(libraryName);
+            return _loadedLibraries.ContainsKey(normalizedName);
+        }
+    }
+
+    /// <summary>
     /// Gets all registered library names.
     /// </summary>
     public IEnumerable<string> GetRegisteredLibraries()

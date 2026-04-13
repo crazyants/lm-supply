@@ -18,6 +18,18 @@ public readonly record struct ChatMessage(ChatRole Role, string Content)
     public string? ToolCallId { get; init; }
 
     /// <summary>
+    /// Multimodal content parts (text + images). When set, takes precedence over
+    /// <see cref="Content"/> for serialization to vision-capable endpoints.
+    /// Null for text-only messages (the common case).
+    /// </summary>
+    public IReadOnlyList<ContentPart>? ContentParts { get; init; }
+
+    /// <summary>
+    /// Whether this message contains image content.
+    /// </summary>
+    public bool IsMultimodal => ContentParts?.Any(p => p is ImageContentPart) == true;
+
+    /// <summary>
     /// Creates a system message.
     /// </summary>
     public static ChatMessage System(string content) => new(ChatRole.System, content);
@@ -26,6 +38,24 @@ public readonly record struct ChatMessage(ChatRole Role, string Content)
     /// Creates a user message.
     /// </summary>
     public static ChatMessage User(string content) => new(ChatRole.User, content);
+
+    /// <summary>
+    /// Creates a user message with an image.
+    /// </summary>
+    public static ChatMessage UserWithImage(string text, string imageUrl) =>
+        new(ChatRole.User, text)
+        {
+            ContentParts = [new TextContentPart(text), new ImageContentPart { Url = imageUrl }]
+        };
+
+    /// <summary>
+    /// Creates a user message with multiple content parts (text and images).
+    /// </summary>
+    public static ChatMessage UserWithContent(IReadOnlyList<ContentPart> parts) =>
+        new(ChatRole.User, ExtractTextContent(parts))
+        {
+            ContentParts = parts
+        };
 
     /// <summary>
     /// Creates an assistant message.
@@ -43,6 +73,13 @@ public readonly record struct ChatMessage(ChatRole Role, string Content)
     /// </summary>
     public static ChatMessage ToolResult(string toolCallId, string content)
         => new(ChatRole.Tool, content) { ToolCallId = toolCallId };
+
+    /// <summary>
+    /// Extracts concatenated text from content parts (joined by space).
+    /// Used as a fallback Content string for formatters that can't render images.
+    /// </summary>
+    private static string ExtractTextContent(IReadOnlyList<ContentPart> parts) =>
+        string.Join(" ", parts.OfType<TextContentPart>().Select(p => p.Text));
 }
 
 /// <summary>

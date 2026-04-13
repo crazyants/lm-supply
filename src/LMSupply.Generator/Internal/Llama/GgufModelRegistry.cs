@@ -12,82 +12,98 @@ public static class GgufModelRegistry
     private static readonly Dictionary<string, GgufModelInfo> _models = new(StringComparer.OrdinalIgnoreCase)
     {
         // ============================================================
-        // Tool-Calling First: llama.cpp 네이티브 핸들러 안정성 기준
-        // Option A (안정성 최우선) — Hermes/Mistral/Llama 핸들러
+        // Gemma 4 중심 레지스트리 (Apache 2.0, 멀티모달, 네이티브 function calling)
+        // llama.cpp b8672+ 에서 Gemma 4 네이티브 지원 (GGUF 메타데이터 자동 감지)
         // ============================================================
 
-        // Fast: Smallest tool-calling capable model (Mistral Nemo handler)
+        // Fast: Gemma 4 E2B — smallest Gemma 4, fits 4GB iGPU/mobile (~4GB VRAM)
         ["gguf:fast"] = new GgufModelInfo
         {
-            RepoId = "mistralai/Ministral-3-3B-Instruct-2512-GGUF",
-            DisplayName = "Ministral 3 3B Instruct",
-            DefaultFile = "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
-            ChatFormat = "mistral-nemo",
-            ContextLength = 32768,
-            ParameterCount = 3_000_000_000,
-            EstimatedSizeBytes = 2_000_000_000L,
+            RepoId = "unsloth/gemma-4-E2B-it-GGUF",
+            DisplayName = "Gemma 4 E2B Instruct",
+            DefaultFile = "gemma-4-E2B-it-Q4_K_M.gguf",
+            ChatFormat = "gemma4",
+            ContextLength = 131072,
+            ParameterCount = 2_300_000_000,
+            EstimatedSizeBytes = 3_110_000_000L,
             QuantizationType = "Q4_K_M",
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
 
-        // Default: Most stable tool-calling model (Hermes native handler)
+        // Default: Gemma 4 E4B — best balance of size, speed, and quality
         ["gguf:default"] = new GgufModelInfo
         {
-            RepoId = "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
-            DisplayName = "Hermes 3 Llama 3.1 8B",
-            DefaultFile = "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf",
-            ChatFormat = "chatml",
-            ContextLength = 8192,
-            ParameterCount = 8_000_000_000,
-            EstimatedSizeBytes = 4_920_000_000L,
+            RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
+            DisplayName = "Gemma 4 E4B Instruct",
+            DefaultFile = "gemma-4-e4b-it-Q4_K_M.gguf",
+            ChatFormat = "gemma4",
+            ContextLength = 131072,
+            ParameterCount = 4_500_000_000,
+            EstimatedSizeBytes = 5_335_285_440L,
             QuantizationType = "Q4_K_M",
-            License = LicenseTier.Conditional,
-            LicenseName = "Llama 3.1 Community License",
-            LicenseRestrictions = "700M MAU limit for commercial use"
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
         },
 
-        // Quality: Mistral Nemo native handler, Apache 2.0
+        // Balanced: Gemma 4 E4B Q8_0 — higher quality E4B for 10-12GB VRAM (RTX 3060 12GB, etc.)
+        // Fills the gap between default (5.3GB) and quality (16.8GB)
+        ["gguf:balanced"] = new GgufModelInfo
+        {
+            RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
+            DisplayName = "Gemma 4 E4B Instruct (Q8_0)",
+            DefaultFile = "gemma-4-e4b-it-Q8_0.gguf",
+            ChatFormat = "gemma4",
+            ContextLength = 131072,
+            ParameterCount = 4_500_000_000,
+            EstimatedSizeBytes = 7_500_000_000L,
+            QuantizationType = "Q8_0",
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+        },
+
+        // Quality: Gemma 4 26B MoE — 31B-class performance with 4B active params
         ["gguf:quality"] = new GgufModelInfo
         {
-            RepoId = "bartowski/Mistral-Nemo-Instruct-2407-GGUF",
-            DisplayName = "Mistral Nemo 12B Instruct",
-            DefaultFile = "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
-            ChatFormat = "mistral-nemo",
-            ContextLength = 32768,
-            ParameterCount = 12_000_000_000,
-            EstimatedSizeBytes = 7_000_000_000L,
+            RepoId = "ggml-org/gemma-4-26B-A4B-it-GGUF",
+            DisplayName = "Gemma 4 26B A4B Instruct (MoE)",
+            DefaultFile = "gemma-4-26B-A4B-it-Q4_K_M.gguf",
+            ChatFormat = "gemma4",
+            ContextLength = 262144,
+            ParameterCount = 26_000_000_000,
+            EstimatedSizeBytes = 16_796_010_720L,
             QuantizationType = "Q4_K_M",
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
 
-        // Large: High quality dense model
+        // Large: Gemma 4 31B Dense — maximum quality single-GPU model
         ["gguf:large"] = new GgufModelInfo
         {
-            RepoId = "unsloth/Qwen3-32B-GGUF",
-            DisplayName = "Qwen 3 32B",
-            DefaultFile = "Qwen3-32B-Q4_K_M.gguf",
-            ChatFormat = "chatml",
-            ContextLength = 32768,
-            ParameterCount = 32_000_000_000,
-            EstimatedSizeBytes = 19_000_000_000L,
+            RepoId = "ggml-org/gemma-4-31B-it-GGUF",
+            DisplayName = "Gemma 4 31B Instruct",
+            DefaultFile = "gemma-4-31B-it-Q4_K_M.gguf",
+            ChatFormat = "gemma4",
+            ContextLength = 262144,
+            ParameterCount = 31_000_000_000,
+            EstimatedSizeBytes = 18_687_057_376L,
             QuantizationType = "Q4_K_M",
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
 
-        // XLarge: Server-grade MoE model
+        // XLarge: Server-grade MoE model (split GGUF — 3 shards in Q4_K_M/ subfolder)
         ["gguf:xlarge"] = new GgufModelInfo
         {
             RepoId = "unsloth/Qwen3.5-122B-A10B-GGUF",
             DisplayName = "Qwen 3.5 122B A10B (MoE)",
-            DefaultFile = "Qwen3.5-122B-A10B-Q4_K_M.gguf",
+            DefaultFile = "Q4_K_M/Qwen3.5-122B-A10B-Q4_K_M-00001-of-00003.gguf",
             ChatFormat = "chatml",
             ContextLength = 32768,
             ParameterCount = 122_000_000_000,
-            EstimatedSizeBytes = 48_000_000_000L,
+            EstimatedSizeBytes = 76_536_573_608L,
             QuantizationType = "Q4_K_M",
+            ShardCount = 3,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },

@@ -98,7 +98,10 @@ public static class TokenizerFactory
         if (spmPath != null)
         {
             using var stream = File.OpenRead(spmPath);
-            tokenizer = LlamaTokenizer.Create(stream);
+            // SentencePieceTokenizer.Create accepts both BPE (LLaMA) and Unigram
+            // (XLM-Roberta / multilingual-e5 / BGE-M3). LlamaTokenizer.Create only
+            // accepts BPE and throws "model type is not Bpe" on Unigram models.
+            tokenizer = SentencePieceTokenizer.Create(stream);
         }
         else
         {
@@ -172,6 +175,69 @@ public static class TokenizerFactory
     }
 
     /// <summary>
+    /// Creates a SentencePiece/Unigram sequence tokenizer (for encoders with non-WordPiece models).
+    /// Reuses <see cref="SentencePiecePairTokenizer"/> since <see cref="IPairTokenizer"/> implements
+    /// <see cref="ISequenceTokenizer"/> — embedder-only callers ignore the pair methods.
+    /// </summary>
+    /// <param name="modelDir">Path to model directory.</param>
+    /// <param name="maxSequenceLength">Maximum sequence length.</param>
+    /// <returns>A sequence tokenizer instance.</returns>
+    public static async Task<ISequenceTokenizer> CreateSentencePieceSequenceAsync(
+        string modelDir,
+        int maxSequenceLength = 512)
+    {
+        return await CreateSentencePiecePairAsync(modelDir, maxSequenceLength);
+    }
+
+    /// <summary>
+    /// Auto-detects tokenizer type and creates appropriate sequence tokenizer from model directory.
+    /// Supports WordPiece (vocab.txt or tokenizer.json with WordPiece type) and SentencePiece
+    /// (Unigram/BPE tokenizer.json, sentencepiece.bpe.model, *.spm).
+    /// </summary>
+    /// <param name="modelDir">Path to model directory.</param>
+    /// <param name="maxSequenceLength">Maximum sequence length.</param>
+    /// <returns>A sequence tokenizer instance.</returns>
+    public static async Task<ISequenceTokenizer> CreateAutoSequenceAsync(
+        string modelDir,
+        int maxSequenceLength = 512)
+    {
+        var vocabTxtPath = Path.Combine(modelDir, "vocab.txt");
+        var tokenizerJsonPath = Path.Combine(modelDir, "tokenizer.json");
+
+        // vocab.txt is a definitive WordPiece signal
+        if (File.Exists(vocabTxtPath))
+        {
+            return await CreateWordPieceAsync(modelDir, maxSequenceLength);
+        }
+
+        // Inspect tokenizer.json model.type when present
+        if (File.Exists(tokenizerJsonPath))
+        {
+            var tokenizerType = DetectTokenizerType(tokenizerJsonPath);
+
+            return tokenizerType switch
+            {
+                "WordPiece" => await CreateWordPieceAsync(modelDir, maxSequenceLength),
+                "Unigram" or "BPE" => await CreateSentencePieceSequenceAsync(modelDir, maxSequenceLength),
+                // Unknown type: prefer SentencePiece if a model file is present, otherwise WordPiece
+                _ => FindSentencePieceModel(modelDir) != null
+                    ? await CreateSentencePieceSequenceAsync(modelDir, maxSequenceLength)
+                    : await CreateWordPieceAsync(modelDir, maxSequenceLength)
+            };
+        }
+
+        // No tokenizer.json: fall back to SentencePiece file probe
+        if (FindSentencePieceModel(modelDir) != null)
+        {
+            return await CreateSentencePieceSequenceAsync(modelDir, maxSequenceLength);
+        }
+
+        throw new FileNotFoundException(
+            $"Could not determine tokenizer type from: {modelDir}. " +
+            "Expected vocab.txt, tokenizer.json, sentencepiece.bpe.model, or *.spm.");
+    }
+
+    /// <summary>
     /// Creates a SentencePiece/Unigram pair tokenizer (for cross-encoders/rerankers with non-WordPiece models).
     /// </summary>
     /// <param name="modelDir">Path to model directory.</param>
@@ -190,7 +256,9 @@ public static class TokenizerFactory
         if (spmPath != null)
         {
             using var stream = File.OpenRead(spmPath);
-            tokenizer = LlamaTokenizer.Create(stream);
+            // SentencePieceTokenizer.Create accepts both BPE and Unigram model types,
+            // so it works for LLaMA-style as well as XLM-Roberta-style SPM files.
+            tokenizer = SentencePieceTokenizer.Create(stream);
             var vocab = LoadVocabularySync(modelDir);
             specialTokens = SpecialTokens.FromVocabulary(vocab);
         }
@@ -359,10 +427,10 @@ public static class TokenizerFactory
             ? typeElement.GetString()
             : null;
 
-        // For Unigram models, we need to create a different tokenizer
-        // Try using the BPE approach with vocab
-        var vocabJsonPath = Path.Combine(Path.GetDirectoryName(tokenizerJsonPath)!, "vocab.json");
-        var mergesPath = Path.Combine(Path.GetDirectoryName(tokenizerJsonPath)!, "merges.txt");
+        // BPE models with vocab.json + merges.txt can be loaded via CodeGen tokenizer.
+        var modelDir = Path.GetDirectoryName(tokenizerJsonPath)!;
+        var vocabJsonPath = Path.Combine(modelDir, "vocab.json");
+        var mergesPath = Path.Combine(modelDir, "merges.txt");
 
         if (File.Exists(vocabJsonPath) && File.Exists(mergesPath))
         {
@@ -371,17 +439,22 @@ public static class TokenizerFactory
             return CodeGenTokenizer.Create(vocabStream, mergesStream);
         }
 
-        // Fallback: Create a simple vocab-based tokenizer using WordPiece format
-        // This works for many Unigram models that have BERT-compatible special tokens
-        var vocabLines = new StringBuilder();
-        for (var i = 0; i < vocabDict.Count; i++)
-        {
-            vocabLines.AppendLine(vocabDict.TryGetValue(i, out var token) ? token : $"[unused{i}]");
-        }
-
-        var vocabBytes = Encoding.UTF8.GetBytes(vocabLines.ToString());
-        using var vocabStream2 = new MemoryStream(vocabBytes);
-        return WordPieceTokenizer.Create(vocabStream2);
+        // No viable construction path. Microsoft.ML.Tokenizers (2.0) cannot build a faithful
+        // Unigram tokenizer from tokenizer.json alone — Unigram requires the SentencePiece
+        // protobuf (`sentencepiece.bpe.model` / `*.spm`). The previous implementation papered
+        // over this by constructing a WordPiece tokenizer from the Unigram vocab list, which
+        // (a) crashed for XLM-Roberta-style models because their `<unk>` token does not match
+        // the WordPiece default `[UNK]`, and (b) would have produced semantically wrong
+        // tokenizations even if the validation were silenced (greedy-longest-match vs.
+        // probabilistic Unigram).
+        var typeLabel = string.IsNullOrEmpty(tokenizerType) ? "non-WordPiece" : tokenizerType;
+        throw new InvalidOperationException(
+            $"Cannot construct a {typeLabel} tokenizer from tokenizer.json alone. " +
+            $"This model requires a SentencePiece protobuf file ('sentencepiece.bpe.model' or '*.spm') " +
+            $"to be present in the same directory. Searched: '{modelDir}'. " +
+            "If this is a SentencePiece-based model (e.g. XLM-Roberta, multilingual-e5, BGE-M3), " +
+            "delete the cached model directory and re-download so the SentencePiece model file is " +
+            "fetched alongside tokenizer.json.");
     }
 
     private static WordPieceTokenizer CreateWordPieceFromJson(string tokenizerJsonPath)
@@ -506,13 +579,16 @@ public static class TokenizerFactory
         try
         {
             using var stream = File.OpenRead(path);
-            // Try to create a tokenizer - if it works, it's valid
-            _ = LlamaTokenizer.Create(stream);
+            // SentencePieceTokenizer.Create accepts both BPE and Unigram models;
+            // LlamaTokenizer.Create only accepts BPE and rejects Unigram models like
+            // XLM-Roberta / multilingual-e5 with "model type is not Bpe", which would
+            // make this validator falsely report SPM files as invalid.
+            _ = SentencePieceTokenizer.Create(stream);
             return true;
         }
         catch (Exception ex)
         {
-            Trace.TraceInformation($"[TokenizerFactory] LlamaTokenizer validation failed: {ex.Message}");
+            Trace.TraceInformation($"[TokenizerFactory] SentencePieceTokenizer validation failed: {ex.Message}");
             return false;
         }
     }

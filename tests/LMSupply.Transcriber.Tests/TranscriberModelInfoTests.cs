@@ -104,4 +104,31 @@ public class TranscriberModelInfoTests
         original.NumMelBins.Should().Be(80, "original instance should not be modified");
         original.HiddenSize.Should().Be(512, "original instance should not be modified");
     }
+
+    [Fact]
+    public void IsTranslateSupported_MultilingualModel_ShouldBeTrue()
+    {
+        DefaultModels.WhisperBase.IsMultilingual.Should().BeTrue();
+        DefaultModels.WhisperBase.IsTranslateSupported.Should().BeTrue();
+        DefaultModels.WhisperLargeV3Turbo.IsTranslateSupported.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsTranslateSupported_EnglishOnlyModel_ShouldBeFalse()
+    {
+        DefaultModels.WhisperBaseEn.IsMultilingual.Should().BeFalse();
+        DefaultModels.WhisperBaseEn.IsTranslateSupported.Should().BeFalse();
+        DefaultModels.DistilWhisperLargeV3.IsTranslateSupported.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsTranslateSupported_ShouldTrackIsMultilingual()
+    {
+        foreach (var model in DefaultModels.All)
+        {
+            model.IsTranslateSupported.Should().Be(
+                model.IsMultilingual,
+                $"{model.Id} translate capability should mirror IsMultilingual");
+        }
+    }
 }

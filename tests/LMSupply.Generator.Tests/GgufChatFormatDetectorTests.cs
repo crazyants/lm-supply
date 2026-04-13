@@ -35,6 +35,17 @@ public class GgufChatFormatDetectorTests
     }
 
     [Theory]
+    [InlineData("gemma-4-E4B-it-Q4_K_M.gguf", "gemma4")]
+    [InlineData("gemma-4-E2B-it-Q4_K_M.gguf", "gemma4")]
+    [InlineData("gemma-4-26B-A4B-it-Q4_K_M.gguf", "gemma4")]
+    [InlineData("gemma-4-31B-it-Q4_K_M.gguf", "gemma4")]
+    public void DetectFromFilename_Gemma4Models_ReturnsGemma4(string filename, string expected)
+    {
+        var result = GgufChatFormatDetector.DetectFromFilename(filename);
+        result.Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("EXAONE-3.5-7.8B-Instruct-Q4_K_M.gguf", "exaone")]
     [InlineData("exaone-3-7b-instruct.Q4_K_M.gguf", "exaone")]
     public void DetectFromFilename_ExaoneModels_ReturnsExaone(string filename, string expected)
@@ -93,6 +104,7 @@ public class GgufChatFormatDetectorTests
     [InlineData("llama3", true)]
     [InlineData("chatml", true)]
     [InlineData("gemma", true)]
+    [InlineData("gemma4", true)]
     [InlineData("exaone", true)]
     [InlineData("deepseek", true)]
     [InlineData("mistral", true)]

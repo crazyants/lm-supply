@@ -184,7 +184,7 @@ internal sealed class OnnxImageGeneratorModel : IImageGeneratorModel
     {
         var sessionOptions = new SessionOptions
         {
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING
+            LogSeverityLevel = (OrtLoggingLevel)(int)options.LogLevel
         };
 
         if (options.ThreadCount.HasValue)

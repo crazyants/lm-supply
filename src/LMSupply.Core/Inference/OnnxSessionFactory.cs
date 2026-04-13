@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using LMSupply.Download;
+using LMSupply.Exceptions;
 using LMSupply.Runtime;
 using Microsoft.ML.OnnxRuntime;
 
@@ -149,6 +151,10 @@ public static class OnnxSessionFactory
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken)
     {
+        // Pre-check: verify ONNX Runtime native library is loadable before entering fallback loop.
+        // Without this, missing VC++ Redistributable causes fatal 0xC0000005 in NativeMethods..cctor().
+        EnsureOnnxRuntimeAvailable(modelPath);
+
         var fallbackChain = RuntimeManager.Instance.Gpu?.GetFallbackProviders()
             ?? new[] { ExecutionProvider.Cpu };
 
@@ -366,6 +372,66 @@ public static class OnnxSessionFactory
     }
 
     /// <summary>
+    /// Checks if the ONNX Runtime native library can be loaded.
+    /// This catches missing VC++ Redistributable (Windows) or missing shared libraries (Linux)
+    /// BEFORE SessionOptions construction, which would otherwise cause a fatal process crash (0xC0000005).
+    /// </summary>
+    /// <returns>Tuple of (isAvailable, errorMessage). errorMessage is null when available.</returns>
+    public static (bool Available, string? ErrorMessage) CheckOnnxRuntimeAvailability()
+    {
+        // Fast path: NativeLoader already has it loaded
+        if (NativeLoader.Instance.IsLoaded("onnxruntime"))
+            return (true, null);
+
+        // Try to load via NativeLoader (checks registered paths)
+        if (NativeLoader.Instance.TryLoad("onnxruntime", out _))
+            return (true, null);
+
+        // Last resort: try direct load
+        try
+        {
+            var libName = OperatingSystem.IsWindows() ? "onnxruntime"
+                : OperatingSystem.IsLinux() ? "libonnxruntime.so"
+                : OperatingSystem.IsMacOS() ? "libonnxruntime.dylib"
+                : "onnxruntime";
+
+            if (NativeLibrary.TryLoad(libName, out var handle))
+            {
+                NativeLibrary.Free(handle);
+                return (true, null);
+            }
+        }
+        catch
+        {
+            // Swallow - fall through to error message
+        }
+
+        var message = OperatingSystem.IsWindows()
+            ? "ONNX Runtime native library failed to load. This usually means Visual C++ Redistributable 2015-2022 is not installed. "
+              + "Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe"
+            : OperatingSystem.IsLinux()
+                ? "ONNX Runtime native library failed to load. Ensure required shared libraries are installed (libstdc++, libgomp)."
+                : "ONNX Runtime native library failed to load. Ensure required system libraries are installed.";
+
+        return (false, message);
+    }
+
+    /// <summary>
+    /// Throws ModelLoadException if ONNX Runtime native library is not available.
+    /// </summary>
+    private static void EnsureOnnxRuntimeAvailable(string? modelPath = null)
+    {
+        var (available, errorMessage) = CheckOnnxRuntimeAvailability();
+        if (!available)
+        {
+            Trace.TraceError($"[OnnxSessionFactory] {errorMessage}");
+            throw new ModelLoadException(
+                errorMessage ?? "ONNX Runtime native library is not available.",
+                modelPath);
+        }
+    }
+
+    /// <summary>
     /// Parses ONNX Runtime error messages to extract missing library names.
     /// Example: '...depends on "cublasLt64_12.dll" which is missing...'
     /// </summary>
@@ -422,9 +488,17 @@ public static class OnnxSessionFactory
         ExecutionProvider provider = ExecutionProvider.Auto,
         Action<SessionOptions>? configureOptions = null)
     {
+        // Pre-check: prevent fatal crash from NativeMethods..cctor() on missing native dependencies
+        EnsureOnnxRuntimeAvailable(modelPath);
+
         var options = new SessionOptions();
 
-        // Apply user configuration first
+        // Default to Error level to suppress expected ORT warnings
+        // (e.g., "Some nodes were not assigned to the preferred execution providers").
+        // Callers can override via configureOptions callback.
+        options.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
+
+        // Apply user configuration (may override log level)
         configureOptions?.Invoke(options);
 
         // Configure execution provider
@@ -531,6 +605,14 @@ public static class OnnxSessionFactory
     /// </summary>
     public static IEnumerable<ExecutionProvider> GetAvailableProviders()
     {
+        // Pre-check: if ONNX Runtime native library is not available, return CPU only
+        var (available, _) = CheckOnnxRuntimeAvailability();
+        if (!available)
+        {
+            yield return ExecutionProvider.Cpu;
+            yield break;
+        }
+
         // CPU is always available
         yield return ExecutionProvider.Cpu;
 

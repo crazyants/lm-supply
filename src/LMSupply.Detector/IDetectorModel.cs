@@ -64,13 +64,34 @@ public interface IDetectorModel : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Detects objects in multiple images.
+    /// Detects objects in multiple images from file paths.
     /// </summary>
     /// <param name="imagePaths">Paths to image files.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Detection results for each image.</returns>
     Task<IReadOnlyList<IReadOnlyList<DetectionResult>>> DetectBatchAsync(
         IEnumerable<string> imagePaths,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Detects objects in multiple images from byte arrays.
+    /// Useful for in-memory image processing (e.g., video frames).
+    /// </summary>
+    /// <param name="imageDataList">Collection of byte arrays containing image data.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Detection results for each image.</returns>
+    Task<IReadOnlyList<IReadOnlyList<DetectionResult>>> DetectBatchAsync(
+        IEnumerable<byte[]> imageDataList,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Detects objects in multiple images from streams.
+    /// </summary>
+    /// <param name="imageStreams">Collection of streams containing image data.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Detection results for each image.</returns>
+    Task<IReadOnlyList<IReadOnlyList<DetectionResult>>> DetectBatchAsync(
+        IEnumerable<Stream> imageStreams,
         CancellationToken cancellationToken = default);
 
     /// <summary>

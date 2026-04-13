@@ -47,7 +47,10 @@ internal sealed class CrnnRecognizer : IDisposable
         RecognitionModelInfo modelInfo,
         OcrOptions options)
     {
-        var session = await OnnxSessionFactory.CreateAsync(modelPath, options.Provider)
+        var session = await OnnxSessionFactory.CreateAsync(
+                modelPath,
+                options.Provider,
+                so => so.LogSeverityLevel = (OrtLoggingLevel)(int)options.LogLevel)
             .ConfigureAwait(false);
 
         var dictionary = new CharacterDictionary(dictPath, modelInfo.UseSpace);

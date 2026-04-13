@@ -80,6 +80,14 @@ public sealed record GgufModelInfo : IModelInfoBase, IModelMemoryInfo
     /// </summary>
     public string? QuantizationType { get; init; }
 
+    /// <summary>
+    /// Number of split shards for this model.
+    /// Null or 1 = single file. Greater than 1 = split GGUF.
+    /// When set, DefaultFile should point to the first shard (-00001-of-NNNNN).
+    /// llama-server will auto-load remaining shards from the same directory.
+    /// </summary>
+    public int? ShardCount { get; init; }
+
     // IModelMemoryInfo explicit implementation
     long? IModelMemoryInfo.EstimatedSizeBytes => EstimatedSizeBytes;
     long IModelMemoryInfo.ParameterCount => ParameterCount;

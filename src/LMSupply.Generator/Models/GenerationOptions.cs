@@ -7,6 +7,7 @@ public sealed class GenerationOptions
 {
     /// <summary>
     /// Gets or sets the maximum number of tokens to generate.
+    /// Enforced both server-side (llama-server) and client-side as a safety net.
     /// Defaults to 512.
     /// </summary>
     public int MaxTokens { get; set; } = 512;
@@ -33,10 +34,17 @@ public sealed class GenerationOptions
     public int TopK { get; set; } = 50;
 
     /// <summary>
-    /// Gets or sets the repetition penalty.
-    /// Values greater than 1.0 discourage repetition.
+    /// Gets or sets the repetition penalty applied to tokens that have already appeared.
+    /// Values greater than 1.0 discourage repetition; 1.0 disables the penalty entirely.
+    /// Typical range: 1.0 to 1.3. Values above 1.5 may degrade output quality.
     /// Defaults to 1.1.
     /// </summary>
+    /// <remarks>
+    /// This is the primary defense against repetition loops. If the model produces
+    /// repetitive text, increase this value (e.g., 1.2–1.3). For creative writing
+    /// or deterministic tasks, adjust accordingly via <see cref="Creative"/> or <see cref="Precise"/> presets.
+    /// Sent to llama-server as <c>repeat_penalty</c>.
+    /// </remarks>
     public float RepetitionPenalty { get; set; } = 1.1f;
 
     /// <summary>
@@ -61,17 +69,17 @@ public sealed class GenerationOptions
     public int Seed { get; set; } = -1;
 
     /// <summary>
-    /// Gets or sets the frequency penalty.
-    /// Penalizes tokens based on how often they appear in the text so far.
-    /// Higher values reduce repetition of frequent tokens.
+    /// Gets or sets the frequency penalty (OpenAI-style).
+    /// Penalizes tokens proportionally to how often they appear in the text so far.
+    /// Complements <see cref="RepetitionPenalty"/> for fine-grained repetition control.
     /// Range: 0.0 to 2.0. Defaults to 0.0 (disabled).
     /// </summary>
     public float FrequencyPenalty { get; set; }
 
     /// <summary>
-    /// Gets or sets the presence penalty.
-    /// Penalizes tokens that have appeared at all in the text so far.
-    /// Higher values encourage the model to discuss new topics.
+    /// Gets or sets the presence penalty (OpenAI-style).
+    /// Applies a flat penalty to any token that has appeared at least once.
+    /// Encourages the model to introduce new topics rather than revisiting earlier ones.
     /// Range: 0.0 to 2.0. Defaults to 0.0 (disabled).
     /// </summary>
     public float PresencePenalty { get; set; }

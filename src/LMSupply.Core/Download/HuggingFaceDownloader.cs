@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using LMSupply.Core.Download;
@@ -172,12 +173,22 @@ public sealed class HuggingFaceDownloader : IDisposable
                     repoId, file, localPath, revision, subfolder,
                     wrappedProgress, cancellationToken);
 
-                if (!downloaded && IsCriticalFile(file))
+                if (!downloaded)
                 {
                     var location = string.IsNullOrEmpty(subfolder) ? "root" : $"'{subfolder}/' and root";
-                    throw new ModelDownloadException(
-                        $"Required file '{file}' not found in repository '{repoId}' (searched in {location}).",
-                        repoId);
+                    if (IsCriticalFile(file))
+                    {
+                        throw new ModelDownloadException(
+                            $"Required file '{file}' not found in repository '{repoId}' (searched in {location}).",
+                            repoId);
+                    }
+
+                    // Non-critical (e.g. tokenizer asset) — log a Trace warning so partial-cache
+                    // problems can be diagnosed even when downstream tokenizer construction fails
+                    // with a confusing error far away from the actual missing file.
+                    Trace.TraceWarning(
+                        $"[HuggingFaceDownloader] Optional file '{file}' not found for '{repoId}' " +
+                        $"(searched in {location}). Downstream tokenizer/feature extraction may fail.");
                 }
             }
         }
@@ -353,9 +364,12 @@ public sealed class HuggingFaceDownloader : IDisposable
                 statusCode: response.StatusCode);
         }
 
-        // Check if this is an LFS pointer (small file for large model)
+        // Check if this is an LFS pointer (small file masquerading as a large binary asset).
+        // Applies to ONNX model files AND SentencePiece protobufs (.spm / .bpe.model / .model),
+        // both of which are stored in LFS on HuggingFace and would render the model unusable
+        // if the resolve endpoint returns a pointer instead of the actual binary.
         var contentLength = response.Content.Headers.ContentLength ?? 0;
-        if (contentLength < 1024 && filename.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase))
+        if (contentLength < 1024 && IsLfsBinaryAsset(filename))
         {
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             if (content.StartsWith("version https://git-lfs.github.com/spec/v1", StringComparison.Ordinal))
@@ -459,6 +473,20 @@ public sealed class HuggingFaceDownloader : IDisposable
     {
         // ONNX model files are critical
         return filename.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns true for files that are stored as Git LFS binary assets on HuggingFace and
+    /// must therefore be guarded against pointer-file responses (small text content).
+    /// </summary>
+    private static bool IsLfsBinaryAsset(string filename)
+    {
+        return filename.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
+               filename.EndsWith(".onnx_data", StringComparison.OrdinalIgnoreCase) ||
+               filename.EndsWith(".spm", StringComparison.OrdinalIgnoreCase) ||
+               filename.EndsWith(".bpe.model", StringComparison.OrdinalIgnoreCase) ||
+               filename.Equals("sentencepiece.bpe.model", StringComparison.OrdinalIgnoreCase) ||
+               filename.Equals("tokenizer.model", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

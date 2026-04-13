@@ -75,9 +75,10 @@ public sealed class RuntimeUpdateService : IAsyncDisposable
         {
             if (Directory.Exists(state.UpdateReadyPath))
             {
+                var readyPath = state.UpdateReadyPath;
                 Trace.TraceInformation($"[RuntimeUpdateService] Applying ready update: {state.LatestKnownVersion}");
                 await _stateManager.ActivateUpdateAsync(packageKey, _options.MaxVersionsToKeep, ct);
-                return state.UpdateReadyPath;
+                return readyPath;
             }
 
             // Update path no longer exists, clear the ready flag

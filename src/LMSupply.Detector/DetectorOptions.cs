@@ -51,6 +51,14 @@ public sealed class DetectorOptions : LMSupplyOptionsBase
     public IReadOnlySet<int>? ClassFilter { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of keypoints for pose estimation models.
+    /// When set, overrides the model registry value.
+    /// Set to 17 for COCO skeleton (e.g., YOLOv8-pose).
+    /// <para>Default: null (use model registry value)</para>
+    /// </summary>
+    public int? NumKeypoints { get; set; }
+
+    /// <summary>
     /// Creates a copy of these options.
     /// </summary>
     public DetectorOptions Clone() => new()
@@ -64,6 +72,7 @@ public sealed class DetectorOptions : LMSupplyOptionsBase
         DisableAutoDownload = DisableAutoDownload,
         ThreadCount = ThreadCount,
         ClassFilter = ClassFilter is not null ? new HashSet<int>(ClassFilter) : null,
-        QuantizationHint = QuantizationHint
+        QuantizationHint = QuantizationHint,
+        NumKeypoints = NumKeypoints
     };
 }

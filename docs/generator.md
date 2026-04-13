@@ -289,25 +289,32 @@ await foreach (var token in model.GenerateAsync("Hello, my name is"))
 
 ### GGUF Model Aliases
 
-| Alias | Model | Parameters | Use Case |
-|-------|-------|------------|----------|
-| `gguf:auto` | Hardware-optimized | varies | Auto-select by hardware |
-| `gguf:fast` | Ministral 3 3B | 3B | Quick responses, tool calling |
-| `gguf:default` | Hermes 3 Llama 3.1 8B | 8B | Balanced, stable tool calling |
-| `gguf:quality` | Mistral Nemo 12B | 12B | Higher quality, tool calling |
-| `gguf:large` | Qwen 3 32B | 32B | Best quality |
-| `gguf:xlarge` | Qwen 3.5 122B MoE | 122B (10B active) | Server-grade |
+The default GGUF registry centers on **Gemma 4** (Apache 2.0, multimodal-capable, native function calling). Loading any Gemma 4 alias requires **llama.cpp b8672+** — the minimum version is automatically validated at load time.
+
+| Alias | Model | Parameters | Quant | Size | Use Case |
+|-------|-------|------------|-------|------|----------|
+| `gguf:auto` | Hardware-optimized | varies | varies | varies | Auto-select by VRAM |
+| `gguf:fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | <4GB iGPU/mobile |
+| `gguf:default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | 4-8GB VRAM |
+| `gguf:balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | 8-16GB VRAM (higher quality E4B) |
+| `gguf:quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | 16-20GB VRAM |
+| `gguf:large` | Gemma 4 31B Instruct | 31B (Dense) | Q4_K_M | ~18.7 GB | 20-48GB VRAM |
+| `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | 48GB+ server |
+
+> **Split GGUF support**: `gguf:xlarge` is distributed as 3 shards (`-00001-of-00003`, etc.) in a `Q4_K_M/` subfolder. The downloader automatically fetches all shards; llama-server auto-loads the remaining parts when given the first shard path.
 
 #### Hardware-Optimized Selection (`gguf:auto`)
 
-Use `gguf:auto` for automatic model selection based on your hardware:
+`gguf:auto` selects the largest model that fits in available VRAM (after a 15% safety margin):
 
-| Performance Tier | Hardware | Selected Model |
-|------------------|----------|----------------|
-| **Low** | CPU only or GPU <4GB | Ministral 3 3B |
-| **Medium** | GPU 4-8GB | Hermes 3 8B |
-| **High** | GPU 8-16GB | Mistral Nemo 12B |
-| **Ultra** | GPU 16GB+ | Qwen 3 32B |
+| Available VRAM | Selected Model |
+|----------------|----------------|
+| <4GB or CPU | Gemma 4 E2B (Q4_K_M, 3.1 GB) |
+| 4-8GB | Gemma 4 E4B (Q4_K_M, 5.3 GB) |
+| 8-16GB | **Gemma 4 E4B (Q8_0, 7.5 GB)** ← `gguf:balanced` |
+| 16-20GB | Gemma 4 26B MoE (Q4_K_M, 16.8 GB) |
+| 20-48GB | Gemma 4 31B Dense (Q4_K_M, 18.7 GB) |
+| 48GB+ | Qwen 3.5 122B MoE (76.5 GB) |
 
 ```csharp
 // Let LMSupply choose the optimal model for your hardware
@@ -539,6 +546,33 @@ await foreach (var token in model.GenerateChatAsync(messages))
 }
 ```
 
+### Multimodal Content (Vision Models)
+
+`ChatMessage` supports multimodal content via `ContentPart` for vision-capable models like Gemma 4 multimodal:
+
+```csharp
+using LMSupply.Generator.Models;
+
+// Convenience: text + single image
+var msg = ChatMessage.UserWithImage(
+    "What is in this image?",
+    "data:image/jpeg;base64,/9j/4AAQSkZJRg...");
+
+// Generic: arbitrary content parts
+var multiPart = ChatMessage.UserWithContent(new ContentPart[]
+{
+    new TextContentPart("Compare these two images:"),
+    new ImageContentPart { Url = "https://example.com/a.jpg" },
+    new ImageContentPart { Url = "https://example.com/b.jpg" },
+    new TextContentPart("Which has more cats?")
+});
+
+// IsMultimodal flag for inspection
+if (msg.IsMultimodal) { /* contains at least one image */ }
+```
+
+**Backward compatibility**: `ChatMessage.User("hi")` works unchanged. `ContentParts` is null for text-only messages, and the `Content` field always holds a text fallback so non-vision formatters keep working.
+
 ### Tool Calling with GGUF
 
 GGUF models support native tool calling via the `--jinja` flag (enabled by default). Models with llama.cpp native handlers (Hermes, Mistral Nemo) provide the most stable experience.
@@ -601,17 +635,20 @@ Supported reasoning tag formats:
 
 The library auto-detects chat format from model filenames:
 
-| Format | Models |
-|--------|--------|
-| Llama 3 | Llama-3, Llama-3.1, Llama-3.2, CodeLlama |
-| ChatML | Qwen, Yi, InternLM, OpenChat |
-| Gemma | Gemma, Gemma-2 |
-| Phi-3 | Phi-3, Phi-3.5, Phi-4 |
-| Mistral | Mistral, Mixtral |
-| EXAONE | EXAONE |
-| DeepSeek | DeepSeek, DeepSeek-R1 |
-| Vicuna | Vicuna |
-| Zephyr | Zephyr |
+| Format | Models | Notes |
+|--------|--------|-------|
+| Llama 3 | Llama-3, Llama-3.1, Llama-3.2, CodeLlama | |
+| ChatML | Qwen, Yi, InternLM, OpenChat | |
+| Gemma | Gemma, Gemma-2 | system → user mapping |
+| **Gemma 4** | Gemma 4 (E2B/E4B/26B/31B) | **Native system role** (`<start_of_turn>system`) |
+| Phi-3 | Phi-3, Phi-3.5, Phi-4 | |
+| Mistral | Mistral, Mixtral | |
+| EXAONE | EXAONE | |
+| DeepSeek | DeepSeek, DeepSeek-R1 | |
+| Vicuna | Vicuna | |
+| Zephyr | Zephyr | |
+
+The detector distinguishes Gemma 4 (e.g., `gemma-4-E4B-it-...gguf`) from earlier Gemma generations and routes them to `Gemma4ChatFormatter`, which preserves the system role natively instead of mapping it to user.
 
 ### Model Information
 

@@ -6,80 +6,65 @@ namespace LMSupply.Embedder.Utils;
 /// </summary>
 internal static class DefaultModels
 {
-    // ===== Alias models =====
+    // ===== Alias models (all multilingual) =====
 
     /// <summary>
-    /// Default: BGE Small English v1.5, 33M params, MTEB top performer.
+    /// Default: multilingual-e5-base, 278M params, 100+ languages, balanced quality/speed.
     /// </summary>
-    public static ModelInfo BgeSmallEnV15 { get; } = new()
+    public static ModelInfo MultilingualE5BaseAlias { get; } = new()
     {
-        RepoId = "BAAI/bge-small-en-v1.5",
+        RepoId = "intfloat/multilingual-e5-base",
         AliasName = "default",
-        Dimensions = 384,
+        Dimensions = 768,
         MaxSequenceLength = 512,
-        PoolingMode = PoolingMode.Cls,
-        DoLowerCase = true,
-        Description = "Default: BGE Small English v1.5, 33M params, MTEB top performer",
+        PoolingMode = PoolingMode.Mean,
+        DoLowerCase = false,
+        Description = "Default: multilingual-e5-base, 278M params, 100+ languages, balanced",
         Subfolder = "onnx"
     };
 
     /// <summary>
-    /// Fast: all-MiniLM-L6-v2, 22M params, ultra-lightweight.
+    /// Fast: multilingual-e5-small, 118M params, 100+ languages, lightweight.
     /// </summary>
-    public static ModelInfo AllMiniLML6V2 { get; } = new()
+    public static ModelInfo MultilingualE5SmallAlias { get; } = new()
     {
-        RepoId = "sentence-transformers/all-MiniLM-L6-v2",
+        RepoId = "intfloat/multilingual-e5-small",
         AliasName = "fast",
         Dimensions = 384,
-        MaxSequenceLength = 256,
-        PoolingMode = PoolingMode.Mean,
-        DoLowerCase = true,
-        Description = "Fast: all-MiniLM-L6-v2, 22M params, ultra-lightweight",
-        Subfolder = "onnx"
-    };
-
-    /// <summary>
-    /// Quality: GTE Base English v1.5, 109M params, 8K context, Apache 2.0.
-    /// </summary>
-    public static ModelInfo GteBaseEnV15 { get; } = new()
-    {
-        RepoId = "Alibaba-NLP/gte-base-en-v1.5",
-        AliasName = "quality",
-        Dimensions = 768,
-        MaxSequenceLength = 8192,
-        PoolingMode = PoolingMode.Cls,
-        DoLowerCase = false,
-        Description = "Quality: GTE Base English v1.5, 109M params, 8K context, Apache 2.0",
-        Subfolder = "onnx"
-    };
-
-    /// <summary>
-    /// Large: Nomic Embed v1.5, 137M params, 8K context, 2024 MTEB top.
-    /// </summary>
-    public static ModelInfo NomicEmbedTextV15 { get; } = new()
-    {
-        RepoId = "nomic-ai/nomic-embed-text-v1.5",
-        AliasName = "large",
-        Dimensions = 768,
-        MaxSequenceLength = 8192,
+        MaxSequenceLength = 512,
         PoolingMode = PoolingMode.Mean,
         DoLowerCase = false,
-        Description = "Large: Nomic Embed v1.5, 137M params, 8K context, 2024 MTEB top",
+        Description = "Fast: multilingual-e5-small, 118M params, 100+ languages, lightweight",
         Subfolder = "onnx"
     };
 
     /// <summary>
-    /// Multilingual: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual.
+    /// Quality: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual, dense+sparse.
     /// </summary>
-    public static ModelInfo BgeM3 { get; } = new()
+    public static ModelInfo BgeM3Alias { get; } = new()
     {
         RepoId = "BAAI/bge-m3",
-        AliasName = "multilingual",
+        AliasName = "quality",
         Dimensions = 1024,
         MaxSequenceLength = 8192,
         PoolingMode = PoolingMode.Cls,
         DoLowerCase = false,
-        Description = "Multilingual: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual",
+        Description = "Quality: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual",
+        Subfolder = "onnx"
+    };
+
+    /// <summary>
+    /// Large: multilingual-e5-large, 560M params, 100+ languages, highest dense quality.
+    /// </summary>
+    public static ModelInfo MultilingualE5LargeAlias { get; } = new()
+    {
+        RepoId = "intfloat/multilingual-e5-large",
+        AliasName = "large",
+        Dimensions = 1024,
+        MaxSequenceLength = 512,
+        PoolingMode = PoolingMode.Mean,
+        DoLowerCase = false,
+        Description = "Large: multilingual-e5-large, 560M params, 100+ languages, highest dense quality",
         Subfolder = "onnx"
     };
 
@@ -225,12 +210,11 @@ internal static class DefaultModels
     /// </summary>
     public static IReadOnlyList<ModelInfo> All { get; } =
     [
-        // Alias models (5 standard aliases)
-        BgeSmallEnV15,      // default
-        AllMiniLML6V2,      // fast
-        GteBaseEnV15,       // quality
-        NomicEmbedTextV15,  // large
-        BgeM3,              // multilingual
+        // Alias models (4 standard aliases, all multilingual)
+        MultilingualE5BaseAlias,    // default
+        MultilingualE5SmallAlias,   // fast
+        BgeM3Alias,                 // quality
+        MultilingualE5LargeAlias,   // large
 
         // Explicit models (by short name)
         AllMpnetBaseV2,

@@ -102,4 +102,44 @@ public class WhisperTokenizerStaticTests
     {
         _tokenizer.IsSpecialToken(_tokenizer.TimestampBeginToken).Should().BeTrue();
     }
+
+    // GetSotSequence tests — verifies translate/transcribe task token selection
+    // Regression: TranscribeOptions.Translate used to be silently ignored (see
+    // ISSUE-lm-supply-20260409-transcribe-translate-silent-failure.md).
+
+    [Fact]
+    public void GetSotSequence_Default_ShouldUseTranscribeToken()
+    {
+        var sot = _tokenizer.GetSotSequence();
+
+        sot.Should().Contain(_tokenizer.TranscribeToken);
+        sot.Should().NotContain(_tokenizer.TranslateToken);
+    }
+
+    [Fact]
+    public void GetSotSequence_TranslateTrue_ShouldUseTranslateToken()
+    {
+        var sot = _tokenizer.GetSotSequence(language: "ko", timestamps: false, translate: true);
+
+        sot.Should().Contain(_tokenizer.TranslateToken, "translate=true must wire through to the task token");
+        sot.Should().NotContain(_tokenizer.TranscribeToken);
+    }
+
+    [Fact]
+    public void GetSotSequence_TranslateFalse_ShouldUseTranscribeToken()
+    {
+        var sot = _tokenizer.GetSotSequence(language: "ko", timestamps: false, translate: false);
+
+        sot.Should().Contain(_tokenizer.TranscribeToken);
+        sot.Should().NotContain(_tokenizer.TranslateToken);
+    }
+
+    [Fact]
+    public void GetSotSequence_TranslateWithTimestamps_ShouldIncludeTranslateAndOmitNoTimestamps()
+    {
+        var sot = _tokenizer.GetSotSequence(language: "ja", timestamps: true, translate: true);
+
+        sot.Should().Contain(_tokenizer.TranslateToken);
+        sot.Should().NotContain(_tokenizer.NoTimestampsToken);
+    }
 }

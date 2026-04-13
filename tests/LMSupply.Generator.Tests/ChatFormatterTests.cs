@@ -211,8 +211,75 @@ public class ChatFormatterTests
         stops.Should().Contain("[INST]");
     }
 
+    [Fact]
+    public void Gemma4ChatFormatter_FormatPrompt_SupportsNativeSystemRole()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.System("You are a helpful assistant."),
+            ChatMessage.User("Hello!"),
+            ChatMessage.Assistant("Hi there!"),
+            ChatMessage.User("How are you?")
+        };
+
+        var result = formatter.FormatPrompt(messages);
+
+        // Gemma 4 supports native system role (unlike Gemma 2 which mapped system→user)
+        result.Should().Contain("<start_of_turn>system\nYou are a helpful assistant.<end_of_turn>");
+        result.Should().Contain("<start_of_turn>user\nHello!<end_of_turn>");
+        result.Should().Contain("<start_of_turn>model\nHi there!<end_of_turn>");
+        result.Should().EndWith("<start_of_turn>model\n");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_FormatName_IsGemma4()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        formatter.FormatName.Should().Be("gemma4");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_GetStopSequences_ReturnsExpected()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var stops = formatter.GetStopSequences();
+
+        stops.Should().Contain("<end_of_turn>");
+        stops.Should().Contain("<start_of_turn>");
+    }
+
+    [Fact]
+    public void GemmaChatFormatter_SystemRole_MapsToUser()
+    {
+        // Verify Gemma 2 formatter still maps system→user (backward compat)
+        var formatter = new GemmaChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.System("Be helpful."),
+            ChatMessage.User("Hello!")
+        };
+
+        var result = formatter.FormatPrompt(messages);
+
+        // Gemma 2: system is mapped to user
+        result.Should().Contain("<start_of_turn>user\nBe helpful.<end_of_turn>");
+        result.Should().NotContain("<start_of_turn>system");
+    }
+
+    [Theory]
+    [InlineData("gemma-4-E4B-it", "gemma4")]
+    [InlineData("gemma4-instruct", "gemma4")]
+    [InlineData("gemma-2b-instruct", "gemma")]
+    public void ChatFormatterFactory_Create_DistinguishesGemmaVersions(string modelName, string expectedFormat)
+    {
+        var formatter = ChatFormatterFactory.Create(modelName);
+        formatter.FormatName.Should().Be(expectedFormat);
+    }
+
     [Theory]
     [InlineData("gemma")]
+    [InlineData("gemma4")]
     [InlineData("exaone")]
     [InlineData("deepseek")]
     [InlineData("mistral")]

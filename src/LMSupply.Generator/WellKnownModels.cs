@@ -179,10 +179,13 @@ public static class WellKnownModels
 
     /// <summary>
     /// Gets MIT-licensed models only (no usage restrictions).
+    /// Uses concrete aliases so registry license lookup succeeds —
+    /// the platform-aware <see cref="Generator.Default"/> alias is excluded
+    /// because it resolves through the auto path and has no single license tier.
     /// </summary>
     public static IReadOnlyList<string> GetUnrestrictedModels() =>
     [
-        Generator.Default,
-        Generator.Quality
+        Generator.Fast,      // phi-4-mini alias (MIT)
+        Generator.Quality    // microsoft/phi-4-onnx (MIT)
     ];
 }

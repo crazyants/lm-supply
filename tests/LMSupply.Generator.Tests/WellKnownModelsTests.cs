@@ -51,13 +51,25 @@ public class WellKnownModelsTests
     }
 
     [Fact]
-    public void GetUnrestrictedModels_ContainsDefaultAndQuality()
+    public void GetUnrestrictedModels_ContainsFastAndQuality()
     {
         var models = WellKnownModels.GetUnrestrictedModels();
 
-        // Default = "default" (auto-routing alias) and Quality are both in the list.
-        models.Should().Contain(WellKnownModels.Generator.Default);
+        // Fast ("phi-4-mini" alias) and Quality are both MIT-licensed Phi-4 models.
+        // The platform-aware Default alias is intentionally excluded because it
+        // routes through auto selection and has no single license tier.
+        models.Should().Contain(WellKnownModels.Generator.Fast);
         models.Should().Contain(WellKnownModels.Generator.Quality);
+    }
+
+    [Fact]
+    public void GetUnrestrictedModels_AllEntriesAreMit()
+    {
+        foreach (var modelId in WellKnownModels.GetUnrestrictedModels())
+        {
+            WellKnownModels.HasRestrictions(modelId).Should().BeFalse(
+                $"GetUnrestrictedModels should only contain MIT-licensed entries but '{modelId}' was flagged as restricted");
+        }
     }
 
     [Fact]

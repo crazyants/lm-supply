@@ -43,7 +43,8 @@ public sealed class TextGeneratorBuilder
     }
 
     /// <summary>
-    /// Uses the default model (Phi-3.5-mini).
+    /// Uses the platform-aware default — hardware-aware auto selection.
+    /// Resolves to Gemma 4 GGUF on NVIDIA/CPU/macOS/Linux and Phi-4 Mini ONNX on Windows DirectML + non-NVIDIA.
     /// </summary>
     public TextGeneratorBuilder WithDefaultModel()
     {

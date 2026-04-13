@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LMSupply.Core.Download;
 using LMSupply.Download;
 using LMSupply.Generator.Abstractions;
@@ -214,40 +215,63 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
     private async Task<(string modelPath, string? configBasePath)> ResolveModelPathWithBaseAsync(
         string modelId, CancellationToken cancellationToken)
     {
-        // Get proper HuggingFace cache path (models--{org}--{name}/snapshots/{revision})
         var snapshotPath = GetModelCachePath(modelId);
+        var triedPaths = new List<string> { snapshotPath };
 
-        // Check if model exists directly in snapshot
+        // Branch (A): snapshot root
         if (IsValidModelDirectory(snapshotPath))
+        {
+            Trace.TraceInformation(
+                $"[OnnxGenerator] Path resolution: snapshot-root hit for {modelId} at {snapshotPath}");
             return (snapshotPath, null);
+        }
 
-        // Check registry subfolder directly — handles 2-level paths like cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4
+        // Branch (B): registry-driven subfolder
         GeneratorModelRegistry.Default.TryResolve(modelId, out var registryInfo);
         if (registryInfo?.Subfolder != null)
         {
             var registrySubfolderPath = Path.Combine(snapshotPath, registryInfo.Subfolder);
+            triedPaths.Add(registrySubfolderPath);
             if (IsValidModelDirectory(registrySubfolderPath))
+            {
+                Trace.TraceInformation(
+                    $"[OnnxGenerator] Path resolution: registry-subfolder hit for {modelId} — {registryInfo.Subfolder}");
                 return (registrySubfolderPath, snapshotPath);
+            }
+            Trace.TraceInformation(
+                $"[OnnxGenerator] Path resolution: registry-subfolder MISS for {modelId} — tried {registrySubfolderPath}");
+        }
+        else
+        {
+            Trace.TraceInformation(
+                $"[OnnxGenerator] Path resolution: no registry subfolder for {modelId} " +
+                $"(registryInfo={(registryInfo == null ? "null" : "no-subfolder")})");
         }
 
-        // Check for variant subdirectories within snapshot (cpu-int4, cuda-int4, etc.)
+        // Branch (C): variant subfolder search (1-level + 2-level)
         var foundPath = FindVariantSubfolder(snapshotPath);
         if (foundPath != null)
+        {
+            Trace.TraceInformation(
+                $"[OnnxGenerator] Path resolution: variant-search hit for {modelId} — {Path.GetRelativePath(snapshotPath, foundPath)}");
             return (foundPath, snapshotPath);
+        }
 
-        // Model not found - attempt download
+        // Model not found — attempt download and retry
+        Trace.TraceInformation($"[OnnxGenerator] Path resolution: no cached layout found, attempting download for {modelId}");
         await DownloadModelAsync(modelId, null, cancellationToken);
 
-        // After download, check again
         if (IsValidModelDirectory(snapshotPath))
             return (snapshotPath, null);
 
-        // Check variants again after download
         foundPath = FindVariantSubfolder(snapshotPath);
         if (foundPath != null)
             return (foundPath, snapshotPath);
 
-        throw new FileNotFoundException($"Model '{modelId}' not found at {snapshotPath}");
+        throw new FileNotFoundException(
+            $"Model '{modelId}' not found. Tried:\n  " +
+            string.Join("\n  ", triedPaths) +
+            "\nSearched variant subfolders (2 levels deep) — no directory containing 'genai_config.json' was found.");
     }
 
     /// <summary>
@@ -266,22 +290,52 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
             _ => new[] { "cpu", "gpu" }
         };
 
+        // Level 1: direct prefix match on an immediate subdirectory
         foreach (var pattern in variantPatterns)
         {
-            // Find subdirectories matching the pattern
             foreach (var subdir in Directory.GetDirectories(basePath))
             {
                 var dirName = Path.GetFileName(subdir);
-                if (dirName.StartsWith(pattern, StringComparison.OrdinalIgnoreCase) && IsValidModelDirectory(subdir))
+                if (dirName.StartsWith(pattern, StringComparison.OrdinalIgnoreCase)
+                    && IsValidModelDirectory(subdir))
                     return subdir;
             }
         }
 
-        // Fallback: check any subdirectory that's a valid model
+        // Level 2: nested variant layout (e.g., cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4)
+        // Walk into any level-1 directory whose name contains the provider pattern,
+        // then check each of its immediate children for a valid model directory.
+        foreach (var pattern in variantPatterns)
+        {
+            foreach (var subdir in Directory.GetDirectories(basePath))
+            {
+                var dirName = Path.GetFileName(subdir);
+                if (!dirName.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                foreach (var nested in Directory.GetDirectories(subdir))
+                {
+                    if (IsValidModelDirectory(nested))
+                        return nested;
+                }
+            }
+        }
+
+        // Fallback: any valid model at level 1
         foreach (var subdir in Directory.GetDirectories(basePath))
         {
             if (IsValidModelDirectory(subdir))
                 return subdir;
+        }
+
+        // Fallback: any valid model at level 2
+        foreach (var subdir in Directory.GetDirectories(basePath))
+        {
+            foreach (var nested in Directory.GetDirectories(subdir))
+            {
+                if (IsValidModelDirectory(nested))
+                    return nested;
+            }
         }
 
         return null;

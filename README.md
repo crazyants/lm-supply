@@ -154,7 +154,7 @@ await foreach (var token in model.GenerateChatAsync(messages))
 
 // ONNX models (for DirectML/NPU environments)
 var generator = await TextGeneratorBuilder.Create()
-    .WithDefaultModel()  // Phi-4 Mini
+    .WithDefaultModel()  // Platform-aware: Gemma 4 GGUF on NVIDIA/CPU/Mac/Linux, Phi-4 Mini ONNX on DirectML+non-NVIDIA
     .BuildAsync();
 
 string response = await generator.GenerateCompleteAsync("What is machine learning?");
@@ -260,16 +260,30 @@ GGUF reranker models are auto-detected by `-GGUF` or `_gguf` in repo name.
 | `BAAI/bge-reranker-v2-m3-GGUF` | 8K | Multilingual, long docs |
 | `jinaai/jina-reranker-v2-base-multilingual-GGUF` | 8K | Multilingual |
 
-### Generator (ONNX)
+### Generator
 
-| Alias | Model | Params | Context | License | Best For |
-|-------|-------|--------|---------|---------|----------|
-| `default` | Phi-4-mini-instruct | 3.8B | 16K | MIT | Balanced reasoning |
-| `fast` | Phi-4-mini-instruct | 3.8B | 16K | MIT | Same as default (smallest FC-capable) |
+**Platform-based defaults** (`default` and `auto` delegate to this matrix):
+
+| Platform | Selected backend | Selected model |
+|----------|------------------|----------------|
+| Windows + NVIDIA | GGUF (llama.cpp CUDA) | Gemma 4 via `gguf:auto` (VRAM-aware) |
+| Windows + AMD/Intel GPU | ONNX (DirectML) | Phi-4 Mini (MIT, FC-capable) |
+| Windows / Linux CPU-only | GGUF (llama.cpp CPU) | Gemma 4 via `gguf:auto` (VRAM-aware) |
+| Linux + any GPU | GGUF (llama.cpp; CUDA on NVIDIA, CPU/ROCm on AMD) | Gemma 4 via `gguf:auto` |
+| macOS (Apple Silicon) | GGUF (llama.cpp Metal) | Gemma 4 via `gguf:auto` |
+
+> `LoadAsync("default")` and `LoadAsync("auto")` both route through this matrix. For explicit selection, use `gguf:*` aliases, ONNX aliases, or a direct HuggingFace repo ID.
+
+**ONNX aliases** (recommended for Windows DirectML + non-NVIDIA):
+
+| Alias | Model | Params | Context | License | Notes |
+|-------|-------|--------|---------|---------|-------|
+| `phi-4-mini` | Phi-4-mini-instruct | 3.8B | 16K | MIT | Smallest FC-capable ONNX model |
+| `fast` | Phi-4-mini-instruct | 3.8B | 16K | MIT | Same as `phi-4-mini` |
 | `quality` | phi-4 | 14B | 16K | MIT | Best reasoning |
-| `medium` | Phi-3.5-mini-instruct | 3.8B | 128K | MIT | Long context (legacy) |
+| `phi-3.5-mini` | Phi-3.5-mini-instruct | 3.8B | 128K | MIT | Long context (legacy) |
 
-### Generator (GGUF via llama-server)
+**GGUF aliases** (via llama-server):
 
 Gemma 4 중심 레지스트리 (Apache 2.0, 멀티모달, 네이티브 function calling). llama.cpp **b8672+** 필요 — `gguf:fast`/`default`/`balanced`/`quality`/`large` 로딩 시 최소 버전이 자동 검증됩니다.
 
@@ -348,7 +362,7 @@ LMSupply detects your hardware and selects models accordingly:
 | **High** | GPU 8-16GB | Mistral Nemo 12B |
 | **Ultra** | GPU 16GB+ | Qwen 3 32B |
 
-> **Platform-based routing (v0.21.0+):** `LoadAsync("auto")` automatically selects GGUF for most environments (CPU, CUDA, Metal) and ONNX only for Windows DirectML with non-NVIDIA GPUs. Use `gguf:auto` or `default` to force a specific backend.
+> **Platform-based routing (v0.28.0+):** `LoadAsync("default")` and `LoadAsync("auto")` both select the optimal backend+model for the current host: GGUF via llama.cpp on CPU / NVIDIA / Apple Silicon / Linux, and ONNX via DirectML on Windows AMD/Intel. Use `gguf:*` aliases or ONNX aliases for explicit control.
 
 **Key benefits:**
 - **Zero configuration** - Just use `"auto"`, no hardware research needed

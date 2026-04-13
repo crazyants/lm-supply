@@ -6,12 +6,15 @@
 
 ---
 
-## ✅ Version 0.26.x (Current)
+## ✅ Version 0.28.x (Current)
 
-**Theme**: Gemma 4 Native Support & Multimodal Foundations
+**Theme**: Platform-aware Default Alias & ONNX Path Hardening
 
 ### Highlights
 
+- **Platform-aware `default` alias** (v0.28.0): `LocalGenerator.LoadAsync("default")` now delegates to `"auto"` — Gemma 4 GGUF is selected on NVIDIA/CPU/macOS/Linux; Windows DirectML + non-NVIDIA still routes to Phi-4 Mini ONNX.
+- **ONNX path resolution fix** (v0.28.0): `FindVariantSubfolder` now walks two directory levels so Phi-4 Mini's `cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4/` layout resolves on first run from a clean HuggingFace cache.
+- **Auto-selection diagnostics** (v0.28.0): `[LocalGenerator.auto]` Trace line reports the selected backend, model, GPU, and VRAM budget.
 - **Gemma 4 Chat Format**: Native `system` role support via `Gemma4ChatFormatter`
 - **llama-server Version Validation**: Architecture-aware minimum version checks (`b8672+` required for Gemma 4)
 - **VRAM Gap Coverage**: New `gguf:balanced` alias (E4B Q8_0, 7.5GB) fills the 8-16GB VRAM range
@@ -30,6 +33,12 @@
 | **#5** | `ChatMessage.ContentParts` multimodal model | ✅ |
 
 Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
+
+### Breaking changes (v0.28.0)
+
+- `LocalGenerator.DefaultModel` const removed. Use `LoadDefaultAsync()` or pass an explicit repo ID.
+- `DefaultGeneratorModels.Phi4Mini.AliasName` changed from `"default"` to `"phi-4-mini"`. The plain `"default"` alias now resolves through the platform-aware auto path.
+- `WellKnownModels.Generator.Default` is now the alias `"default"` (was the Phi-4 Mini repo ID); `WellKnownModels.Generator.Fast` is now `"phi-4-mini"`.
 
 ---
 
@@ -67,4 +76,5 @@ Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
 |---------|-------|--------|
 | 0.9.2 | ONNX Runtime Management | Released |
 | 0.10.0 | Local Performance Max & DX | Released |
-| 0.26.x | Gemma 4 & Multimodal Foundations | **Current** |
+| 0.26.x | Gemma 4 & Multimodal Foundations | Released |
+| 0.28.x | Platform-aware Default Alias & ONNX Path Hardening | **Current** |

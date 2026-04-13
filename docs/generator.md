@@ -17,7 +17,7 @@ using LMSupply.Generator;
 
 // Using the builder pattern
 var generator = await TextGeneratorBuilder.Create()
-    .WithDefaultModel()        // Uses Phi-4 Mini (ONNX)
+    .WithDefaultModel()        // Platform-aware: Gemma 4 GGUF on NVIDIA/CPU/Mac/Linux, Phi-4 Mini ONNX on DirectML+non-NVIDIA
     .BuildAsync();
 
 // Generate text
@@ -34,7 +34,7 @@ using LMSupply.Generator;
 using LMSupply.Generator.Models;
 
 var generator = await TextGeneratorBuilder.Create()
-    .WithDefaultModel()
+    .WithDefaultModel()  // see "Default and auto selection" below
     .BuildAsync();
 
 // Chat format
@@ -55,6 +55,34 @@ await foreach (var token in generator.GenerateAsync("Write a short story about a
 {
     Console.Write(token);
 }
+```
+
+## Default and auto selection
+
+`LocalGenerator.LoadAsync("default")` and `LocalGenerator.LoadAsync("auto")` both delegate to a hardware-aware selection:
+
+| Platform | Backend | Model |
+|----------|---------|-------|
+| NVIDIA GPU (any OS) | GGUF (llama.cpp CUDA) | Gemma 4 via `gguf:auto` (VRAM-aware) |
+| Apple Silicon | GGUF (llama.cpp Metal) | Gemma 4 via `gguf:auto` |
+| CPU-only (any OS) | GGUF (llama.cpp CPU) | Gemma 4 via `gguf:auto` |
+| Linux + any GPU | GGUF (llama.cpp) | Gemma 4 via `gguf:auto` |
+| Windows + AMD/Intel GPU | ONNX (DirectML) | Phi-4 Mini (FC-capable, MIT) |
+
+### Explicit model selection
+
+```csharp
+// Pin a specific ONNX model (DirectML + non-NVIDIA users)
+await using var onnx = await LocalGenerator.LoadAsync("microsoft/Phi-4-mini-instruct-onnx");
+await using var onnxAlias = await LocalGenerator.LoadAsync("phi-4-mini");
+
+// Pin a specific GGUF model
+await using var gguf = await LocalGenerator.LoadAsync("gguf:default"); // Gemma 4 E4B
+await using var ggufXL = await LocalGenerator.LoadAsync("gguf:large"); // Gemma 4 31B
+
+// Let the hardware decide (GGUF on most platforms, ONNX on DirectML+non-NVIDIA)
+await using var auto = await LocalGenerator.LoadAsync("auto");
+await using var def  = await LocalGenerator.LoadAsync("default"); // same as "auto"
 ```
 
 ## Model Selection

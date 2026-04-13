@@ -406,13 +406,15 @@ public class GeneratorFunctionalTests
 
     [Fact]
     [Trait("Axis", "Loading")]
-    public void L_ModelRegistry_DefaultAlias_ReturnsPhi4Mini()
+    public void L_ModelRegistry_Phi4MiniAlias_ResolvesCorrectly()
     {
-        var defaultModel = GeneratorModelRegistry.Default.Resolve("default");
+        // "default" is now handled by LocalGenerator.LoadAsync (hardware-aware routing),
+        // not by the registry. "phi-4-mini" is the explicit ONNX alias.
+        var phi4Mini = GeneratorModelRegistry.Default.Resolve("phi-4-mini");
 
-        defaultModel.Should().NotBeNull();
-        defaultModel.ModelId.Should().Contain("Phi-4-mini",
-            "default generator model should be Phi-4 Mini");
+        phi4Mini.Should().NotBeNull();
+        phi4Mini.ModelId.Should().Contain("Phi-4-mini",
+            "phi-4-mini alias should resolve to the Phi-4 Mini ONNX model");
     }
 
     [Fact]
@@ -511,8 +513,10 @@ public class GeneratorFunctionalTests
     [Trait("Axis", "Loading")]
     public void L_WellKnownModels_Constants_AreValid()
     {
-        WellKnownModels.Generator.Default.Should().Contain("Phi-4-mini");
-        WellKnownModels.Generator.Fast.Should().Contain("Llama-3.2-1B");
+        WellKnownModels.Generator.Default.Should().Be("default",
+            "Default routes through hardware-aware auto selection");
+        WellKnownModels.Generator.Fast.Should().Be("phi-4-mini",
+            "Fast pins the ONNX path explicitly (Phi-4 Mini)");
         WellKnownModels.Generator.Quality.Should().Contain("phi-4");
         WellKnownModels.Generator.Small.Should().Be(WellKnownModels.Generator.Fast,
             "Small should be an alias for Fast");

@@ -105,7 +105,7 @@ public class ModelFormatDetectorTests
     public void Detect_RegisteredOnnxModel_ReturnsOnnx()
     {
         // Models in ModelRegistry should be detected as ONNX
-        var result = ModelFormatDetector.Detect("default");
+        var result = ModelFormatDetector.Detect("phi-4-mini");
         result.Should().Be(ModelFormat.Onnx);
     }
 

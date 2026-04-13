@@ -26,7 +26,7 @@ public static class DefaultGeneratorModels
     public static ModelInfo Phi4Mini { get; } = new()
     {
         ModelId = "microsoft/Phi-4-mini-instruct-onnx",
-        AliasName = "default",
+        AliasName = "phi-4-mini",
         DisplayName = "Phi-4 Mini",
         Description = "Default: Phi-4 Mini, 3.8B params, MIT, 16K context",
         ParameterCount = 3_800_000_000,

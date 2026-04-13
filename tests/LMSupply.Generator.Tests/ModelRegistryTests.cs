@@ -8,10 +8,10 @@ public class ModelRegistryTests
     // ===== New GeneratorModelRegistry tests =====
 
     [Fact]
-    public void Resolve_WithDefaultAlias_ReturnsPhi4Mini()
+    public void Resolve_WithPhiMiniAlias_ReturnsPhi4Mini()
     {
         // Act
-        var model = GeneratorModelRegistry.Default.Resolve("default");
+        var model = GeneratorModelRegistry.Default.Resolve("phi-4-mini");
 
         // Assert
         model.Should().NotBeNull();
@@ -120,7 +120,7 @@ public class ModelRegistryTests
         // Assert
         var aliasNames = aliases.Select(a => a.Name).ToList();
         aliasNames.Should().Contain("auto");
-        aliasNames.Should().Contain("default");
+        aliasNames.Should().Contain("phi-4-mini");
         aliasNames.Should().Contain("fast");
         aliasNames.Should().Contain("quality");
     }
@@ -191,7 +191,7 @@ public class ModelRegistryTests
         var registry = new GeneratorModelRegistry(DefaultGeneratorModels.All);
 
         // Act
-        var act = () => registry.RegisterAlias("default", "microsoft/phi-4-onnx");
+        var act = () => registry.RegisterAlias("phi-4-mini", "microsoft/phi-4-onnx");
 
         // Assert
         act.Should().Throw<AliasConflictException>();
@@ -236,7 +236,7 @@ public class ModelRegistryTests
     public void ModelInfo_GetMemoryConfig_ReturnsValidConfig()
     {
         // Arrange
-        var model = GeneratorModelRegistry.Default.Resolve("default");
+        var model = GeneratorModelRegistry.Default.Resolve("phi-4-mini");
 
         // Act
         var config = model.GetMemoryConfig();

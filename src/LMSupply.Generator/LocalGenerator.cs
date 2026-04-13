@@ -10,12 +10,6 @@ namespace LMSupply.Generator;
 public static class LocalGenerator
 {
     /// <summary>
-    /// Default model to use when no model is specified.
-    /// Microsoft Phi-4 Mini (MIT license), 3.8B params, 16K context.
-    /// </summary>
-    public const string DefaultModel = "microsoft/Phi-4-mini-instruct-onnx";
-
-    /// <summary>
     /// Gets the model registry for the Generator domain.
     /// Provides access to model resolution, alias management, and model enumeration.
     /// </summary>
@@ -27,20 +21,29 @@ public static class LocalGenerator
     public static GeneratorPool Pool { get; } = new(Internal.DefaultGeneratorFactory.Instance);
 
     /// <summary>
-    /// Loads a text generator from a HuggingFace model repository.
-    /// Supports "auto" alias which selects optimal model based on hardware.
+    /// Loads a text generator from a HuggingFace model repository or alias.
     /// </summary>
-    /// <param name="modelId">The HuggingFace model identifier (e.g., "microsoft/Phi-3.5-mini-instruct-onnx") or "auto".</param>
+    /// <param name="modelId">
+    /// One of:
+    /// <list type="bullet">
+    ///   <item><c>"default"</c> / <c>"auto"</c> — hardware-aware selection (see remarks).</item>
+    ///   <item>A GGUF alias (<c>"gguf:default"</c>, <c>"gguf:fast"</c>, <c>"gguf:quality"</c>, etc.).</item>
+    ///   <item>An ONNX alias (<c>"phi-4-mini"</c>, <c>"fast"</c>, <c>"quality"</c>, <c>"phi-3.5-mini"</c>).</item>
+    ///   <item>A HuggingFace repo ID (e.g., <c>"microsoft/Phi-4-mini-instruct-onnx"</c>).</item>
+    ///   <item>A local file path (GGUF) or directory (ONNX).</item>
+    /// </list>
+    /// </param>
     /// <param name="options">Model loading options.</param>
     /// <param name="progress">Progress callback for model downloading.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A text generator instance.</returns>
     /// <remarks>
-    /// When "auto" is specified, the model is selected based on hardware:
-    /// - Low tier (GPU &lt;4GB): Llama-3.2-1B (1B params)
-    /// - Medium tier (GPU 4-8GB): Phi-3.5-mini (3.8B params)
-    /// - High tier (GPU 8-16GB): Phi-4-mini (3.8B, 16K context)
-    /// - Ultra tier (GPU 16GB+): Phi-4 (14B params)
+    /// For <c>"default"</c> and <c>"auto"</c>, the backend and model are selected from the host:
+    /// <list type="bullet">
+    ///   <item>NVIDIA GPU / CPU / macOS / Linux → GGUF via llama.cpp (Gemma 4 by default, VRAM-aware).</item>
+    ///   <item>Windows with DirectML and a non-NVIDIA GPU → ONNX (Phi-4 Mini).</item>
+    /// </list>
+    /// The selection is logged via <c>Trace.TraceInformation</c> with a <c>[LocalGenerator.auto]</c> prefix.
     /// </remarks>
     public static Task<IGeneratorModel> LoadAsync(
         string modelId,
@@ -56,13 +59,14 @@ public static class LocalGenerator
         modelId = baseId;
         options.QuantizationHint ??= qualifier;
 
-        // Handle "auto" — platform-based format selection
-        if (modelId.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        // "default" and "auto" both delegate to hardware-aware selection.
+        if (modelId.Equals("default", StringComparison.OrdinalIgnoreCase) ||
+            modelId.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
             return LoadAutoAsync(options, progress, cancellationToken);
         }
 
-        // Handle standard aliases via the registry
+        // Handle other standard aliases via the registry
         if (GeneratorModelRegistry.Default.TryResolve(modelId, out var resolvedModel))
         {
             modelId = resolvedModel!.ModelId;
@@ -118,7 +122,7 @@ public static class LocalGenerator
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return LoadAsync(DefaultModel, options, progress, cancellationToken);
+        return LoadAsync("default", options, progress, cancellationToken);
     }
 
     /// <summary>
@@ -135,19 +139,33 @@ public static class LocalGenerator
         var useOnnx = profile.RecommendedProvider == ExecutionProvider.DirectML &&
                       profile.GpuInfo.Vendor != GpuVendor.Nvidia;
 
+        string selectedModelId;
+        string selectedFormat;
+
         if (useOnnx)
         {
-            // ONNX path: DirectML/NPU advantage
             var model = GeneratorModelRegistry.Default.Resolve("auto");
-            return Internal.GeneratorModelLoader.LoadAsync(
-                model.ModelId, options, progress, cancellationToken);
+            selectedModelId = model.ModelId;
+            selectedFormat = "ONNX";
         }
         else
         {
-            // GGUF path: CPU, CUDA, Metal, Linux — all go here
             var model = Internal.Llama.GgufModelRegistry.GetAutoModel();
-            return Internal.GeneratorModelLoader.LoadAsync(
-                model.RepoId, options, progress, cancellationToken);
+            selectedModelId = model.RepoId;
+            selectedFormat = "GGUF";
         }
+
+        LogAutoSelection(profile, selectedFormat, selectedModelId);
+        return Internal.GeneratorModelLoader.LoadAsync(
+            selectedModelId, options, progress, cancellationToken);
+    }
+
+    private static void LogAutoSelection(HardwareProfile profile, string format, string modelId)
+    {
+        var vramMb = VramBudget.GetAvailableBytes(profile.GpuInfo) / (1024 * 1024);
+        System.Diagnostics.Trace.TraceInformation(
+            $"[LocalGenerator.auto] Provider={profile.RecommendedProvider}, " +
+            $"GPU={profile.GpuInfo.Vendor} {profile.GpuInfo.DeviceName ?? "n/a"}, " +
+            $"VRAM={vramMb}MB → {format} path, selected={modelId}");
     }
 }

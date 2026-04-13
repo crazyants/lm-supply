@@ -12,19 +12,20 @@ public static class WellKnownModels
     public static class Generator
     {
         /// <summary>
-        /// Default balanced model - Microsoft Phi-4 Mini (MIT license).
-        /// 3.8B parameters, 16K context, excellent reasoning for its size.
-        /// Released: 2025-01, successor to Phi-3.5 Mini.
+        /// Default — routes through <see cref="LocalGenerator.LoadAsync(string, GeneratorOptions?, IProgress{DownloadProgress}?, CancellationToken)"/>
+        /// hardware-aware auto selection. Resolves to Gemma 4 GGUF on NVIDIA/CPU/macOS/Linux
+        /// and Phi-4 Mini ONNX on Windows DirectML + non-NVIDIA.
         /// </summary>
-        public const string Default = "microsoft/Phi-4-mini-instruct-onnx";
+        public const string Default = "default";
 
         /// <summary>
-        /// Fast model - same as Default (Phi-4 Mini is the smallest FC-capable ONNX model).
+        /// Fast — Phi-4 Mini (smallest FC-capable ONNX model). Pins the ONNX path explicitly;
+        /// use <see cref="Default"/> for hardware-aware selection instead.
         /// </summary>
-        public const string Fast = Default;
+        public const string Fast = "phi-4-mini";
 
         /// <summary>
-        /// Small model - same as Fast, alias for clarity.
+        /// Small — alias for <see cref="Fast"/>.
         /// </summary>
         public const string Small = Fast;
 

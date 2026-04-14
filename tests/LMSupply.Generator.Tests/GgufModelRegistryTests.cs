@@ -313,6 +313,41 @@ public class GgufModelRegistryTests
         model.DefaultFile.Should().StartWith("Q4_K_M/");
     }
 
+    [Fact]
+    public void GetAutoSelection_AliasName_IsResolvable()
+    {
+        // Regression for v0.29.0 → v0.30.0 fix: LoadAutoAsync passes
+        // selection.Selected.AliasName (not RepoId) downstream so the loader can
+        // re-resolve it to the registry entry's DefaultFile. If AliasName is
+        // empty or not in the registry, the loader falls through to
+        // GgufFileSelector which can pick bf16 on small-VRAM hosts.
+        var lowVram = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 4L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 3L * 1024 * 1024 * 1024,
+        };
+        var highVram = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 22L * 1024 * 1024 * 1024,
+        };
+
+        foreach (var gpu in new[] { lowVram, highVram })
+        {
+            var selection = GgufModelRegistry.GetAutoSelection(gpu);
+            selection.Selected.AliasName.Should().NotBeNullOrEmpty(
+                because: "LoadAutoAsync needs an alias to round-trip through Resolve");
+
+            var roundTripped = GgufModelRegistry.Resolve(selection.Selected.AliasName);
+            roundTripped.Should().NotBeNull(
+                because: "the alias from GetAutoSelection must be resolvable via Resolve");
+            roundTripped!.DefaultFile.Should().Be(selection.Selected.DefaultFile,
+                because: "round-trip must preserve the exact DefaultFile to avoid bf16 fallback");
+        }
+    }
+
     [Theory]
     [InlineData("gguf:default", true)]
     [InlineData("gguf:fast", true)]

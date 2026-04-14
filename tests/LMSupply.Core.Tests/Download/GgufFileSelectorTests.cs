@@ -350,6 +350,69 @@ public class GgufFileSelectorTests
             "larger context should fit fewer or equal models");
     }
 
+    // ─── VRAM-only 모드: 4GB-VRAM/대용량-RAM 호스트의 bf16 오선택 방지 ───
+
+    [Fact]
+    public void Select_VramOnly_PrefersFitInVramOverLargestInRam()
+    {
+        // 4GB VRAM(usable 2GB) + 32GB RAM 시뮬레이션. bf16(15GB)은 RAM에는 들어가지만
+        // VRAM 예산을 초과 → vramOnly=true 일 때는 절대 선택되어선 안 됨.
+        var memory = new AvailableMemory(
+            VramBytes: 4L * 1024 * 1024 * 1024,
+            RamBytes: 32L * 1024 * 1024 * 1024);
+
+        var groups = new[]
+        {
+            MakeGroup("model-Q4_K_M.gguf", 1L * 1024 * 1024 * 1024),    // 1GB → VRAM 적합
+            MakeGroup("model-Q8_0.gguf",   3L * 1024 * 1024 * 1024),    // 3GB → VRAM 초과
+            MakeGroup("model-bf16.gguf",   15L * 1024 * 1024 * 1024),   // 15GB → VRAM 초과 (RAM은 적합)
+        };
+
+        var result = GgufFileSelector.Select(groups, memory, vramOnly: true);
+
+        result.PrimaryFileName.Should().Be("model-Q4_K_M.gguf");
+    }
+
+    [Fact]
+    public void Select_VramOnly_NothingFits_FallsBackToSmallest()
+    {
+        // VRAM에 들어갈 후보가 전혀 없을 때, vramOnly=true 는 예외 대신 최소 크기를 반환
+        // (llama-server가 부분 CPU 오프로드로 처리할 수 있도록).
+        var memory = new AvailableMemory(
+            VramBytes: 4L * 1024 * 1024 * 1024,
+            RamBytes: 32L * 1024 * 1024 * 1024);
+
+        var groups = new[]
+        {
+            MakeGroup("model-Q4_K_M.gguf", 4L * 1024 * 1024 * 1024),    // 4GB → VRAM(2GB usable) 초과
+            MakeGroup("model-bf16.gguf",   15L * 1024 * 1024 * 1024),
+        };
+
+        var result = GgufFileSelector.Select(groups, memory, vramOnly: true);
+
+        result.PrimaryFileName.Should().Be("model-Q4_K_M.gguf");
+    }
+
+    [Fact]
+    public void Select_VramOnly_FalseByDefault_PreservesLegacyBehavior()
+    {
+        // vramOnly 미지정 시 기존 RAM 합산 동작 유지 (회귀 방지).
+        var memory = new AvailableMemory(
+            VramBytes: 4L * 1024 * 1024 * 1024,
+            RamBytes: 32L * 1024 * 1024 * 1024);
+
+        var groups = new[]
+        {
+            MakeGroup("model-Q4_K_M.gguf", 1L * 1024 * 1024 * 1024),
+            MakeGroup("model-bf16.gguf",   15L * 1024 * 1024 * 1024),
+        };
+
+        var result = GgufFileSelector.Select(groups, memory);
+
+        // 기존 동작: VRAM+RAM에 들어가는 가장 큰 파일 선택
+        result.PrimaryFileName.Should().Be("model-bf16.gguf");
+    }
+
     // ─── 헬퍼 ───
 
     private static GgufFileGroup MakeGroup(string filename, long sizeBytes) =>

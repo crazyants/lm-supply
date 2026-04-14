@@ -38,7 +38,7 @@ public static class GgufModelRegistry
         {
             RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
             DisplayName = "Gemma 4 E4B Instruct",
-            DefaultFile = "gemma-4-e4b-it-Q4_K_M.gguf",
+            DefaultFile = "gemma-4-E4B-it-Q4_K_M.gguf",
             ChatFormat = "gemma4",
             ContextLength = 131072,
             ParameterCount = 4_500_000_000,
@@ -56,7 +56,7 @@ public static class GgufModelRegistry
         {
             RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
             DisplayName = "Gemma 4 E4B Instruct (Q8_0)",
-            DefaultFile = "gemma-4-e4b-it-Q8_0.gguf",
+            DefaultFile = "gemma-4-E4B-it-Q8_0.gguf",
             ChatFormat = "gemma4",
             ContextLength = 131072,
             ParameterCount = 4_500_000_000,

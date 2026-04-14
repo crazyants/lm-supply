@@ -28,6 +28,12 @@ public static class GpuDetector
         // Try NVIDIA detection via NVML
         var nvidiaGpus = NvmlDetector.DetectNvidiaGpus();
         gpus.AddRange(nvidiaGpus);
+        Trace.TraceInformation(
+            $"[GpuDetector] NVML probe: found {nvidiaGpus.Count} NVIDIA GPU(s)" +
+            (nvidiaGpus.Count > 0
+                ? string.Join(string.Empty, nvidiaGpus.Select(g =>
+                    $" | {g.DeviceName ?? "<unnamed>"} total={FormatBytes(g.TotalMemoryBytes)} free={FormatBytes(g.FreeMemoryBytes)}"))
+                : string.Empty));
 
         // Check DirectML support on Windows
         var directMLSupported = DirectMLDetector.IsSupported();
@@ -44,6 +50,12 @@ public static class GpuDetector
                 DirectMLSupported = true,
                 CoreMLSupported = false
             }));
+            Trace.TraceInformation(
+                $"[GpuDetector] DXGI fallback: enumerated {dxgiGpus.Count} adapter(s)" +
+                (dxgiGpus.Count > 0
+                    ? string.Join(string.Empty, dxgiGpus.Select(g =>
+                        $" | vendor={g.Vendor} {g.DeviceName ?? "<unnamed>"} dedicated={FormatBytes(g.TotalMemoryBytes)}"))
+                    : string.Empty));
         }
 
         // If still no GPUs, check for Apple Silicon
@@ -86,6 +98,14 @@ public static class GpuDetector
         DirectMLSupported = false,
         CoreMLSupported = false
     };
+
+    private static string FormatBytes(long? bytes)
+    {
+        if (bytes is null)
+            return "n/a";
+        const double mb = 1024.0 * 1024.0;
+        return $"{bytes.Value / mb:F0}MB";
+    }
 
     private static string GetAppleSiliconName()
     {

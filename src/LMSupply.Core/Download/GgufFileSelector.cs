@@ -87,6 +87,14 @@ public static class GgufFileSelector
     /// Optional user-specified quantization type (e.g. "Q8_0", "Q6_K").
     /// If the preferred type fits in memory, it is selected. Otherwise falls back to auto.
     /// </param>
+    /// <param name="vramOnly">
+    /// When <c>true</c> and the host has VRAM, candidates are filtered by VRAM-only fit
+    /// (model + KV cache ≤ usable VRAM) instead of total VRAM+RAM. Use this on GPU hosts
+    /// to avoid selecting variants (e.g. bf16) that only fit because system RAM is large.
+    /// If nothing fits the VRAM budget, the smallest variant is returned as a fallback
+    /// (matches GgufModelRegistry's FallbackToSmallest behavior). Default <c>false</c>
+    /// preserves the legacy VRAM+RAM total-memory fit logic.
+    /// </param>
     /// <returns>The best fitting file group.</returns>
     /// <exception cref="ArgumentException">Thrown when groups is empty.</exception>
     /// <exception cref="InvalidOperationException">
@@ -95,21 +103,36 @@ public static class GgufFileSelector
     public static GgufFileGroup Select(
         IEnumerable<GgufFileGroup> groups,
         AvailableMemory memory,
-        string? preferredQuantization = null)
+        string? preferredQuantization = null,
+        bool vramOnly = false)
     {
         var list = groups.ToList();
 
         if (list.Count == 0)
             throw new ArgumentException("No GGUF file groups provided.", nameof(groups));
 
-        // Filter to groups that fit in available memory, sorted by size descending (best quality first)
+        // VRAM-only mode prevents bf16 (or any oversized variant) being chosen on a
+        // small-VRAM host because total RAM happens to be large. Without this, a
+        // 4GB-VRAM laptop with 32GB RAM would happily pick a 15GB bf16 variant since
+        // it "fits in memory", silently OOMing at load.
+        var fitsInBudget = vramOnly && memory.VramBytes > 0
+            ? (Func<long, bool>)memory.FitsInGpu
+            : memory.FitsInMemory;
+
         var fitting = list
-            .Where(g => memory.FitsInMemory(g.TotalSizeBytes))
+            .Where(g => fitsInBudget(g.TotalSizeBytes))
             .OrderByDescending(g => g.TotalSizeBytes)
             .ToList();
 
         if (fitting.Count == 0)
         {
+            // VRAM-only mode: fall back to smallest variant (partial CPU offload via
+            // llama-server is acceptable) rather than throwing. Mirrors the registry's
+            // GetAutoSelection FallbackToSmallest behavior and prevents the v0.29.0
+            // failure mode where bf16 was silently chosen via the RAM budget.
+            if (vramOnly)
+                return list.OrderBy(g => g.TotalSizeBytes).First();
+
             var smallest = list.MinBy(g => g.TotalSizeBytes)!;
             var availableGB = memory.TotalUsableBytes / (1024.0 * 1024 * 1024);
             throw new InvalidOperationException(

@@ -70,6 +70,43 @@ public class LocalGeneratorDefaultRoutingTests
         lines.Should().NotContain(l => l.Contains("[LocalGenerator.auto]"));
     }
 
+    [Theory]
+    [InlineData("gguf:fast")]
+    [InlineData("gguf:default")]
+    [InlineData("gguf:balanced")]
+    public async Task LoadAsync_GgufPrefixedAlias_IsNotShreddedByQualifierSplit(string alias)
+    {
+        // Regression: SplitQualifier("gguf:fast") historically split into
+        // ("gguf", "fast") and tried to download a repo literally named "gguf",
+        // 401ing with "Access denied to repository 'gguf'". LocalGenerator must
+        // recognize GGUF registry aliases before applying qualifier splitting.
+        // We verify the negative signal: the error message must NOT say the
+        // request targeted a repo called "gguf".
+        var listener = new CapturingListener();
+        Trace.Listeners.Add(listener);
+        string? errorMessage = null;
+        try
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            await LocalGenerator.LoadAsync(alias, cancellationToken: cts.Token);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        if (errorMessage is not null)
+        {
+            errorMessage.Should().NotContain("'gguf'",
+                because: "the alias must not be split into modelId='gguf' + qualifier");
+        }
+    }
+
     [Fact]
     public void FastAlias_StillResolvesToPhi4Mini()
     {

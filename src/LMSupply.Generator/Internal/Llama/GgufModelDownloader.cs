@@ -242,8 +242,13 @@ public sealed class GgufModelDownloader : IDisposable
                 $"No GGUF files found in repository '{repoId}'.",
                 repoId);
 
-        var memory = GgufFileSelector.FromHardwareProfile(HardwareProfile.Current);
-        var selected = GgufFileSelector.Select(groups, memory, preferredQuantization);
+        var profile = HardwareProfile.Current;
+        var memory = GgufFileSelector.FromHardwareProfile(profile);
+        // GPU host: enforce VRAM budget so we don't pick a variant (e.g. bf16) that
+        // only fits because system RAM is large. Without this, raw HF repo IDs on a
+        // small-VRAM laptop silently downloaded multi-tens-of-GB variants.
+        var vramOnly = profile.GpuInfo.EffectiveAvailableBytes is > 0;
+        var selected = GgufFileSelector.Select(groups, memory, preferredQuantization, vramOnly);
         return selected.PrimaryFileName;
     }
 

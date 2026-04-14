@@ -54,6 +54,15 @@ public static class LocalGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         options ??= new GeneratorOptions();
 
+        // GGUF aliases use "gguf:" as a domain prefix, not a variant qualifier.
+        // Skip SplitQualifier so "gguf:fast" does not get shredded into
+        // modelId="gguf" + qualifier="fast" (which then tries to fetch a repo
+        // literally named "gguf" and 401s).
+        if (Internal.Llama.GgufModelRegistry.IsAlias(modelId))
+        {
+            return Internal.GeneratorModelLoader.LoadAsync(modelId, options, progress, cancellationToken);
+        }
+
         // Parse variant qualifier (e.g., "default:fp16" → modelId="default", hint="fp16")
         var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelId);
         modelId = baseId;
@@ -150,7 +159,13 @@ public static class LocalGenerator
         else
         {
             var selection = Internal.Llama.GgufModelRegistry.GetAutoSelection(profile.GpuInfo);
-            selectedModelId = selection.Selected.RepoId;
+            // Pass the alias (e.g. "gguf:fast") rather than RepoId so the downstream
+            // loader can re-resolve the registry entry and use its DefaultFile. Passing
+            // RepoId would lose the DefaultFile and fall back to GgufFileSelector, which
+            // can pick larger variants (e.g. bf16) that fit in VRAM+RAM but blow VRAM.
+            selectedModelId = !string.IsNullOrEmpty(selection.Selected.AliasName)
+                ? selection.Selected.AliasName
+                : selection.Selected.RepoId;
             LogGgufAutoSelection(profile, selection);
         }
 

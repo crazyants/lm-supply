@@ -3,6 +3,7 @@ using LMSupply.Download;
 using LMSupply.Embedder.Inference;
 using LMSupply.Embedder.Pooling;
 using LMSupply.Embedder.Utils;
+using LMSupply.Hardware;
 using LMSupply.Text;
 
 namespace LMSupply.Embedder;
@@ -196,10 +197,25 @@ public static class LocalEmbedder
         // Load inference engine (use async to ensure RuntimeManager initializes native binaries)
         var engine = await OnnxInferenceEngine.CreateAsync(modelPath, options.Provider, cancellationToken: cancellationToken);
 
+        LogProviderSelection(modelId, options.Provider, engine);
+
         // Create pooling strategy
         var poolingStrategy = PoolingFactory.Create(options.PoolingMode);
 
         return new EmbeddingModel(modelId, engine, tokenizer, poolingStrategy, options, loadedModelInfo, modelPath);
+    }
+
+    private static void LogProviderSelection(string modelId, ExecutionProvider requested, OnnxInferenceEngine engine)
+    {
+        var profile = HardwareProfile.Current;
+        var gpu = profile.GpuInfo;
+        var active = engine.ActiveProviders.Count > 0
+            ? string.Join("+", engine.ActiveProviders)
+            : "(none)";
+        System.Diagnostics.Trace.TraceInformation(
+            $"[LocalEmbedder.auto] Requested={requested}, Active={active}, " +
+            $"GPU={gpu.Vendor} {gpu.DeviceName ?? "n/a"}, " +
+            $"Recommended={gpu.RecommendedProvider}, model={modelId}");
     }
 
     /// <summary>

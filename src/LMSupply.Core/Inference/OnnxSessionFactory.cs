@@ -85,13 +85,30 @@ public static class OnnxSessionFactory
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        return await CreateWithInfoAsync(modelPath, provider, skipProviders: null,
+            configureOptions, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// Same as <see cref="CreateWithInfoAsync(string, ExecutionProvider, Action{SessionOptions}?, IProgress{DownloadProgress}?, CancellationToken)"/>
+    /// but accepts a set of providers to exclude from the Auto fallback chain.
+    /// Used by inference-time fallback recovery when a previously-selected provider crashed at run time.
+    /// </summary>
+    public static async Task<SessionCreationResult> CreateWithInfoAsync(
+        string modelPath,
+        ExecutionProvider provider,
+        IReadOnlyCollection<ExecutionProvider>? skipProviders,
+        Action<SessionOptions>? configureOptions = null,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
         // Ensure runtime binaries are available
         await RuntimeManager.Instance.InitializeAsync(cancellationToken);
 
         if (provider == ExecutionProvider.Auto)
         {
             // Use fallback chain: CUDA → DirectML → CoreML → CPU
-            return await CreateWithFallbackChainAsync(modelPath, configureOptions, progress, cancellationToken);
+            return await CreateWithFallbackChainAsync(modelPath, skipProviders, configureOptions, progress, cancellationToken);
         }
 
         // Explicit provider specified - use single provider with CPU fallback
@@ -147,6 +164,7 @@ public static class OnnxSessionFactory
     /// </summary>
     private static async Task<SessionCreationResult> CreateWithFallbackChainAsync(
         string modelPath,
+        IReadOnlyCollection<ExecutionProvider>? skipProviders,
         Action<SessionOptions>? configureOptions,
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken)
@@ -163,6 +181,13 @@ public static class OnnxSessionFactory
 
         foreach (var providerToTry in fallbackChain)
         {
+            if (skipProviders is not null && skipProviders.Contains(providerToTry))
+            {
+                Trace.TraceInformation($"[Fallback] {providerToTry}: skipped (caller-blacklisted)");
+                triedProviders.Add($"{providerToTry}(blacklisted)");
+                continue;
+            }
+
             try
             {
                 // For CUDA, check if runtime libraries are available FIRST
@@ -171,7 +196,14 @@ public static class OnnxSessionFactory
                     var (cudaAvailable, missingLibs) = CheckCudaRuntimeAvailability();
                     if (!cudaAvailable)
                     {
-                        Trace.TraceInformation($"[Fallback] CUDA: skipped (missing: {string.Join(", ", missingLibs)})");
+                        // Warning, not Information: CUDA was the recommended provider on this hardware
+                        // but a runtime dependency is missing. Operators need to see this in ASP.NET logs
+                        // because the silent skip means inference will fall back to DML/CPU and may
+                        // surface as a confusing "wrong provider was used" later.
+                        Trace.TraceWarning(
+                            $"[OnnxSessionFactory] CUDA skipped (missing: {string.Join(", ", missingLibs)}). " +
+                            $"Falling back to next provider in chain. " +
+                            $"Install the missing libraries to enable CUDA acceleration.");
                         triedProviders.Add("CUDA(skipped)");
                         continue;
                     }

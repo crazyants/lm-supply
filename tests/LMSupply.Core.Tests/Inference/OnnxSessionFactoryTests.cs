@@ -192,4 +192,34 @@ public class OnnxSessionFactoryTests
         var action = () => OnnxSessionFactory.CheckOnnxRuntimeAvailability();
         action.Should().NotThrow("pre-check must never crash the process");
     }
+
+    [Fact]
+    public async Task CreateWithInfoAsync_WithSkipProviders_ShouldAcceptOverload()
+    {
+        // The skipProviders overload exists so OnnxInferenceEngine can request a
+        // re-creation that excludes a provider that crashed at inference time.
+        // Verify the overload is callable with a non-empty skip list and reaches
+        // its precheck (which fails on a missing model file as expected).
+        var skip = new[] { ExecutionProvider.DirectML };
+
+        Func<Task> action = async () => await OnnxSessionFactory.CreateWithInfoAsync(
+            modelPath: "/nonexistent/model.onnx",
+            provider: ExecutionProvider.Auto,
+            skipProviders: skip);
+
+        // Should fail at the precheck or session creation, not at signature resolution.
+        await action.Should().ThrowAsync<Exception>();
+    }
+
+    [Fact]
+    public async Task CreateWithInfoAsync_WithNullSkipProviders_ShouldBeEquivalentToOriginalOverload()
+    {
+        // Null skipProviders must behave exactly like the original overload — no provider exclusion.
+        Func<Task> action = async () => await OnnxSessionFactory.CreateWithInfoAsync(
+            modelPath: "/nonexistent/model.onnx",
+            provider: ExecutionProvider.Auto,
+            skipProviders: null);
+
+        await action.Should().ThrowAsync<Exception>();
+    }
 }

@@ -93,6 +93,12 @@ public readonly record struct GeneratorModelInfo(
     public string? RuntimeVersion { get; init; }
 
     /// <summary>
+    /// Gets auto-selection diagnostics (VRAM total/free/budget, safety margin, reason).
+    /// Null when the model was loaded via an explicit alias rather than the auto path.
+    /// </summary>
+    public SelectionDiagnostics? Diagnostics { get; init; }
+
+    /// <summary>
     /// Gets the model identifier (IModelInfoBase.Id).
     /// </summary>
     string IModelInfoBase.Id => ModelId;

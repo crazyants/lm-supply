@@ -75,14 +75,17 @@ public class VramBudgetTests
 
         var available = VramBudget.GetAvailableBytes(gpu);
 
-        // Should use recommended (0.25), not default (0.15) → 3GB * 0.75
-        available.Should().Be((long)(3 * GB * 0.75));
+        // Should use recommended (0.25), not default (0.15). Budget is based on total (not free)
+        // since the model host owns the GPU for its lifetime → 4GB * 0.75 = 3GB.
+        available.Should().Be((long)(4 * GB * 0.75));
     }
 
     [Fact]
-    public void GetAvailableBytes_WithFreeMemory_ReturnsFreeMemoryWithSafetyMargin()
+    public void GetAvailableBytes_PrefersTotalOverFree()
     {
-        // Arrange: 16GB total, 12GB free → expect ~10.2GB (12 * 0.85)
+        // Arrange: 16GB total, 12GB free. The budget is based on total (owner-of-GPU assumption),
+        // not the transient free reading — otherwise a 24GB card can look like a 2GB card when
+        // other processes briefly allocate VRAM.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -93,8 +96,8 @@ public class VramBudgetTests
         // Act
         var available = VramBudget.GetAvailableBytes(gpu);
 
-        // Assert: 12GB * 0.85 = 10.2GB
-        var expected = (long)(12 * GB * 0.85);
+        // Assert: 16GB * 0.85 = 13.6GB
+        var expected = (long)(16 * GB * 0.85);
         available.Should().Be(expected);
     }
 
@@ -138,7 +141,7 @@ public class VramBudgetTests
     [Fact]
     public void GetAvailableBytes_CustomSafetyMargin()
     {
-        // Arrange: 10GB free, 0.1 margin → expect ~9GB
+        // Arrange: 16GB total, 10GB free, 0.1 margin → expect ~14.4GB (based on total)
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -149,9 +152,35 @@ public class VramBudgetTests
         // Act
         var available = VramBudget.GetAvailableBytes(gpu, safetyMargin: 0.1);
 
-        // Assert: 10GB * 0.9 = 9GB
-        var expected = (long)(10 * GB * 0.9);
+        // Assert: 16GB * 0.9 = 14.4GB
+        var expected = (long)(16 * GB * 0.9);
         available.Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetAvailableBytes_EnvOverride_BypassesMargin()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 16 * GB,
+            FreeMemoryBytes = 2 * GB,
+        };
+
+        var previous = Environment.GetEnvironmentVariable(VramBudget.BudgetOverrideEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(VramBudget.BudgetOverrideEnvVar, "8000");
+
+            var available = VramBudget.GetAvailableBytes(gpu);
+
+            // 8000 MB exactly, no margin applied
+            available.Should().Be(8000L * 1024 * 1024);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(VramBudget.BudgetOverrideEnvVar, previous);
+        }
     }
 
     [Fact]
@@ -176,19 +205,19 @@ public class VramBudgetTests
     [Fact]
     public void CanFitModel_ModelTooLarge_ReturnsFalse()
     {
-        // Arrange: 6GB model, 4GB free
+        // Arrange: 8GB model on 6GB card (total) → can't fit even with zero-margin.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Amd,
-            TotalMemoryBytes = 8 * GB,
+            TotalMemoryBytes = 6 * GB,
             FreeMemoryBytes = 4 * GB,
         };
-        var modelSize = 6 * GB;
+        var modelSize = 8 * GB;
 
         // Act
         var result = VramBudget.CanFitModel(gpu, modelSize);
 
-        // Assert: 4GB * 0.85 = 3.4GB < 6GB
+        // Assert: 6GB * 0.85 = 5.1GB < 8GB
         result.Should().BeFalse();
     }
 }

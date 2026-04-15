@@ -56,11 +56,17 @@ public sealed class MemoryAwareOptions
 /// <summary>
 /// Decorator that wraps a generator model with memory monitoring and management.
 /// </summary>
-public sealed class MemoryAwareGenerator : IGeneratorModel
+public sealed class MemoryAwareGenerator : IGeneratorModel, Internal.IDiagnosticsSink
 {
     private readonly IGeneratorModel _inner;
     private readonly MemoryAwareOptions _options;
     private bool _disposed;
+
+    void Internal.IDiagnosticsSink.SetDiagnostics(SelectionDiagnostics diagnostics)
+    {
+        if (_inner is Internal.IDiagnosticsSink sink)
+            sink.SetDiagnostics(diagnostics);
+    }
 
     /// <summary>
     /// Creates a new memory-aware generator wrapper.

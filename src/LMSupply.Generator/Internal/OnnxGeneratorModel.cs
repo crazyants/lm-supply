@@ -12,7 +12,7 @@ namespace LMSupply.Generator.Internal;
 /// <summary>
 /// ONNX Runtime GenAI implementation of the text generator.
 /// </summary>
-internal sealed class OnnxGeneratorModel : IGeneratorModel
+internal sealed class OnnxGeneratorModel : IGeneratorModel, IDiagnosticsSink
 {
     private readonly Model _model;
     private readonly Tokenizer _tokenizer;
@@ -22,7 +22,10 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
     private readonly string? _configBasePath;
     private readonly ExecutionProvider _resolvedProvider;
     private readonly SemaphoreSlim _concurrencyLimiter;
+    private SelectionDiagnostics? _diagnostics;
     private bool _disposed;
+
+    public void SetDiagnostics(SelectionDiagnostics diagnostics) => _diagnostics = diagnostics;
 
     public OnnxGeneratorModel(
         string modelId,
@@ -368,7 +371,10 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel
         _modelPath,
         MaxContextLength,
         _chatFormatter.FormatName,
-        _resolvedProvider.ToString());
+        _resolvedProvider.ToString())
+    {
+        Diagnostics = _diagnostics
+    };
 
     /// <inheritdoc />
     public Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default)

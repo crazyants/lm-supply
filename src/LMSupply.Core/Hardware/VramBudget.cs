@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using LMSupply.Runtime;
 
@@ -5,10 +6,18 @@ namespace LMSupply.Hardware;
 
 /// <summary>
 /// Calculates available VRAM budget for model loading.
-/// Uses runtime free memory detection with fallback to total VRAM estimation.
+/// Uses total VRAM (the model host is assumed to own the GPU for its lifetime);
+/// falls back to free VRAM only when total is unknown.
+/// Absolute override via environment variable <see cref="BudgetOverrideEnvVar"/> (megabytes).
 /// </summary>
 public static class VramBudget
 {
+    /// <summary>
+    /// Environment variable that overrides the computed budget with an absolute value in megabytes.
+    /// When set to a positive integer, the value is returned as-is (safety margin is not applied).
+    /// </summary>
+    public const string BudgetOverrideEnvVar = "LMSUPPLY_VRAM_BUDGET_MB";
+
     /// <summary>
     /// Default safety margin (15%) to reserve for OS, other processes, and runtime overhead.
     /// </summary>
@@ -53,23 +62,46 @@ public static class VramBudget
     /// <summary>
     /// Gets available VRAM bytes for model loading from the specified GPU,
     /// using the platform-recommended safety margin (see <see cref="GetRecommendedSafetyMargin"/>).
-    /// Uses FreeMemoryBytes if available (NVML), otherwise TotalMemoryBytes.
+    /// Prefers TotalMemoryBytes; falls back to FreeMemoryBytes only when total is unknown.
     /// </summary>
     public static long GetAvailableBytes(GpuInfo gpu)
         => GetAvailableBytes(gpu, GetRecommendedSafetyMargin(gpu));
 
     /// <summary>
     /// Gets available VRAM bytes for model loading from the specified GPU using an explicit safety margin.
-    /// Uses FreeMemoryBytes if available (NVML), otherwise TotalMemoryBytes.
+    /// Prefers TotalMemoryBytes (long-running hosts own the GPU for their lifetime);
+    /// falls back to FreeMemoryBytes only when total is unknown.
+    /// Honors <see cref="BudgetOverrideEnvVar"/> as an absolute override (MB, margin ignored).
     /// </summary>
     public static long GetAvailableBytes(GpuInfo gpu, double safetyMargin)
     {
-        var rawBytes = gpu.FreeMemoryBytes ?? gpu.TotalMemoryBytes;
+        if (TryGetEnvOverrideBytes(out var overrideBytes))
+            return overrideBytes;
+
+        var rawBytes = gpu.TotalMemoryBytes ?? gpu.FreeMemoryBytes;
         if (rawBytes is null or <= 0)
             return 0;
 
         var usable = (long)(rawBytes.Value * (1.0 - Math.Clamp(safetyMargin, 0.0, 0.5)));
         return Math.Max(usable, 0);
+    }
+
+    /// <summary>
+    /// Returns true if <see cref="BudgetOverrideEnvVar"/> is set to a positive integer,
+    /// with the override value (bytes) in <paramref name="bytes"/>.
+    /// </summary>
+    public static bool TryGetEnvOverrideBytes(out long bytes)
+    {
+        bytes = 0;
+        var raw = Environment.GetEnvironmentVariable(BudgetOverrideEnvVar);
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        if (!long.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var mb) || mb <= 0)
+            return false;
+
+        bytes = mb * 1024L * 1024L;
+        return true;
     }
 
     /// <summary>

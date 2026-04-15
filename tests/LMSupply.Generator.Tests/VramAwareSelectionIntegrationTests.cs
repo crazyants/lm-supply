@@ -21,10 +21,11 @@ public class VramAwareSelectionIntegrationTests
             CudaComputeCapabilityMinor = 6
         };
 
-        // Step 1: Calculate available VRAM
+        // Step 1: Calculate available VRAM.
+        // Budget is based on total (not free) — host owns the GPU for its lifetime.
         var availableVram = VramBudget.GetAvailableBytes(gpu);
         availableVram.Should().BeGreaterThan(0);
-        availableVram.Should().BeLessThan(6L * 1024 * 1024 * 1024); // less than free due to safety margin
+        availableVram.Should().BeLessThan(8L * 1024 * 1024 * 1024); // 8GB * 0.85 = 6.8GB
 
         // Step 2: Select model via GGUF registry
         var model = GgufModelRegistry.GetAutoModel(gpu);

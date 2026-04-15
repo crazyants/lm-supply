@@ -14,7 +14,7 @@ namespace LMSupply.Generator.Internal.Llama;
 /// GGUF model implementation using llama-server (standalone llama.cpp HTTP server).
 /// Uses LlamaServerPool for server instance reuse across model loads.
 /// </summary>
-internal sealed class LlamaServerGeneratorModel : IGeneratorModel
+internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsSink
 {
     private readonly ServerLease _serverLease;
     private readonly IChatFormatter _chatFormatter;
@@ -23,6 +23,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
     private readonly SemaphoreSlim _concurrencyLimiter;
     private readonly GgufMetadata? _ggufMetadata;
     private readonly string _serverVersion;
+    private SelectionDiagnostics? _diagnostics;
+
+    public void SetDiagnostics(SelectionDiagnostics diagnostics) => _diagnostics = diagnostics;
     private bool _disposed;
 
     private LlamaServerGeneratorModel(
@@ -476,7 +479,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
     {
         GgufMetadata = _ggufMetadata,
         BackendLog = _serverLease.Server.Info?.StartupLog,
-        RuntimeVersion = _serverVersion
+        RuntimeVersion = _serverVersion,
+        Diagnostics = _diagnostics
     };
 
     /// <inheritdoc />

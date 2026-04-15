@@ -139,7 +139,7 @@ public static class LocalGenerator
     /// GGUF for most environments (CPU, CUDA, Metal).
     /// ONNX only for Windows DirectML (non-NVIDIA) or NPU.
     /// </summary>
-    private static Task<IGeneratorModel> LoadAutoAsync(
+    private static async Task<IGeneratorModel> LoadAutoAsync(
         GeneratorOptions options,
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken)
@@ -149,11 +149,13 @@ public static class LocalGenerator
                       profile.GpuInfo.Vendor != GpuVendor.Nvidia;
 
         string selectedModelId;
+        SelectionDiagnostics diagnostics;
 
         if (useOnnx)
         {
             var model = GeneratorModelRegistry.Default.Resolve("auto");
             selectedModelId = model.ModelId;
+            diagnostics = BuildOnnxDiagnostics(profile);
             LogOnnxAutoSelection(profile, model.ModelId);
         }
         else
@@ -166,12 +168,40 @@ public static class LocalGenerator
             selectedModelId = !string.IsNullOrEmpty(selection.Selected.AliasName)
                 ? selection.Selected.AliasName
                 : selection.Selected.RepoId;
+            diagnostics = BuildGgufDiagnostics(profile, selection);
             LogGgufAutoSelection(profile, selection);
         }
 
-        return Internal.GeneratorModelLoader.LoadAsync(
-            selectedModelId, options, progress, cancellationToken);
+        var loaded = await Internal.GeneratorModelLoader.LoadAsync(
+            selectedModelId, options, progress, cancellationToken).ConfigureAwait(false);
+
+        if (loaded is Internal.IDiagnosticsSink sink)
+            sink.SetDiagnostics(diagnostics);
+
+        return loaded;
     }
+
+    private static SelectionDiagnostics BuildOnnxDiagnostics(HardwareProfile profile)
+        => new()
+        {
+            TotalVramBytes = profile.GpuInfo.TotalMemoryBytes,
+            FreeVramBytes = profile.GpuInfo.FreeMemoryBytes,
+            BudgetVramBytes = VramBudget.GetAvailableBytes(profile.GpuInfo),
+            SafetyMargin = VramBudget.GetRecommendedSafetyMargin(profile.GpuInfo),
+            EnvOverrideApplied = VramBudget.TryGetEnvOverrideBytes(out _)
+        };
+
+    private static SelectionDiagnostics BuildGgufDiagnostics(
+        HardwareProfile profile, Internal.Llama.ModelSelectionResult selection)
+        => new()
+        {
+            TotalVramBytes = profile.GpuInfo.TotalMemoryBytes,
+            FreeVramBytes = profile.GpuInfo.FreeMemoryBytes,
+            BudgetVramBytes = selection.AvailableVramBytes,
+            SafetyMargin = selection.SafetyMargin,
+            SelectionReason = selection.Reason.ToString(),
+            EnvOverrideApplied = VramBudget.TryGetEnvOverrideBytes(out _)
+        };
 
     private static void LogOnnxAutoSelection(HardwareProfile profile, string modelId)
     {

@@ -174,16 +174,15 @@ public class GgufModelRegistryTests
     [Fact]
     public void GetAutoSelection_KvCacheCountedInBudget()
     {
-        // 7GB free Nvidia (non-laptop high-end card scenario):
-        // budget = 7 * 0.85 = 5.95 GB
+        // 7GB total card (budget = 7 × 0.85 = 5.95 GB).
         // gguf:default weights = 5.3GB, KV @ 4096 ctx ≈ 1.4GB → total ~6.7GB (over budget)
-        // → must demote to gguf:fast (3.1GB + ~1GB KV ≈ 4.1GB)
+        // → must demote to gguf:fast (3.1GB + ~1GB KV ≈ 4.1GB).
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
-            DeviceName = "Test 8GB",
-            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
-            FreeMemoryBytes = 7L * 1024 * 1024 * 1024,
+            DeviceName = "Test 7GB",
+            TotalMemoryBytes = 7L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 6L * 1024 * 1024 * 1024,
         };
 
         var result = GgufModelRegistry.GetAutoSelection(gpu);
@@ -253,8 +252,8 @@ public class GgufModelRegistryTests
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
-            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
-            FreeMemoryBytes = 7L * 1024 * 1024 * 1024
+            TotalMemoryBytes = 7L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 6L * 1024 * 1024 * 1024
         };
         // 7GB × 0.85 = 5.95GB. With KV @ 4096:
         // - default (5.3GB + ~1.4GB KV ≈ 6.7GB) does NOT fit
@@ -265,14 +264,16 @@ public class GgufModelRegistryTests
     }
 
     [Fact]
-    public void GetAutoModel_8GBFreeVram_SelectsDefault()
+    public void GetAutoModel_8GBVram_SelectsDefault()
     {
-        // Need ~8GB free to actually fit gguf:default (5.3 + 1.4 = 6.7GB) under 0.85 margin (~6.8GB budget).
+        // 8GB total × 0.85 = 6.8GB budget.
+        // - default (5.3GB + ~1.4GB KV ≈ 6.7GB) fits
+        // - balanced (7.5GB + ~1.4GB KV ≈ 8.9GB) does NOT fit
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
-            TotalMemoryBytes = 10L * 1024 * 1024 * 1024,
-            FreeMemoryBytes = 8L * 1024 * 1024 * 1024
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 6L * 1024 * 1024 * 1024
         };
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q4_K_M");

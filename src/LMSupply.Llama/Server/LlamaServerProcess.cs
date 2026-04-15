@@ -373,7 +373,7 @@ public sealed class LlamaServerProcess : IAsyncDisposable
 
         // Wait for server to be ready
         var startTime = DateTimeOffset.UtcNow;
-        var ready = await WaitForServerReadyAsync(_config.StartupTimeout, cancellationToken);
+        var ready = await WaitForServerReadyAsync(_config.StartupTimeout, stderrBuilder, cancellationToken);
 
         if (!ready)
         {
@@ -425,7 +425,10 @@ public sealed class LlamaServerProcess : IAsyncDisposable
 
         if (_config.FlashAttention)
         {
+            // llama.cpp b8795+ requires an explicit value (on|off|auto).
+            // Older builds that accepted the boolean form are no longer distributed via LMSupply.
             args.Add("--flash-attn");
+            args.Add("on");
         }
 
         // KV cache quantization (Phase 1)
@@ -524,7 +527,10 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         return string.Join(" ", args);
     }
 
-    private async Task<bool> WaitForServerReadyAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    private async Task<bool> WaitForServerReadyAsync(
+        TimeSpan timeout,
+        System.Text.StringBuilder stderrBuilder,
+        CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + timeout;
 
@@ -533,6 +539,13 @@ public sealed class LlamaServerProcess : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
 
             if (_process?.HasExited == true)
+            {
+                return false;
+            }
+
+            // Fail fast on fatal CLI-parse errors — llama.cpp prints these before the HTTP port
+            // is up and the process may linger briefly, so don't wait for HasExited or the full timeout.
+            if (HasFatalStartupError(stderrBuilder))
             {
                 return false;
             }
@@ -558,6 +571,17 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         }
 
         return false;
+    }
+
+    private static bool HasFatalStartupError(System.Text.StringBuilder stderrBuilder)
+    {
+        if (stderrBuilder.Length == 0)
+            return false;
+
+        var text = stderrBuilder.ToString();
+        return text.Contains("error while handling argument", StringComparison.Ordinal)
+            || text.Contains("error: invalid argument", StringComparison.Ordinal)
+            || text.Contains("unknown argument", StringComparison.Ordinal);
     }
 
     /// <summary>

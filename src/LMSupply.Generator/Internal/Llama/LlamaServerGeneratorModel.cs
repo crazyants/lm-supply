@@ -158,8 +158,14 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel
             var safeContext = EstimateSafeContextLength(modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1);
             if (safeContext < contextLength)
             {
+                const double mb = 1024.0 * 1024.0;
+                var gpu = Hardware.HardwareProfile.Current.GpuInfo;
+                var availableMb = (gpu.EffectiveAvailableBytes ?? 0) / mb;
+                var totalMb = (gpu.TotalMemoryBytes ?? 0) / mb;
+                var freeMb = (gpu.FreeMemoryBytes ?? gpu.TotalMemoryBytes ?? 0) / mb;
                 Trace.TraceInformation(
-                    $"[LlamaServerGeneratorModel] Context capped: {contextLength} → {safeContext} (VRAM budget)");
+                    $"[LlamaServerGeneratorModel] Context capped: {contextLength} → {safeContext} " +
+                    $"(VRAM available={availableMb:F0}MB, free={freeMb:F0}MB, total={totalMb:F0}MB)");
                 contextLength = safeContext;
             }
         }

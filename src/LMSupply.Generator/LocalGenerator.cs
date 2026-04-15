@@ -186,14 +186,15 @@ public static class LocalGenerator
         HardwareProfile profile, Internal.Llama.ModelSelectionResult selection)
     {
         const double mb = 1024.0 * 1024.0;
-        var freeMb = (profile.GpuInfo.FreeMemoryBytes ?? profile.GpuInfo.TotalMemoryBytes ?? 0) / mb;
+        var vramTotalMb = (profile.GpuInfo.TotalMemoryBytes ?? 0) / mb;
+        var vramFreeMb = (profile.GpuInfo.FreeMemoryBytes ?? profile.GpuInfo.TotalMemoryBytes ?? 0) / mb;
         var budgetMb = selection.AvailableVramBytes / mb;
         var marginPct = selection.SafetyMargin * 100;
 
         System.Diagnostics.Trace.TraceInformation(
             $"[LocalGenerator.auto] Provider={profile.RecommendedProvider}, " +
             $"GPU={profile.GpuInfo.Vendor} {profile.GpuInfo.DeviceName ?? "n/a"}, " +
-            $"VRAM raw={freeMb:F0}MB → budget={budgetMb:F0}MB (margin={marginPct:F0}%, " +
+            $"VRAM total={vramTotalMb:F0}MB free={vramFreeMb:F0}MB → budget={budgetMb:F0}MB (margin={marginPct:F0}%, " +
             $"KV ctx={selection.BudgetContextLength}) → GGUF path, " +
             $"selected={selection.Selected.AliasName} ({selection.Selected.RepoId}), " +
             $"reason={selection.Reason}");

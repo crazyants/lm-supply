@@ -46,6 +46,11 @@ public sealed class TextGeneratorBuilder
     /// Uses the platform-aware default — hardware-aware auto selection.
     /// Resolves to Gemma 4 GGUF on NVIDIA/CPU/macOS/Linux and Phi-4 Mini ONNX on Windows DirectML + non-NVIDIA.
     /// </summary>
+    /// <remarks>
+    /// At <see cref="BuildAsync"/> time the builder delegates to
+    /// <see cref="LocalGenerator.LoadAsync(string, GeneratorOptions?, IProgress{DownloadProgress}?, CancellationToken)"/>
+    /// for hardware-aware GGUF/ONNX dispatch, rather than going through the ONNX-only factory.
+    /// </remarks>
     public TextGeneratorBuilder WithDefaultModel()
     {
         _modelId = WellKnownModels.Generator.Default;
@@ -202,6 +207,27 @@ public sealed class TextGeneratorBuilder
                 "Model path or ID is required. Use WithModelPath(), WithHuggingFaceModel(), or WithDefaultModel().");
         }
 
+        // Aliases that need hardware-aware / GGUF routing must go through
+        // LocalGenerator.LoadAsync rather than the ONNX factory. The ONNX factory
+        // would treat the literal alias (e.g. "default") as a HuggingFace repo id
+        // and 401 against huggingface.co/default, while LocalGenerator dispatches
+        // to GGUF aliases or the auto-selection path. See ISSUE-LMSupply.Generator-
+        // 20260429-000657 for the diagnosis.
+        if (!string.IsNullOrEmpty(_modelId) && NeedsLocalGeneratorRouting(_modelId))
+        {
+            var localOptions = BuildLocalGeneratorOptions();
+            IGeneratorModel localGenerator = await LocalGenerator.LoadAsync(
+                _modelId, localOptions, progress: null, cancellationToken).ConfigureAwait(false);
+
+            // Layer memory management on top in the same way as the ONNX path.
+            if (_memoryOptions != null)
+            {
+                localGenerator = new MemoryAwareGenerator(localGenerator, _memoryOptions);
+            }
+
+            return localGenerator;
+        }
+
         // Ensure GenAI runtime binaries are available before loading the model
         // This downloads onnxruntime and onnxruntime-genai native binaries on first use
         await Internal.GeneratorModelLoader.EnsureGenAiRuntimeAsync(
@@ -223,6 +249,34 @@ public sealed class TextGeneratorBuilder
 
         return generator;
     }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="modelId"/> must be resolved through
+    /// <see cref="LocalGenerator.LoadAsync(string, GeneratorOptions?, IProgress{DownloadProgress}?, CancellationToken)"/>
+    /// rather than the ONNX factory. Covers the platform-aware default ("default"/"auto")
+    /// and any GGUF registry alias (prefixed with "gguf:").
+    /// </summary>
+    private static bool NeedsLocalGeneratorRouting(string modelId) =>
+        modelId.Equals("default", StringComparison.OrdinalIgnoreCase) ||
+        modelId.Equals("auto", StringComparison.OrdinalIgnoreCase) ||
+        modelId.StartsWith("gguf:", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Builds a <see cref="GeneratorOptions"/> for <see cref="LocalGenerator.LoadAsync"/>
+    /// from the builder's accumulated options. Mirrors the fields the ONNX path consumes
+    /// so the two paths behave consistently.
+    /// </summary>
+    private GeneratorOptions BuildLocalGeneratorOptions() => new()
+    {
+        CacheDirectory = _modelOptions.CacheDirectory,
+        Provider = _modelOptions.Provider,
+        ChatFormat = _modelOptions.ChatFormat,
+        Verbose = _modelOptions.Verbose,
+        MaxContextLength = _modelOptions.MaxContextLength,
+        MaxConcurrentRequests = _modelOptions.MaxConcurrentRequests,
+        LlamaOptions = _modelOptions.LlamaOptions,
+        QuantizationHint = _modelOptions.QuantizationHint,
+    };
 
     /// <summary>
     /// Builds a generator pool for managing multiple models.

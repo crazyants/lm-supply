@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using FluentAssertions;
 
 namespace LMSupply.Generator.Tests;
 
+[Collection("TraceListeners")]
 public class TextGeneratorBuilderTests
 {
     [Fact]
@@ -142,4 +144,113 @@ public class TextGeneratorBuilderTests
     // Note: Integration test for runtime loading is in the sample project
     // TextGeneratorBuilderSample validates that EnsureGenAiRuntimeAsync is called
     // before OnnxGeneratorModel creation, fixing the DllNotFoundException issue.
+
+    private sealed class CapturingListener : TraceListener
+    {
+        private readonly List<string> _lines = new();
+        public IReadOnlyList<string> Lines => _lines;
+
+        public override void Write(string? message) { if (message != null) _lines.Add(message); }
+        public override void WriteLine(string? message) { if (message != null) _lines.Add(message); }
+    }
+
+    private static async Task<(IReadOnlyList<string> Lines, Exception? Error)> CaptureBuildAsync(
+        Func<TextGeneratorBuilder> configure)
+    {
+        var listener = new CapturingListener();
+        Trace.Listeners.Add(listener);
+        Exception? error = null;
+        try
+        {
+            // Pre-canceled token: the auto-selection trace fires synchronously inside
+            // LoadAutoAsync before the cancellation check inside the downstream loader,
+            // so the trace line is observable deterministically without downloading
+            // any weights or hitting the network.
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            try
+            {
+                await configure().BuildAsync(cts.Token);
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+        return (listener.Lines, error);
+    }
+
+    [Fact]
+    public async Task BuildAsync_WithDefaultModel_RoutesThroughLocalGeneratorAuto()
+    {
+        // Regression test for ISSUE-LMSupply.Generator-20260429-000657:
+        // WithDefaultModel() previously stamped _modelId = "default" and BuildAsync
+        // routed it through OnnxGeneratorModelFactory, which 401'd against
+        // huggingface.co/default. The fix delegates to LocalGenerator.LoadAsync
+        // for hardware-aware GGUF/ONNX dispatch — observable via the
+        // "[LocalGenerator.auto]" trace line emitted by LoadAutoAsync.
+        var (lines, error) = await CaptureBuildAsync(
+            () => TextGeneratorBuilder.Create().WithDefaultModel());
+
+        lines.Should().Contain(l => l.Contains("[LocalGenerator.auto]"),
+            because: "WithDefaultModel must dispatch through LocalGenerator.LoadAutoAsync, " +
+                     "not the ONNX factory which would try to download a HuggingFace repo named 'default'");
+
+        // The error message (if any) must NOT mention the broken HF "default" repo path.
+        if (error is not null)
+        {
+            error.Message.Should().NotContain("from 'default'",
+                because: "the broken path was downloading 'genai_config.json' from 'default'");
+            error.Message.Should().NotContain("huggingface.co/default",
+                because: "the broken path was 401'ing against huggingface.co/default");
+        }
+    }
+
+    [Theory]
+    [InlineData(GeneratorModelPreset.Default)]
+    public async Task BuildAsync_WithModelDefaultPreset_RoutesThroughLocalGeneratorAuto(GeneratorModelPreset preset)
+    {
+        // The Default preset shares the underlying alias with WithDefaultModel(),
+        // so it must follow the same routing.
+        var (lines, _) = await CaptureBuildAsync(
+            () => TextGeneratorBuilder.Create().WithModel(preset));
+
+        lines.Should().Contain(l => l.Contains("[LocalGenerator.auto]"));
+    }
+
+    [Theory]
+    [InlineData("gguf:fast")]
+    [InlineData("gguf:default")]
+    public async Task BuildAsync_WithGgufAlias_RoutesThroughLocalGenerator(string alias)
+    {
+        // GGUF aliases must also bypass the ONNX factory. The negative signal is that
+        // the failure path must not contain a 401 against a literal "gguf" / alias-stripped
+        // HuggingFace repo, since LocalGenerator routes them to the GGUF loader.
+        var (_, error) = await CaptureBuildAsync(
+            () => TextGeneratorBuilder.Create().WithHuggingFaceModel(alias));
+
+        if (error is not null)
+        {
+            error.Message.Should().NotContain("from 'gguf'",
+                because: "the alias must not be split into a literal 'gguf' repo download");
+        }
+    }
+
+    [Fact]
+    public async Task BuildAsync_WithExplicitOnnxRepo_DoesNotRouteThroughLocalGeneratorAuto()
+    {
+        // Negative regression: an explicit ONNX HuggingFace repo id must continue to
+        // flow through the ONNX factory path, not the LocalGenerator auto trace.
+        var (lines, _) = await CaptureBuildAsync(() =>
+            TextGeneratorBuilder.Create()
+                .WithHuggingFaceModel("microsoft/Phi-4-mini-instruct-onnx"));
+
+        lines.Should().NotContain(l => l.Contains("[LocalGenerator.auto]"),
+            because: "an explicit ONNX repo id must still go through OnnxGeneratorModelFactory, " +
+                     "not LocalGenerator.LoadAutoAsync");
+    }
 }

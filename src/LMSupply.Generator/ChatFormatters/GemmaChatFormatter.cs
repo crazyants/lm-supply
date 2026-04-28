@@ -6,6 +6,8 @@ namespace LMSupply.Generator.ChatFormatters;
 /// <summary>
 /// Chat formatter for Gemma 2 models.
 /// Format: &lt;start_of_turn&gt;user\n{content}&lt;end_of_turn&gt;\n&lt;start_of_turn&gt;model\n
+/// Tool results are folded into a user turn with a [tool_result: id] marker
+/// because Gemma's chat template does not define a dedicated tool turn.
 /// </summary>
 public sealed class GemmaChatFormatter : IChatFormatter
 {
@@ -22,6 +24,22 @@ public sealed class GemmaChatFormatter : IChatFormatter
 
         foreach (var message in messages)
         {
+            if (message.Role == ChatRole.Tool)
+            {
+                sb.Append(StartOfTurn);
+                sb.Append("user\n[tool_result");
+                if (!string.IsNullOrEmpty(message.ToolCallId))
+                {
+                    sb.Append(": ");
+                    sb.Append(message.ToolCallId);
+                }
+                sb.Append("] ");
+                sb.Append(message.Content);
+                sb.Append(EndOfTurn);
+                sb.Append('\n');
+                continue;
+            }
+
             var role = message.Role switch
             {
                 ChatRole.System => "user", // Gemma treats system as user
@@ -33,7 +51,9 @@ public sealed class GemmaChatFormatter : IChatFormatter
             sb.Append(StartOfTurn);
             sb.Append(role);
             sb.Append('\n');
-            sb.Append(message.Content);
+            sb.Append(message.Role == ChatRole.Assistant
+                ? ChatMessageRendering.GetAssistantText(message)
+                : message.Content);
             sb.Append(EndOfTurn);
             sb.Append('\n');
         }

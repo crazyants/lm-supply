@@ -6,6 +6,7 @@ namespace LMSupply.Generator.ChatFormatters;
 /// <summary>
 /// Chat formatter for Llama 3 and Llama 3.2 models.
 /// Format: &lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;\n\n{content}&lt;|eot_id|&gt;...
+/// Tool results use the official Llama 3.1+ <c>ipython</c> role.
 /// </summary>
 public sealed class Llama3ChatFormatter : IChatFormatter
 {
@@ -30,6 +31,7 @@ public sealed class Llama3ChatFormatter : IChatFormatter
                 ChatRole.System => "system",
                 ChatRole.User => "user",
                 ChatRole.Assistant => "assistant",
+                ChatRole.Tool => "ipython",
                 _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
@@ -44,7 +46,9 @@ public sealed class Llama3ChatFormatter : IChatFormatter
             sb.Append(role);
             sb.Append(EndHeaderId);
             sb.Append("\n\n");
-            sb.Append(message.Content);
+            sb.Append(message.Role == ChatRole.Assistant
+                ? ChatMessageRendering.GetAssistantText(message)
+                : message.Content);
             sb.Append(EotId);
         }
 

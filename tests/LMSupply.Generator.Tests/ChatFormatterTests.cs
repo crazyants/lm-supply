@@ -1,4 +1,5 @@
 using FluentAssertions;
+using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.ChatFormatters;
 using LMSupply.Generator.Models;
 
@@ -302,5 +303,179 @@ public class ChatFormatterTests
 
         act.Should().Throw<ArgumentException>()
             .WithMessage("*Unknown chat format*");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // ChatRole.Tool round-trip: every formatter must accept a 4-message history
+    // [system, user, assistant-tool-call, tool-result] without throwing, and
+    // include the tool result content in the formatted prompt.
+    // Regression guard for the IronHive 0.5.4 unmasking incident (2026-04-28):
+    // ToolResult messages must not throw ArgumentOutOfRangeException, and
+    // assistant-emitted tool calls must not silently disappear from history.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private static ChatMessage[] ToolRoundTripHistory() =>
+    [
+        ChatMessage.System("You are helpful."),
+        ChatMessage.User("Search for python intro."),
+        ChatMessage.AssistantToolCalls([
+            new ChatToolCall("call_abc123", "search_knowledge", "{\"query\":\"python intro\"}")
+        ]),
+        ChatMessage.ToolResult("call_abc123", "Found python-intro.md")
+    ];
+
+    [Theory]
+    [InlineData(typeof(Phi3ChatFormatter))]
+    [InlineData(typeof(Llama3ChatFormatter))]
+    [InlineData(typeof(ChatMLFormatter))]
+    [InlineData(typeof(GemmaChatFormatter))]
+    [InlineData(typeof(Gemma4ChatFormatter))]
+    [InlineData(typeof(ExaoneChatFormatter))]
+    [InlineData(typeof(DeepSeekChatFormatter))]
+    [InlineData(typeof(MistralChatFormatter))]
+    public void AllFormatters_FormatPrompt_ToolRoleHistory_DoesNotThrow(Type formatterType)
+    {
+        var formatter = (IChatFormatter)Activator.CreateInstance(formatterType)!;
+
+        var act = () => formatter.FormatPrompt(ToolRoundTripHistory());
+
+        act.Should().NotThrow();
+    }
+
+    [Theory]
+    [InlineData(typeof(Phi3ChatFormatter))]
+    [InlineData(typeof(Llama3ChatFormatter))]
+    [InlineData(typeof(ChatMLFormatter))]
+    [InlineData(typeof(GemmaChatFormatter))]
+    [InlineData(typeof(Gemma4ChatFormatter))]
+    [InlineData(typeof(ExaoneChatFormatter))]
+    [InlineData(typeof(DeepSeekChatFormatter))]
+    [InlineData(typeof(MistralChatFormatter))]
+    public void AllFormatters_FormatPrompt_IncludesToolResultContent(Type formatterType)
+    {
+        var formatter = (IChatFormatter)Activator.CreateInstance(formatterType)!;
+
+        var result = formatter.FormatPrompt(ToolRoundTripHistory());
+
+        result.Should().Contain("Found python-intro.md");
+    }
+
+    [Theory]
+    [InlineData(typeof(Phi3ChatFormatter))]
+    [InlineData(typeof(Llama3ChatFormatter))]
+    [InlineData(typeof(ChatMLFormatter))]
+    [InlineData(typeof(GemmaChatFormatter))]
+    [InlineData(typeof(Gemma4ChatFormatter))]
+    [InlineData(typeof(ExaoneChatFormatter))]
+    [InlineData(typeof(DeepSeekChatFormatter))]
+    [InlineData(typeof(MistralChatFormatter))]
+    public void AllFormatters_FormatPrompt_RendersAssistantToolCalls(Type formatterType)
+    {
+        var formatter = (IChatFormatter)Activator.CreateInstance(formatterType)!;
+
+        var result = formatter.FormatPrompt(ToolRoundTripHistory());
+
+        // The assistant turn used AssistantToolCalls (empty Content + ToolCalls).
+        // Formatters must render the tool-call function name into the prompt so the
+        // model can see what it called in the previous turn.
+        result.Should().Contain("search_knowledge");
+    }
+
+    [Theory]
+    [InlineData(typeof(Phi3ChatFormatter))]
+    [InlineData(typeof(Llama3ChatFormatter))]
+    [InlineData(typeof(ChatMLFormatter))]
+    [InlineData(typeof(GemmaChatFormatter))]
+    [InlineData(typeof(Gemma4ChatFormatter))]
+    [InlineData(typeof(ExaoneChatFormatter))]
+    [InlineData(typeof(DeepSeekChatFormatter))]
+    [InlineData(typeof(MistralChatFormatter))]
+    public void AllFormatters_FormatPrompt_MultipleToolResults_DoesNotThrow(Type formatterType)
+    {
+        // Re-entrancy guard from issue §9: multiple Tool messages in history must
+        // also format successfully, not just the first.
+        var formatter = (IChatFormatter)Activator.CreateInstance(formatterType)!;
+
+        var history = new[]
+        {
+            ChatMessage.User("Compare python and kotlin intros."),
+            ChatMessage.AssistantToolCalls([
+                new ChatToolCall("call_1", "search_knowledge", "{\"query\":\"python\"}")
+            ]),
+            ChatMessage.ToolResult("call_1", "python-intro.md found"),
+            ChatMessage.AssistantToolCalls([
+                new ChatToolCall("call_2", "search_knowledge", "{\"query\":\"kotlin\"}")
+            ]),
+            ChatMessage.ToolResult("call_2", "kotlin-intro.md found")
+        };
+
+        var act = () => formatter.FormatPrompt(history);
+
+        act.Should().NotThrow();
+        var result = formatter.FormatPrompt(history);
+        result.Should().Contain("python-intro.md found");
+        result.Should().Contain("kotlin-intro.md found");
+    }
+
+    [Fact]
+    public void Llama3ChatFormatter_ToolResult_UsesIpythonRole()
+    {
+        // Llama 3.1+ official chat template uses the ipython role for tool results.
+        var formatter = new Llama3ChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.User("Search."),
+            ChatMessage.AssistantToolCalls([
+                new ChatToolCall("call_1", "search", "{}")
+            ]),
+            ChatMessage.ToolResult("call_1", "result-payload")
+        };
+
+        var result = formatter.FormatPrompt(messages);
+
+        result.Should().Contain("<|start_header_id|>ipython<|end_header_id|>");
+        result.Should().Contain("result-payload");
+    }
+
+    [Fact]
+    public void ChatMLFormatter_ToolResult_UsesToolRole()
+    {
+        // ChatML extension (Qwen 2.5+) uses <|im_start|>tool ... <|im_end|>.
+        var formatter = new ChatMLFormatter();
+        var messages = new[]
+        {
+            ChatMessage.User("q"),
+            ChatMessage.AssistantToolCalls([
+                new ChatToolCall("call_1", "fn", "{}")
+            ]),
+            ChatMessage.ToolResult("call_1", "tool-output")
+        };
+
+        var result = formatter.FormatPrompt(messages);
+
+        result.Should().Contain("<|im_start|>tool");
+        result.Should().Contain("tool-output");
+    }
+
+    [Fact]
+    public void MistralChatFormatter_ToolResult_UsesToolResultsTokens()
+    {
+        // Mistral v3 instruct uses [TOOL_RESULTS] ... [/TOOL_RESULTS] tokens.
+        var formatter = new MistralChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.User("q"),
+            ChatMessage.AssistantToolCalls([
+                new ChatToolCall("call_1", "fn", "{\"x\":1}")
+            ]),
+            ChatMessage.ToolResult("call_1", "tool-output")
+        };
+
+        var result = formatter.FormatPrompt(messages);
+
+        result.Should().Contain("[TOOL_RESULTS]");
+        result.Should().Contain("[/TOOL_RESULTS]");
+        result.Should().Contain("tool-output");
+        result.Should().Contain("call_1");
     }
 }

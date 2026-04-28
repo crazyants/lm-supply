@@ -6,6 +6,7 @@ namespace LMSupply.Generator.ChatFormatters;
 /// <summary>
 /// Chat formatter for ChatML format (used by Qwen, some Mistral variants).
 /// Format: &lt;|im_start|&gt;system\n{content}&lt;|im_end|&gt;\n&lt;|im_start|&gt;user\n{content}&lt;|im_end|&gt;\n...
+/// Tool results use the Qwen 2.5+ <c>tool</c> role extension.
 /// </summary>
 public sealed class ChatMLFormatter : IChatFormatter
 {
@@ -27,13 +28,16 @@ public sealed class ChatMLFormatter : IChatFormatter
                 ChatRole.System => "system",
                 ChatRole.User => "user",
                 ChatRole.Assistant => "assistant",
+                ChatRole.Tool => "tool",
                 _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             sb.Append(ImStart);
             sb.Append(role);
             sb.Append('\n');
-            sb.Append(message.Content);
+            sb.Append(message.Role == ChatRole.Assistant
+                ? ChatMessageRendering.GetAssistantText(message)
+                : message.Content);
             sb.Append(ImEnd);
             sb.Append('\n');
         }

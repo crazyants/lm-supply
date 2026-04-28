@@ -6,12 +6,14 @@ namespace LMSupply.Generator.ChatFormatters;
 /// <summary>
 /// Chat formatter for EXAONE models (Korean-specialized).
 /// Format: [|system|]{content}[|endofturn|][|user|]{content}[|endofturn|][|assistant|]
+/// Tool results use a [|tool|] tag symmetric with the existing role tags.
 /// </summary>
 public sealed class ExaoneChatFormatter : IChatFormatter
 {
     private const string SystemTag = "[|system|]";
     private const string UserTag = "[|user|]";
     private const string AssistantTag = "[|assistant|]";
+    private const string ToolTag = "[|tool|]";
     private const string EndOfTurn = "[|endofturn|]";
 
     /// <inheritdoc />
@@ -29,11 +31,14 @@ public sealed class ExaoneChatFormatter : IChatFormatter
                 ChatRole.System => SystemTag,
                 ChatRole.User => UserTag,
                 ChatRole.Assistant => AssistantTag,
+                ChatRole.Tool => ToolTag,
                 _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             sb.Append(tag);
-            sb.Append(message.Content);
+            sb.Append(message.Role == ChatRole.Assistant
+                ? ChatMessageRendering.GetAssistantText(message)
+                : message.Content);
             sb.Append(EndOfTurn);
         }
 

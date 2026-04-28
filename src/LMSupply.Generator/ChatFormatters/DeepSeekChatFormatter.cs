@@ -6,6 +6,8 @@ namespace LMSupply.Generator.ChatFormatters;
 /// <summary>
 /// Chat formatter for DeepSeek models.
 /// Similar to ChatML but with specific tokens for reasoning models.
+/// Tool results use a <c>&lt;|tool|&gt;</c> turn that mirrors the existing role
+/// tag pattern.
 /// </summary>
 public sealed class DeepSeekChatFormatter : IChatFormatter
 {
@@ -24,13 +26,16 @@ public sealed class DeepSeekChatFormatter : IChatFormatter
                 ChatRole.System => "system",
                 ChatRole.User => "user",
                 ChatRole.Assistant => "assistant",
+                ChatRole.Tool => "tool",
                 _ => throw new ArgumentOutOfRangeException(nameof(messages), message.Role, "Unsupported chat role")
             };
 
             sb.Append("<|");
             sb.Append(role);
             sb.Append("|>\n");
-            sb.Append(message.Content);
+            sb.Append(message.Role == ChatRole.Assistant
+                ? ChatMessageRendering.GetAssistantText(message)
+                : message.Content);
             sb.Append('\n');
         }
 

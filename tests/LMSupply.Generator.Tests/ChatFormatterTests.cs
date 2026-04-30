@@ -478,4 +478,162 @@ public class ChatFormatterTests
         result.Should().Contain("tool-output");
         result.Should().Contain("call_1");
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // RenderToolPromptFragment — 2026-04-30 ecosystem ISSUE Option D-1.
+    // Small/quantized models (Gemma 4 E4B at gguf:default) emit empty tool args
+    // and fail to self-correct under ResilientFunctionInvoker directives because
+    // llama-server's native chat template renders JSON schema raw, which the
+    // model misinterprets. The formatter exposes an opt-in textual reinforcement
+    // fragment that LlamaServerGeneratorModel prepends as a system message.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private static System.Text.Json.JsonElement BuildJsonSchema(string json)
+    {
+        return System.Text.Json.JsonDocument.Parse(json).RootElement;
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_RenderToolPromptFragment_WithRequiredParam_ReturnsModelFriendlyMarkerText()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildJsonSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string", "description": "absolute file path" },
+                "content": { "type": "string" }
+              },
+              "required": ["path"]
+            }
+            """);
+        var tools = new[]
+        {
+            new ChatToolDefinition("WriteFile", "Write content to a file", schema)
+        };
+
+        var fragment = formatter.RenderToolPromptFragment(tools);
+
+        fragment.Should().NotBeNullOrEmpty(
+            because: "Gemma 4 small/quantized models need textual reinforcement of tool schemas — the native chat template's JSON schema rendering is too dense for them to follow");
+        fragment!.Should().Contain("WriteFile",
+            because: "tool name must be visible to anchor the model's attention");
+        fragment.Should().Contain("Required parameters",
+            because: "the issue specifies a model-friendly 'Required parameters (MUST be provided): ...' marker line");
+        fragment.Should().Contain("path",
+            because: "the required parameter name must be enumerated explicitly so the model fills it in");
+        fragment.Should().Contain("string",
+            because: "type information helps the model produce a well-typed argument value");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_RenderToolPromptFragment_OptionalParamsListedSeparately()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildJsonSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string" },
+                "content": { "type": "string" }
+              },
+              "required": ["path"]
+            }
+            """);
+        var tools = new[]
+        {
+            new ChatToolDefinition("WriteFile", "Write content", schema)
+        };
+
+        var fragment = formatter.RenderToolPromptFragment(tools);
+
+        fragment!.Should().Contain("Optional parameters",
+            because: "optional vs required distinction prevents the model from confusing the two when it tries to fill arguments");
+        fragment.Should().Contain("content",
+            because: "optional parameter names must still be enumerated so the model knows they exist");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_RenderToolPromptFragment_NullOrEmptyTools_ReturnsNull()
+    {
+        var formatter = new Gemma4ChatFormatter();
+
+        formatter.RenderToolPromptFragment(null).Should().BeNull(
+            because: "no tools = no fragment to inject; caller should not prepend an empty system message");
+        formatter.RenderToolPromptFragment(Array.Empty<ChatToolDefinition>()).Should().BeNull(
+            because: "empty tools collection is semantically equivalent to null");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_RenderToolPromptFragment_MultipleTools_AllListed()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var writeSchema = BuildJsonSchema(
+            """{ "type": "object", "properties": { "path": {"type":"string"} }, "required": ["path"] }""");
+        var readSchema = BuildJsonSchema(
+            """{ "type": "object", "properties": { "path": {"type":"string"} }, "required": ["path"] }""");
+        var tools = new[]
+        {
+            new ChatToolDefinition("WriteFile", "Write a file", writeSchema),
+            new ChatToolDefinition("ReadFile", "Read a file", readSchema)
+        };
+
+        var fragment = formatter.RenderToolPromptFragment(tools);
+
+        fragment!.Should().Contain("WriteFile");
+        fragment.Should().Contain("ReadFile");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_RenderToolPromptFragment_ToolWithoutRequired_StillIncludesNameAndOptional()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildJsonSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" }
+              }
+            }
+            """);
+        var tools = new[]
+        {
+            new ChatToolDefinition("Search", "Search anything", schema)
+        };
+
+        var fragment = formatter.RenderToolPromptFragment(tools);
+
+        fragment.Should().NotBeNullOrEmpty(
+            because: "tools with no required params still benefit from textual exposure of their optional parameter names");
+        fragment!.Should().Contain("Search");
+        fragment.Should().Contain("query");
+    }
+
+    [Theory]
+    [InlineData(typeof(Phi3ChatFormatter))]
+    [InlineData(typeof(Llama3ChatFormatter))]
+    [InlineData(typeof(ChatMLFormatter))]
+    [InlineData(typeof(GemmaChatFormatter))]
+    [InlineData(typeof(ExaoneChatFormatter))]
+    [InlineData(typeof(DeepSeekChatFormatter))]
+    [InlineData(typeof(MistralChatFormatter))]
+    public void NonGemma4Formatters_RenderToolPromptFragment_ReturnsNullByDefault(Type formatterType)
+    {
+        // Default IChatFormatter contract: only Gemma 4 currently opts in to schema reinforcement.
+        // Other formatters return null so LlamaServerGeneratorModel does not inject a duplicate
+        // schema layer on top of llama-server's native template (would waste tokens for models
+        // that already follow the raw schema).
+        var formatter = (IChatFormatter)Activator.CreateInstance(formatterType)!;
+        var schema = BuildJsonSchema(
+            """{ "type": "object", "properties": { "p": {"type":"string"} }, "required": ["p"] }""");
+        var tools = new[] { new ChatToolDefinition("AnyTool", "any", schema) };
+
+        var fragment = formatter.RenderToolPromptFragment(tools);
+
+        fragment.Should().BeNull(
+            because: $"{formatterType.Name} did not opt in to textual reinforcement and must rely on llama-server's native template");
+    }
 }

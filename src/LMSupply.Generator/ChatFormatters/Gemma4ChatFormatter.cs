@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
 
@@ -73,4 +74,114 @@ public sealed class Gemma4ChatFormatter : IChatFormatter
     /// <inheritdoc />
     public IReadOnlyList<string> GetStopSequences() =>
         [EndOfTurn, StartOfTurn];
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Gemma 4 E4B at gguf:default emits empty tool args under llama-server's
+    /// native template because the model misinterprets the raw JSON schema.
+    /// This override exposes <c>Required parameters (MUST be provided): name (type)</c>
+    /// marker lines that LlamaServerGeneratorModel injects as a system message
+    /// (ecosystem ISSUE Option D-1, 2026-04-30).
+    /// </remarks>
+    public string? RenderToolPromptFragment(IReadOnlyList<ChatToolDefinition>? tools)
+    {
+        if (tools is null || tools.Count == 0)
+        {
+            return null;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("You have access to the following tools. When you call a tool, you MUST provide every required parameter listed below.");
+        sb.AppendLine();
+
+        for (var i = 0; i < tools.Count; i++)
+        {
+            var tool = tools[i];
+            AppendToolFragment(sb, tool);
+            if (i < tools.Count - 1)
+            {
+                sb.AppendLine();
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendToolFragment(StringBuilder sb, ChatToolDefinition tool)
+    {
+        if (string.IsNullOrEmpty(tool.Description))
+        {
+            sb.Append("Tool: ").AppendLine(tool.Name);
+        }
+        else
+        {
+            sb.Append("Tool: ").Append(tool.Name).Append(" - ").AppendLine(tool.Description);
+        }
+
+        var (required, optional) = ExtractParameters(tool.Parameters);
+
+        if (required.Count > 0)
+        {
+            sb.Append("Required parameters (MUST be provided): ");
+            sb.AppendLine(string.Join(", ", required));
+        }
+        else
+        {
+            sb.AppendLine("Required parameters (MUST be provided): (none)");
+        }
+
+        if (optional.Count > 0)
+        {
+            sb.Append("Optional parameters: ");
+            sb.AppendLine(string.Join(", ", optional));
+        }
+    }
+
+    private static (List<string> Required, List<string> Optional) ExtractParameters(JsonElement? parameters)
+    {
+        var required = new List<string>();
+        var optional = new List<string>();
+
+        if (parameters is not { } schema || schema.ValueKind != JsonValueKind.Object)
+        {
+            return (required, optional);
+        }
+
+        var requiredNames = new HashSet<string>(StringComparer.Ordinal);
+        if (schema.TryGetProperty("required", out var requiredArray) && requiredArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var name in requiredArray.EnumerateArray())
+            {
+                if (name.ValueKind == JsonValueKind.String && name.GetString() is { Length: > 0 } str)
+                {
+                    requiredNames.Add(str);
+                }
+            }
+        }
+
+        if (!schema.TryGetProperty("properties", out var properties) || properties.ValueKind != JsonValueKind.Object)
+        {
+            return (required, optional);
+        }
+
+        foreach (var property in properties.EnumerateObject())
+        {
+            var name = property.Name;
+            var typeText = property.Value.TryGetProperty("type", out var typeElem) && typeElem.ValueKind == JsonValueKind.String
+                ? typeElem.GetString()
+                : null;
+            var rendered = string.IsNullOrEmpty(typeText) ? name : $"{name} ({typeText})";
+
+            if (requiredNames.Contains(name))
+            {
+                required.Add(rendered);
+            }
+            else
+            {
+                optional.Add(rendered);
+            }
+        }
+
+        return (required, optional);
+    }
 }

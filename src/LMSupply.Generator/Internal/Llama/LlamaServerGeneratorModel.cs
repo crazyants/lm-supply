@@ -378,7 +378,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         try
         {
             // Convert to llama-server format
-            var serverMessages = ConvertMessages(messages);
+            var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
 
             // Client-side token limit as safety net
@@ -513,7 +514,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         await _concurrencyLimiter.WaitAsync(cancellationToken);
         try
         {
-            var serverMessages = ConvertMessages(messages);
+            var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
 
             // Client-side token limit as safety net
@@ -601,7 +603,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         await _concurrencyLimiter.WaitAsync(cancellationToken);
         try
         {
-            var serverMessages = ConvertMessages(messages);
+            var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
 
             var response = await _serverLease.Client.GenerateChatWithToolsAsync(
@@ -904,6 +907,41 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             < 10L * 1024 * 1024 * 1024 => 32,
             _ => 40
         };
+    }
+
+    /// <summary>
+    /// Conditionally prepends a textual reinforcement of the active tool schemas as a
+    /// system message when the formatter opts in via
+    /// <see cref="IChatFormatter.RenderToolPromptFragment"/>. Small/quantized models
+    /// (Gemma 4 E4B at gguf:default) misinterpret llama-server's raw JSON-schema
+    /// rendering and emit empty tool args; the textual fragment raises first-attempt
+    /// success (ecosystem ISSUE Option D-1, 2026-04-30).
+    /// </summary>
+    /// <remarks>
+    /// Returns the original sequence unchanged when the formatter returns <c>null</c>
+    /// (default for all formatters except Gemma 4) or when no tools are passed —
+    /// avoids polluting other model families' prompts with redundant text.
+    /// </remarks>
+    internal static IEnumerable<ChatMessage> MaybeInjectToolPromptFragment(
+        IEnumerable<ChatMessage> messages,
+        IReadOnlyList<ChatToolDefinition>? tools,
+        IChatFormatter formatter)
+    {
+        var fragment = formatter.RenderToolPromptFragment(tools);
+        if (string.IsNullOrEmpty(fragment))
+        {
+            foreach (var msg in messages)
+            {
+                yield return msg;
+            }
+            yield break;
+        }
+
+        yield return ChatMessage.System(fragment);
+        foreach (var msg in messages)
+        {
+            yield return msg;
+        }
     }
 
     private void ThrowIfDisposed()

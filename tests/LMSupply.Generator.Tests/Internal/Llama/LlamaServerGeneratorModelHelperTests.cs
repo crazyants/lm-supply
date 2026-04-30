@@ -1,5 +1,9 @@
+using System.Text.Json;
 using FluentAssertions;
+using LMSupply.Generator.Abstractions;
+using LMSupply.Generator.ChatFormatters;
 using LMSupply.Generator.Internal.Llama;
+using LMSupply.Generator.Models;
 
 namespace LMSupply.Generator.Tests.Internal.Llama;
 
@@ -56,6 +60,79 @@ public class LlamaServerGeneratorModelHelperTests
 
         LlamaServerGeneratorModel.EstimateTotalLayers(just_under_2gb).Should().Be(22);
         LlamaServerGeneratorModel.EstimateTotalLayers(exactly_2gb).Should().Be(28);
+    }
+
+    // ─── MaybeInjectToolPromptFragment (Option D-1, 2026-04-30) ───
+
+    private static JsonElement BuildSchema(string json) => JsonDocument.Parse(json).RootElement;
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_FormatterReturnsFragment_PrependsSystemMessage()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "path":{"type":"string"} }, "required":["path"] }""");
+        var tools = new[] { new ChatToolDefinition("WriteFile", "Write a file", schema) };
+        var original = new[]
+        {
+            ChatMessage.System("You are helpful."),
+            ChatMessage.User("write /tmp/x")
+        };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter).ToList();
+
+        result.Should().HaveCount(3,
+            because: "fragment is prepended as a new system message — original 2 messages stay");
+        result[0].Role.Should().Be(ChatRole.System);
+        result[0].Content.Should().Contain("Required parameters",
+            because: "the prepended message must carry Gemma4's textual reinforcement so llama-server forwards it to the model");
+        result[1].Should().Be(original[0],
+            because: "original messages are passed through unchanged");
+        result[2].Should().Be(original[1]);
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_FormatterReturnsNull_PassesMessagesThrough()
+    {
+        // Phi3 doesn't opt in to schema reinforcement.
+        var formatter = new Phi3ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "p":{"type":"string"} }, "required":["p"] }""");
+        var tools = new[] { new ChatToolDefinition("AnyTool", "any", schema) };
+        var original = new[]
+        {
+            ChatMessage.System("sys"),
+            ChatMessage.User("u")
+        };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter).ToList();
+
+        result.Should().HaveCount(2,
+            because: "Phi3 returned null — pipeline must not synthesize an empty system message");
+        result[0].Should().Be(original[0]);
+        result[1].Should().Be(original[1]);
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_NullTools_PassesMessagesThrough()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var original = new[] { ChatMessage.User("hello") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, null, formatter).ToList();
+
+        result.Should().HaveCount(1);
+        result[0].Should().Be(original[0]);
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_EmptyTools_PassesMessagesThrough()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var original = new[] { ChatMessage.User("hello") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(
+            original, Array.Empty<ChatToolDefinition>(), formatter).ToList();
+
+        result.Should().HaveCount(1);
     }
 }
 

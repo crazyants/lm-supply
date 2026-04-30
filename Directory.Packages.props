@@ -51,6 +51,6 @@
       (as of 10.0.5) still assigns to it, producing CS0200 at build time.
       Keep pinned to 2.7.x. See commit de95363 for the original fix.
     -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="3.5.2" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.0" />
   </ItemGroup>
 </Project>

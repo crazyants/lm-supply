@@ -48,4 +48,28 @@ public interface IChatFormatter
     /// raises first-attempt success.
     /// </remarks>
     string? RenderToolPromptFragment(IReadOnlyList<ChatToolDefinition>? tools) => null;
+
+    /// <summary>
+    /// Creates a stateful parser that extracts model-native tool-call wrapper
+    /// tokens from the streaming text channel and converts them into structured
+    /// <c>ChatToolCallDelta</c> events. Returns <c>null</c> by default — formatters
+    /// opt in by overriding when their model emits a wrapper that llama-server
+    /// does not recognize.
+    /// </summary>
+    /// <returns>A new parser instance, or <c>null</c> if this formatter relies
+    /// entirely on llama-server's native tool-call extraction.</returns>
+    /// <remarks>
+    /// When a non-null parser is returned, the active GGUF generator
+    /// (<c>LlamaServerGeneratorModel</c>) treats the parser's output as the
+    /// authoritative tool-call source for the turn and SUPPRESSES server-emitted
+    /// tool-call deltas (which on Gemma 4 are typically half-formed name-only
+    /// pattern matches that never invoke).
+    ///
+    /// Reference: ecosystem ISSUE Option D-5 (2026-05-01) —
+    /// Filer cycle-701 surfaced that Gemma 4 emits its native
+    /// <c>&lt;|tool_call&gt;call:NAME{ARGS_JSON}&lt;tool_call|&gt;</c> wrapper into the
+    /// text channel; without this hook the wrapper tokens leak as plain text and
+    /// no tool ever invokes (chat-rag flow 0% success on gguf:default).
+    /// </remarks>
+    IToolCallStreamParser? CreateToolCallStreamParser() => null;
 }

@@ -77,6 +77,25 @@ public sealed class Gemma4ChatFormatter : IChatFormatter
 
     /// <inheritdoc />
     /// <remarks>
+    /// Gemma 4 emits tool calls inside its native
+    /// <c>&lt;|tool_call&gt;call:NAME{ARGS_JSON}&lt;tool_call|&gt;</c> wrapper.
+    /// llama-server forwards those wrapper tokens verbatim in the text channel
+    /// (often together with spurious half-formed name-only tool-call deltas
+    /// extracted from elsewhere in the stream), so chunks never reach the
+    /// invoke layer upstream. <see cref="Gemma4ToolCallStreamParser"/> closes
+    /// the gap by consuming the wrappers and emitting fully formed
+    /// <c>ChatToolCallDelta</c> events. The generator suppresses server-side
+    /// tool-call deltas when this parser is active.
+    ///
+    /// Reference: ecosystem ISSUE Option D-5 (2026-05-01) — Filer cycle-701.
+    /// </remarks>
+    public IToolCallStreamParser CreateToolCallStreamParser()
+    {
+        return new Gemma4ToolCallStreamParser();
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
     /// Gemma 4 E4B at gguf:default emits empty tool args under llama-server's
     /// native template because the model misinterprets the raw JSON schema.
     /// This override exposes <c>Required parameters (MUST be provided): name (type)</c>

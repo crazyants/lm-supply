@@ -528,6 +528,12 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 ? new ReasoningTokenFilter(options.ExtractReasoningTokens)
                 : null;
 
+            // Initialize formatter-supplied tool-call wrapper parser if any.
+            // When present, the parser is the authoritative tool-call source for
+            // the turn and server-emitted tool-call deltas are suppressed
+            // (ecosystem ISSUE Option D-5, 2026-05-01 — Gemma 4 wrapper extraction).
+            var toolStreamParser = _chatFormatter.CreateToolCallStreamParser();
+
             await foreach (var data in _serverLease.Client.GenerateChatStreamAsync(
                 serverMessages, chatOptions, cancellationToken))
             {
@@ -538,9 +544,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     break;
                 }
 
-                // Convert tool call deltas from server types to Generator types
+                // Convert tool call deltas from server types to Generator types.
+                // Suppressed when a formatter-supplied parser owns the channel.
                 IReadOnlyList<ChatToolCallDelta>? toolCallDeltas = null;
-                if (data.ToolCallDeltas is { Count: > 0 })
+                if (toolStreamParser is null && data.ToolCallDeltas is { Count: > 0 })
                 {
                     toolCallDeltas = data.ToolCallDeltas.Select(tc => new ChatToolCallDelta
                     {
@@ -558,6 +565,17 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     text = reasoningFilter.Process(text);
                     if (string.IsNullOrEmpty(text))
                         text = null;
+                }
+
+                // Route remaining text through the formatter-supplied wrapper parser.
+                if (text is not null && toolStreamParser is not null)
+                {
+                    var parsed = toolStreamParser.Feed(text);
+                    text = parsed.Text;
+                    if (parsed.ToolCalls is { Count: > 0 })
+                    {
+                        toolCallDeltas = parsed.ToolCalls;
+                    }
                 }
 
                 // Yield structured chunk
@@ -578,7 +596,33 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 var remaining = reasoningFilter.Flush();
                 if (!string.IsNullOrEmpty(remaining))
                 {
-                    yield return new ChatStreamChunk { Text = remaining };
+                    var residual = remaining;
+                    IReadOnlyList<ChatToolCallDelta>? residualCalls = null;
+                    if (toolStreamParser is not null)
+                    {
+                        var parsed = toolStreamParser.Feed(residual);
+                        residual = parsed.Text;
+                        residualCalls = parsed.ToolCalls;
+                    }
+                    if (residual is not null || residualCalls is not null)
+                    {
+                        yield return new ChatStreamChunk { Text = residual, ToolCalls = residualCalls };
+                    }
+                }
+            }
+
+            // Flush formatter-supplied parser (releases trailing text outside any wrapper;
+            // incomplete wrapper bodies are discarded — see Gemma4ToolCallStreamParser).
+            if (toolStreamParser is not null)
+            {
+                var flushed = toolStreamParser.Flush();
+                if (flushed.Text is not null || flushed.ToolCalls is { Count: > 0 })
+                {
+                    yield return new ChatStreamChunk
+                    {
+                        Text = flushed.Text,
+                        ToolCalls = flushed.ToolCalls
+                    };
                 }
             }
         }

@@ -196,6 +196,50 @@ internal sealed class LlamaServerEmbeddingModel : IEmbeddingModel
     }
 
     /// <inheritdoc />
+    public async ValueTask<float[]> EmbedAsync(
+        string text,
+        int dimensions,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (dimensions <= 0 || dimensions > Dimensions)
+            throw new ArgumentOutOfRangeException(
+                nameof(dimensions), $"dimensions must be between 1 and {Dimensions}.");
+
+        var full = await EmbedAsync(text, cancellationToken);
+        if (dimensions == Dimensions)
+            return full;
+
+        var truncated = full[..dimensions];
+        NormalizeVector(truncated);
+        return truncated;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<float[][]> EmbedAsync(
+        IReadOnlyList<string> texts,
+        int dimensions,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (dimensions <= 0 || dimensions > Dimensions)
+            throw new ArgumentOutOfRangeException(
+                nameof(dimensions), $"dimensions must be between 1 and {Dimensions}.");
+
+        var full = await EmbedAsync(texts, cancellationToken);
+        if (dimensions == Dimensions)
+            return full;
+
+        var result = new float[full.Length][];
+        for (int i = 0; i < full.Length; i++)
+        {
+            result[i] = full[i][..dimensions];
+            NormalizeVector(result[i]);
+        }
+        return result;
+    }
+
+    /// <inheritdoc />
     public async Task WarmupAsync(CancellationToken cancellationToken = default)
     {
         // Server is already warmed up during LoadAsync (test embedding)

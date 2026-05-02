@@ -144,6 +144,57 @@ internal sealed class EmbeddingModel : IEmbeddingModel
         return results;
     }
 
+    public async ValueTask<float[]> EmbedAsync(
+        string text,
+        int dimensions,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (dimensions <= 0 || dimensions > Dimensions)
+            throw new ArgumentOutOfRangeException(
+                nameof(dimensions), $"dimensions must be between 1 and {Dimensions}.");
+
+        var full = await EmbedAsync(text, cancellationToken);
+        if (dimensions == Dimensions)
+            return full;
+
+        var truncated = full[..dimensions];
+        NormalizeL2(truncated);
+        return truncated;
+    }
+
+    public async ValueTask<float[][]> EmbedAsync(
+        IReadOnlyList<string> texts,
+        int dimensions,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (dimensions <= 0 || dimensions > Dimensions)
+            throw new ArgumentOutOfRangeException(
+                nameof(dimensions), $"dimensions must be between 1 and {Dimensions}.");
+
+        var full = await EmbedAsync(texts, cancellationToken);
+        if (dimensions == Dimensions)
+            return full;
+
+        var result = new float[full.Length][];
+        for (int i = 0; i < full.Length; i++)
+        {
+            result[i] = full[i][..dimensions];
+            NormalizeL2(result[i]);
+        }
+        return result;
+    }
+
+    private static void NormalizeL2(float[] vector)
+    {
+        float norm = 0f;
+        for (int i = 0; i < vector.Length; i++) norm += vector[i] * vector[i];
+        norm = MathF.Sqrt(norm);
+        if (norm > 0f)
+            for (int i = 0; i < vector.Length; i++) vector[i] /= norm;
+    }
+
     public async Task WarmupAsync(CancellationToken cancellationToken = default)
     {
         if (_warmedUp) return;

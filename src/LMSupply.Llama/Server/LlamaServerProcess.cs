@@ -162,6 +162,54 @@ public sealed class LlamaServerConfig
 
     #endregion
 
+    #region Speculative Decoding Options
+
+    /// <summary>
+    /// Speculative decoding type (--spec-type). "ngram" for N-gram based speculation.
+    /// </summary>
+    public string? SpecType { get; init; }
+
+    /// <summary>
+    /// Draft model path for speculative decoding (--model-draft).
+    /// </summary>
+    public string? ModelDraft { get; init; }
+
+    #endregion
+
+    #region YaRN RoPE Scaling Options
+
+    /// <summary>
+    /// RoPE scaling mode (--rope-scaling). Values: linear, yarn, longrope.
+    /// </summary>
+    public string? RopeScaling { get; init; }
+
+    /// <summary>
+    /// YaRN: original context window size the model was trained with (--yarn-orig-ctx).
+    /// </summary>
+    public uint? YarnOriginalContext { get; init; }
+
+    /// <summary>
+    /// YaRN: extrapolation mix factor (--yarn-ext-factor). -1 = model default.
+    /// </summary>
+    public float? YarnExtensionFactor { get; init; }
+
+    /// <summary>
+    /// YaRN: attention magnitude scaling factor (--yarn-attn-factor).
+    /// </summary>
+    public float? YarnAttentionFactor { get; init; }
+
+    /// <summary>
+    /// YaRN: low-frequency correction ramp parameter (--yarn-beta-fast).
+    /// </summary>
+    public float? YarnBetaFast { get; init; }
+
+    /// <summary>
+    /// YaRN: high-frequency correction ramp parameter (--yarn-beta-slow).
+    /// </summary>
+    public float? YarnBetaSlow { get; init; }
+
+    #endregion
+
     #region Multimodal Options (Phase 3)
 
     /// <summary>
@@ -473,6 +521,56 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         {
             args.Add("--rope-freq-scale");
             args.Add(_config.RopeFreqScale.Value.ToString("F4", CultureInfo.InvariantCulture));
+        }
+
+        // Speculative decoding
+        if (!string.IsNullOrEmpty(_config.SpecType))
+        {
+            args.Add("--spec-type");
+            args.Add(_config.SpecType);
+        }
+
+        if (!string.IsNullOrEmpty(_config.ModelDraft))
+        {
+            args.Add("--model-draft");
+            args.Add($"\"{_config.ModelDraft}\"");
+        }
+
+        // YaRN RoPE scaling
+        if (!string.IsNullOrEmpty(_config.RopeScaling))
+        {
+            args.Add("--rope-scaling");
+            args.Add(_config.RopeScaling);
+        }
+
+        if (_config.YarnOriginalContext.HasValue)
+        {
+            args.Add("--yarn-orig-ctx");
+            args.Add(_config.YarnOriginalContext.Value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (_config.YarnExtensionFactor.HasValue)
+        {
+            args.Add("--yarn-ext-factor");
+            args.Add(_config.YarnExtensionFactor.Value.ToString("F4", CultureInfo.InvariantCulture));
+        }
+
+        if (_config.YarnAttentionFactor.HasValue)
+        {
+            args.Add("--yarn-attn-factor");
+            args.Add(_config.YarnAttentionFactor.Value.ToString("F4", CultureInfo.InvariantCulture));
+        }
+
+        if (_config.YarnBetaFast.HasValue)
+        {
+            args.Add("--yarn-beta-fast");
+            args.Add(_config.YarnBetaFast.Value.ToString("F4", CultureInfo.InvariantCulture));
+        }
+
+        if (_config.YarnBetaSlow.HasValue)
+        {
+            args.Add("--yarn-beta-slow");
+            args.Add(_config.YarnBetaSlow.Value.ToString("F4", CultureInfo.InvariantCulture));
         }
 
         // Multimodal projector (Phase 3)

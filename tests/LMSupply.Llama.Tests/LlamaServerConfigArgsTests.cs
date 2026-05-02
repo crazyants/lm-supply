@@ -15,4 +15,28 @@ public class LlamaServerConfigArgsTests
     {
         LlamaServerVersionRequirements.GetMinimumBuild(key).Should().Be(expected);
     }
+
+    [Fact]
+    public void LlamaServerConfig_HasSpecTypeProperty()
+    {
+        var config = new LlamaServerConfig { ModelPath = "model.gguf", SpecType = "ngram" };
+        config.SpecType.Should().Be("ngram");
+    }
+
+    [Fact]
+    public void LlamaServerConfig_HasYarnProperties()
+    {
+        var config = new LlamaServerConfig
+        {
+            ModelPath = "model.gguf",
+            RopeScaling = "yarn",
+            YarnOriginalContext = 4096,
+            YarnExtensionFactor = -1f,
+            YarnAttentionFactor = 1.0f,
+            YarnBetaFast = 32f,
+            YarnBetaSlow = 1f
+        };
+        config.RopeScaling.Should().Be("yarn");
+        config.YarnOriginalContext.Should().Be(4096u);
+    }
 }

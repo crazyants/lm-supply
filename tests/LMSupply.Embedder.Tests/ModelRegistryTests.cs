@@ -63,12 +63,12 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void DefaultAlias_PointsToMultilingualE5Base()
+    public void DefaultAlias_PointsToNomicEmbedV15()
     {
         _registry.TryResolve("default", out var info);
 
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("intfloat/multilingual-e5-base");
+        info!.RepoId.Should().Be("nomic-ai/nomic-embed-text-v1.5");
     }
 
     [Fact]

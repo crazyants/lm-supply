@@ -15,7 +15,7 @@ public sealed class EmbedderModelRegistry : ModelRegistryBase<ModelInfo>
     [
         DefaultModels.BgeM3Alias,               // 568M params, 1024 dims, 8K context
         DefaultModels.MultilingualE5LargeAlias,  // 560M params, 1024 dims
-        DefaultModels.MultilingualE5BaseAlias,   // 278M params, 768 dims
+        DefaultModels.NomicEmbedV15Alias,        // 137M params, 768 dims, 8K context, Matryoshka
         DefaultModels.MultilingualE5SmallAlias,  // 118M params, 384 dims
     ];
 

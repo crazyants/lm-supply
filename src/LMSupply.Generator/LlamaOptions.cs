@@ -86,17 +86,15 @@ public sealed class LlamaOptions
 
     /// <summary>
     /// Gets or sets the quantization type for KV cache keys.
-    /// Q8_0 offers good memory/quality balance, Q4_0 for maximum memory savings.
-    /// Defaults to F16 (no quantization).
+    /// Auto selects Q8_0 for CUDA/Metal/Hip (Vulkan b8500+), F16 for CPU/SYCL.
     /// </summary>
-    public KvCacheQuantizationType? TypeK { get; set; }
+    public KvCacheQuantizationType TypeK { get; set; } = KvCacheQuantizationType.Auto;
 
     /// <summary>
     /// Gets or sets the quantization type for KV cache values.
-    /// Q8_0 offers good memory/quality balance, Q4_0 for maximum memory savings.
-    /// Defaults to F16 (no quantization).
+    /// Auto selects Q8_0 for CUDA/Metal/Hip (Vulkan b8500+), F16 for CPU/SYCL.
     /// </summary>
-    public KvCacheQuantizationType? TypeV { get; set; }
+    public KvCacheQuantizationType TypeV { get; set; } = KvCacheQuantizationType.Auto;
 
     /// <summary>
     /// Gets or sets the physical batch size for prompt processing.
@@ -104,6 +102,59 @@ public sealed class LlamaOptions
     /// Defaults to 512.
     /// </summary>
     public uint? UBatchSize { get; set; }
+
+    #region Speculative Decoding
+
+    /// <summary>
+    /// Gets or sets the speculative decoding strategy.
+    /// Auto enables Ngram mode when the server build supports it (≥ b8500).
+    /// Ngram mode provides 1.5–3× speedup with no quality loss and requires no draft model.
+    /// </summary>
+    public SpeculativeDecodingMode SpeculativeDecoding { get; set; } = SpeculativeDecodingMode.Auto;
+
+    /// <summary>
+    /// Gets or sets the path to a draft model for DraftModel speculation mode.
+    /// Only used when SpeculativeDecoding = DraftModel.
+    /// </summary>
+    public string? DraftModelPath { get; set; }
+
+    #endregion
+
+    #region YaRN RoPE Scaling
+
+    /// <summary>
+    /// Gets or sets the RoPE scaling mode for context extension.
+    /// Default passes through to model metadata. YaRN requires YarnOriginalContext.
+    /// </summary>
+    public RopeScalingMode RopeScaling { get; set; } = RopeScalingMode.Default;
+
+    /// <summary>
+    /// Gets or sets the original context size the model was trained with (YaRN only).
+    /// Example: 4096 for most 7B models, 8192 for extended variants.
+    /// </summary>
+    public uint? YarnOriginalContext { get; set; }
+
+    /// <summary>
+    /// Gets or sets the YaRN extrapolation mix factor (-1 = model default).
+    /// </summary>
+    public float? YarnExtensionFactor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the YaRN attention magnitude scaling factor.
+    /// </summary>
+    public float? YarnAttentionFactor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the YaRN low-frequency ramp parameter (beta-fast).
+    /// </summary>
+    public float? YarnBetaFast { get; set; }
+
+    /// <summary>
+    /// Gets or sets the YaRN high-frequency ramp parameter (beta-slow).
+    /// </summary>
+    public float? YarnBetaSlow { get; set; }
+
+    #endregion
 
     #region Phase 3: Multimodal Support
 

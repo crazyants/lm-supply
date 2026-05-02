@@ -147,6 +147,6 @@ public static class DefaultModels
         MsMarcoMiniLML12V2,
         BgeRerankerBase,
         BgeRerankerLarge,
-        BgeRerankerV2M3
+        BgeRerankerV2M3,
     ];
 }

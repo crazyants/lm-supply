@@ -6,20 +6,25 @@ namespace LMSupply.Embedder.Utils;
 /// </summary>
 internal static class DefaultModels
 {
-    // ===== Alias models (all multilingual) =====
+    // ===== Alias models =====
+    // Note: 'default' alias uses nomic-embed-text-v1.5 (English-first, Matryoshka).
+    // For multilingual workloads use 'fast' (multilingual-e5-small), 'quality' (BGE-M3), or 'large' (multilingual-e5-large).
 
     /// <summary>
-    /// Default: multilingual-e5-base, 278M params, 100+ languages, balanced quality/speed.
+    /// Default: nomic-embed-text-v1.5, 137M params, Matryoshka (64–768d), 8K context.
+    /// Supports variable-dimension embeddings via Matryoshka Representation Learning.
+    /// Note: For optimal retrieval quality use instruction prefixes:
+    ///   Documents: "search_document: {text}", Queries: "search_query: {text}".
     /// </summary>
-    public static ModelInfo MultilingualE5BaseAlias { get; } = new()
+    public static ModelInfo NomicEmbedV15Alias { get; } = new()
     {
-        RepoId = "intfloat/multilingual-e5-base",
+        RepoId = "nomic-ai/nomic-embed-text-v1.5",
         AliasName = "default",
         Dimensions = 768,
-        MaxSequenceLength = 512,
+        MaxSequenceLength = 8192,
         PoolingMode = PoolingMode.Mean,
         DoLowerCase = false,
-        Description = "Default: multilingual-e5-base, 278M params, 100+ languages, balanced",
+        Description = "Default: nomic-embed-text-v1.5, 137M, English-first, Matryoshka 64–768d, 8K context",
         Subfolder = "onnx"
     };
 
@@ -210,8 +215,8 @@ internal static class DefaultModels
     /// </summary>
     public static IReadOnlyList<ModelInfo> All { get; } =
     [
-        // Alias models (4 standard aliases, all multilingual)
-        MultilingualE5BaseAlias,    // default
+        // Alias models (4 standard aliases)
+        NomicEmbedV15Alias,         // default
         MultilingualE5SmallAlias,   // fast
         BgeM3Alias,                 // quality
         MultilingualE5LargeAlias,   // large

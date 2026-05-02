@@ -49,6 +49,23 @@ public interface IEmbeddingModel : IAsyncDisposable
     ValueTask<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Generates a Matryoshka embedding truncated to the specified dimension count.
+    /// Computes the full embedding then slices and re-normalizes to the requested size.
+    /// </summary>
+    /// <param name="text">The input text to embed.</param>
+    /// <param name="dimensions">Target dimension count (1 ≤ dimensions ≤ model.Dimensions).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask<float[]> EmbedAsync(string text, int dimensions, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates Matryoshka embeddings for multiple texts truncated to the specified dimension count.
+    /// </summary>
+    /// <param name="texts">The input texts to embed.</param>
+    /// <param name="dimensions">Target dimension count (1 ≤ dimensions ≤ model.Dimensions).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask<float[][]> EmbedAsync(IReadOnlyList<string> texts, int dimensions, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Pre-loads the model to avoid cold start latency on first inference.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

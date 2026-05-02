@@ -88,10 +88,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
 
         var serverPath = updateResult.ServerPath;
         var backend = updateResult.Backend;
+        var serverVersion = updateResult.NewVersion ?? updateResult.PreviousVersion;
 
         // 1b. Validate server version meets model requirements
-        LlamaServerVersionRequirements.Validate(
-            updateResult.NewVersion ?? updateResult.PreviousVersion, chatFormatter.FormatName);
+        LlamaServerVersionRequirements.Validate(serverVersion, chatFormatter.FormatName);
 
         // 2. Read GGUF metadata (best effort)
         GgufMetadata? ggufMetadata = null;
@@ -146,6 +146,14 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     MultimodalProjector = llamaOpts.MultimodalProjector,
                     LoraPath = llamaOpts.LoraPath,
                     LoraScale = llamaOpts.LoraScale,
+                    SpeculativeDecoding  = llamaOpts.SpeculativeDecoding,
+                    DraftModelPath       = llamaOpts.DraftModelPath,
+                    RopeScaling          = llamaOpts.RopeScaling,
+                    YarnOriginalContext  = llamaOpts.YarnOriginalContext,
+                    YarnExtensionFactor  = llamaOpts.YarnExtensionFactor,
+                    YarnAttentionFactor  = llamaOpts.YarnAttentionFactor,
+                    YarnBetaFast         = llamaOpts.YarnBetaFast,
+                    YarnBetaSlow         = llamaOpts.YarnBetaSlow,
                 };
                 Trace.TraceInformation(
                     $"[LlamaServerGeneratorModel] Auto partial offload: " +
@@ -181,6 +189,21 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             additionalArgs.Add(llamaOpts.Threads.Value.ToString(CultureInfo.InvariantCulture));
         }
 
+        // Validate speculative decoding configuration
+        if (llamaOpts.SpeculativeDecoding == SpeculativeDecodingMode.DraftModel
+            && string.IsNullOrEmpty(llamaOpts.DraftModelPath))
+        {
+            throw new InvalidOperationException(
+                "SpeculativeDecoding = DraftModel requires DraftModelPath to be set.");
+        }
+
+        // Validate YaRN configuration
+        if (llamaOpts.RopeScaling == RopeScalingMode.YaRN && !llamaOpts.YarnOriginalContext.HasValue)
+        {
+            throw new InvalidOperationException(
+                "RopeScaling = YaRN requires YarnOriginalContext to be set (original training context size, e.g., 4096).");
+        }
+
         var serverConfig = new LlamaServerConfig
         {
             ModelPath = modelPath,
@@ -192,8 +215,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             Parallel = Math.Max(1, options.MaxConcurrentRequests),
             FlashAttention = llamaOpts.FlashAttention ?? false,
             // Phase 1: KV cache quantization
-            CacheTypeK = MapKvCacheType(llamaOpts.TypeK),
-            CacheTypeV = MapKvCacheType(llamaOpts.TypeV),
+            CacheTypeK = ResolveKvCacheType(llamaOpts.TypeK, backend, serverVersion),
+            CacheTypeV = ResolveKvCacheType(llamaOpts.TypeV, backend, serverVersion),
             // Phase 1: Memory options
             UseMemoryMap = llamaOpts.UseMemoryMap,
             UseMemoryLock = llamaOpts.UseMemoryLock,
@@ -202,6 +225,17 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             // Phase 1: RoPE options
             RopeFreqBase = llamaOpts.RopeFrequencyBase,
             RopeFreqScale = llamaOpts.RopeFrequencyScale,
+            // Speculative decoding
+            SpecType = ResolveSpecType(llamaOpts.SpeculativeDecoding, serverVersion),
+            ModelDraft = llamaOpts.SpeculativeDecoding == SpeculativeDecodingMode.DraftModel
+                ? llamaOpts.DraftModelPath : null,
+            // YaRN RoPE scaling
+            RopeScaling         = MapRopeScaling(llamaOpts.RopeScaling),
+            YarnOriginalContext  = llamaOpts.YarnOriginalContext,
+            YarnExtensionFactor  = llamaOpts.YarnExtensionFactor,
+            YarnAttentionFactor  = llamaOpts.YarnAttentionFactor,
+            YarnBetaFast         = llamaOpts.YarnBetaFast,
+            YarnBetaSlow         = llamaOpts.YarnBetaSlow,
             // Phase 3: Multimodal support
             MultimodalProjector = llamaOpts.MultimodalProjector,
             // Phase 3: LoRA support
@@ -250,9 +284,6 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             Phase = DownloadPhase.Complete
         });
 
-        // Extract server version from update result
-        var serverVersion = updateResult.NewVersion ?? updateResult.PreviousVersion ?? "unknown";
-
         return new LlamaServerGeneratorModel(
             modelId,
             modelPath,
@@ -261,7 +292,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             options,
             contextLength,
             ggufMetadata,
-            serverVersion);
+            serverVersion ?? "unknown");
     }
 
     /// <inheritdoc />
@@ -753,20 +784,73 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     }
 
     /// <summary>
-    /// Maps KV cache quantization type to llama-server CLI format.
+    /// Resolves KV cache type to llama-server CLI string.
+    /// Auto selects based on backend and server version.
     /// </summary>
-    private static string? MapKvCacheType(KvCacheQuantizationType? type)
+    internal static string? ResolveKvCacheType(
+        KvCacheQuantizationType type,
+        LlamaServerBackend backend,
+        string? serverVersion)
     {
+        if (type == KvCacheQuantizationType.Auto)
+            type = SelectAutoKvCache(backend, serverVersion);
+
         return type switch
         {
-            KvCacheQuantizationType.F16 => "f16",
             KvCacheQuantizationType.Q8_0 => "q8_0",
             KvCacheQuantizationType.Q4_0 => "q4_0",
-            KvCacheQuantizationType.F32 => "f32",
-            null => null,
+            KvCacheQuantizationType.F32  => "f32",
+            _                            => null   // F16 = llama-server default
+        };
+    }
+
+    private static KvCacheQuantizationType SelectAutoKvCache(LlamaServerBackend backend, string? serverVersion)
+    {
+        return backend switch
+        {
+            LlamaServerBackend.Cuda12 or LlamaServerBackend.Cuda13
+                or LlamaServerBackend.Metal or LlamaServerBackend.Hip
+                => KvCacheQuantizationType.Q8_0,
+            LlamaServerBackend.Vulkan
+                => IsFeatureSupported("kv-q8-vulkan", serverVersion)
+                    ? KvCacheQuantizationType.Q8_0
+                    : KvCacheQuantizationType.F16,
+            _ => KvCacheQuantizationType.F16   // Cpu, Sycl
+        };
+    }
+
+    /// <summary>
+    /// Resolves speculative decoding mode to llama-server --spec-type value.
+    /// </summary>
+    internal static string? ResolveSpecType(
+        SpeculativeDecodingMode mode,
+        string? serverVersion)
+    {
+        return mode switch
+        {
+            SpeculativeDecodingMode.None       => null,
+            SpeculativeDecodingMode.Ngram      => "ngram",
+            SpeculativeDecodingMode.DraftModel => null,  // handled via ModelDraft
+            SpeculativeDecodingMode.Auto
+                => IsFeatureSupported("spec-ngram", serverVersion) ? "ngram" : null,
             _ => null
         };
     }
+
+    private static bool IsFeatureSupported(string featureKey, string? serverVersion)
+    {
+        var build = LlamaServerVersionRequirements.ParseBuildNumber(serverVersion);
+        var minBuild = LlamaServerVersionRequirements.GetMinimumBuild(featureKey);
+        return build.HasValue && minBuild.HasValue && build.Value >= minBuild.Value;
+    }
+
+    private static string? MapRopeScaling(RopeScalingMode mode) => mode switch
+    {
+        RopeScalingMode.Linear   => "linear",
+        RopeScalingMode.YaRN    => "yarn",
+        RopeScalingMode.LongRoPE => "longrope",
+        _                        => null  // Default = passthrough
+    };
 
     private static LlamaServerBackend MapProviderToBackend(ExecutionProvider provider)
     {
@@ -889,6 +973,14 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         MainGpu = source.MainGpu,
         RopeFreqBase = source.RopeFreqBase,
         RopeFreqScale = source.RopeFreqScale,
+        SpecType            = source.SpecType,
+        ModelDraft          = source.ModelDraft,
+        RopeScaling         = source.RopeScaling,
+        YarnOriginalContext = source.YarnOriginalContext,
+        YarnExtensionFactor = source.YarnExtensionFactor,
+        YarnAttentionFactor = source.YarnAttentionFactor,
+        YarnBetaFast        = source.YarnBetaFast,
+        YarnBetaSlow        = source.YarnBetaSlow,
         MultimodalProjector = source.MultimodalProjector,
         LoraPath = source.LoraPath,
         LoraScale = source.LoraScale,

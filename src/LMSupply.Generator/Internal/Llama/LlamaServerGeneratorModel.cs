@@ -290,7 +290,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             serverLease,
             chatFormatter,
             options,
-            contextLength,
+            SelectReportedContextLength(options, ggufMetadata, contextLength),
             ggufMetadata,
             serverVersion ?? "unknown");
     }
@@ -1092,6 +1092,16 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             yield return msg;
         }
     }
+
+    /// <summary>
+    /// Selects the context length to report as the model's capability.
+    /// Priority: explicit user cap &gt; GGUF metadata capability &gt; VRAM-capped session budget.
+    /// </summary>
+    internal static int SelectReportedContextLength(
+        GeneratorOptions options,
+        GgufMetadata? ggufMetadata,
+        int vramCappedBudget)
+        => options.MaxContextLength ?? ggufMetadata?.ContextLength ?? vramCappedBudget;
 
     private void ThrowIfDisposed()
     {

@@ -7,6 +7,12 @@ namespace LMSupply.Hardware;
 public enum KvCacheQuantizationType
 {
     /// <summary>
+    /// Auto-select based on GPU backend and server version.
+    /// CUDA/Metal/Hip → Q8_0, Vulkan b8500+ → Q8_0, CPU/SYCL → F16.
+    /// </summary>
+    Auto = -1,
+
+    /// <summary>
     /// 16-bit floating point (default, highest quality).
     /// </summary>
     F16 = 0,

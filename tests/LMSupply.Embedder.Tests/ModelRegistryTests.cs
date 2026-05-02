@@ -63,12 +63,12 @@ public class ModelRegistryTests
     }
 
     [Fact]
-    public void DefaultAlias_PointsToNomicEmbedV15()
+    public void DefaultAlias_PointsToBgeM3()
     {
         _registry.TryResolve("default", out var info);
 
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("nomic-ai/nomic-embed-text-v1.5");
+        info!.RepoId.Should().Be("BAAI/bge-m3");
     }
 
     [Fact]

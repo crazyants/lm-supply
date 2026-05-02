@@ -113,6 +113,8 @@ public sealed class LlamaServerClient : IDisposable
                 continue;
             }
 
+            // Only yield content tokens — reasoning_content (thinking) is intentionally skipped.
+            // b8994+: Gemma 4 separates thinking into reasoning_content; content holds the answer.
             var delta = chunk?.Choices?.FirstOrDefault()?.Delta?.Content;
             if (!string.IsNullOrEmpty(delta))
             {
@@ -197,14 +199,15 @@ public sealed class LlamaServerClient : IDisposable
             if (choice is null)
                 continue;
 
-            // Only yield if there's actual content
             if (choice.Delta?.Content is not null ||
+                choice.Delta?.ReasoningContent is not null ||
                 choice.Delta?.ToolCalls is { Count: > 0 } ||
                 choice.FinishReason is not null)
             {
                 yield return new ChatStreamData
                 {
                     TextDelta = choice.Delta?.Content,
+                    ReasoningDelta = choice.Delta?.ReasoningContent,
                     ToolCallDeltas = choice.Delta?.ToolCalls,
                     FinishReason = choice.FinishReason
                 };
@@ -703,6 +706,9 @@ internal sealed class ChatCompletionDelta
 {
     public string? Content { get; set; }
 
+    [JsonPropertyName("reasoning_content")]
+    public string? ReasoningContent { get; set; }
+
     [JsonPropertyName("tool_calls")]
     public List<ToolCallDelta>? ToolCalls { get; set; }
 }
@@ -809,6 +815,11 @@ public sealed class ChatStreamData
     public string? TextDelta { get; init; }
 
     /// <summary>
+    /// Reasoning/thinking content delta (b8994+: emitted in separate field before content).
+    /// </summary>
+    public string? ReasoningDelta { get; init; }
+
+    /// <summary>
     /// Tool call deltas (raw SSE format).
     /// </summary>
     public List<ToolCallDelta>? ToolCallDeltas { get; init; }
@@ -848,6 +859,9 @@ public sealed class ChatCompletionResponseMessage
 
     [JsonPropertyName("content")]
     public string? Content { get; set; }
+
+    [JsonPropertyName("reasoning_content")]
+    public string? ReasoningContent { get; set; }
 
     [JsonPropertyName("tool_calls")]
     public List<ToolCallMessage>? ToolCalls { get; set; }

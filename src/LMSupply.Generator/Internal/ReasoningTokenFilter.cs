@@ -14,9 +14,10 @@ internal sealed partial class ReasoningTokenFilter
     private bool _inReasoningBlock;
     private bool _extractReasoning;
 
-    // Reasoning tag patterns for various models
-    private static readonly string[] OpenTags = ["<think>", "<｜begin▁of▁thinking｜>"];
-    private static readonly string[] CloseTags = ["</think>", "<｜end▁of▁thinking｜>"];
+    // Reasoning tag patterns for various models.
+    // Gemma 4 thinking: <|channel>thought\n…<channel|> (llama.cpp b8672+).
+    private static readonly string[] OpenTags = ["<think>", "<｜begin▁of▁thinking｜>", "<|channel>thought\n"];
+    private static readonly string[] CloseTags = ["</think>", "<｜end▁of▁thinking｜>", "<channel|>"];
 
     /// <summary>
     /// Gets the accumulated reasoning content (if extraction is enabled).

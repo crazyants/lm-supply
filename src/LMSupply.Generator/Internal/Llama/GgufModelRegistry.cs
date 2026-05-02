@@ -16,7 +16,10 @@ public static class GgufModelRegistry
         // llama.cpp b8672+ 에서 Gemma 4 네이티브 지원 (GGUF 메타데이터 자동 감지)
         // ============================================================
 
-        // Fast: Gemma 4 E2B — smallest Gemma 4, fits 4GB iGPU/mobile (~4GB VRAM)
+        // Fast: Gemma 4 E2B — smallest Gemma 4, fits 4GB iGPU/mobile (~3.1GB VRAM).
+        // Q4_K_M is the only tier that fits 4GB VRAM (Q8_0=4.8GB, Q5_K_M=3.2GB w/ no KV margin).
+        // Tool-call schema compliance at Q4_K_M is lower than on larger models — prefer gguf:default
+        // or above for agentic workloads. Auto-selection picks E2B only when E4B doesn't fit.
         ["gguf:fast"] = new GgufModelInfo
         {
             RepoId = "unsloth/gemma-4-E2B-it-GGUF",

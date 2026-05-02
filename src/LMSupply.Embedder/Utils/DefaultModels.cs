@@ -2,29 +2,29 @@ namespace LMSupply.Embedder.Utils;
 
 /// <summary>
 /// Provides definitions for built-in supported embedding models.
-/// Updated: 2025-12 based on MTEB leaderboard rankings.
+/// Updated: 2026-05 — BGE-M3 promoted to 'default' for multilingual coverage.
 /// </summary>
 internal static class DefaultModels
 {
     // ===== Alias models =====
-    // Note: 'default' alias uses nomic-embed-text-v1.5 (English-first, Matryoshka).
-    // For multilingual workloads use 'fast' (multilingual-e5-small), 'quality' (BGE-M3), or 'large' (multilingual-e5-large).
+    // 'default' and 'quality' both resolve to BGE-M3 (100+ languages, 8K context, ONNX official).
+    // For lightweight multilingual use 'fast' (multilingual-e5-small).
+    // For high-dimensional dense retrieval use 'large' (multilingual-e5-large).
+    // For English-only workloads use 'nomic-embed-text-v1.5' (Matryoshka, fast).
 
     /// <summary>
-    /// Default: nomic-embed-text-v1.5, 137M params, Matryoshka (64–768d), 8K context.
-    /// Supports variable-dimension embeddings via Matryoshka Representation Learning.
-    /// Note: For optimal retrieval quality use instruction prefixes:
-    ///   Documents: "search_document: {text}", Queries: "search_query: {text}".
+    /// Default: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual dense retrieval.
+    /// Uses CLS pooling; instruction prefix not required.
     /// </summary>
-    public static ModelInfo NomicEmbedV15Alias { get; } = new()
+    public static ModelInfo BgeM3DefaultAlias { get; } = new()
     {
-        RepoId = "nomic-ai/nomic-embed-text-v1.5",
+        RepoId = "BAAI/bge-m3",
         AliasName = "default",
-        Dimensions = 768,
+        Dimensions = 1024,
         MaxSequenceLength = 8192,
-        PoolingMode = PoolingMode.Mean,
+        PoolingMode = PoolingMode.Cls,
         DoLowerCase = false,
-        Description = "Default: nomic-embed-text-v1.5, 137M, English-first, Matryoshka 64–768d, 8K context",
+        Description = "Default: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual",
         Subfolder = "onnx"
     };
 
@@ -45,8 +45,9 @@ internal static class DefaultModels
 
     /// <summary>
     /// Quality: BGE-M3, 568M params, 100+ languages, 8K context, SOTA multilingual, dense+sparse.
+    /// Same model as 'default'; exposed separately for pipelines that explicitly request quality tier.
     /// </summary>
-    public static ModelInfo BgeM3Alias { get; } = new()
+    public static ModelInfo BgeM3QualityAlias { get; } = new()
     {
         RepoId = "BAAI/bge-m3",
         AliasName = "quality",
@@ -60,6 +61,7 @@ internal static class DefaultModels
 
     /// <summary>
     /// Large: multilingual-e5-large, 560M params, 100+ languages, highest dense quality.
+    /// Note: 512-token context limit. Use BGE-M3 (default) for long-document retrieval.
     /// </summary>
     public static ModelInfo MultilingualE5LargeAlias { get; } = new()
     {
@@ -74,6 +76,23 @@ internal static class DefaultModels
     };
 
     // ===== Explicit models (non-alias, registered by short name) =====
+
+    /// <summary>
+    /// nomic-embed-text-v1.5, 137M params, English-first, Matryoshka 64–768d, 8K context.
+    /// Recommended for English-only RAG pipelines; use instruction prefixes for best retrieval:
+    ///   Documents: "search_document: {text}", Queries: "search_query: {text}".
+    /// </summary>
+    public static ModelInfo NomicEmbedTextV15 { get; } = new()
+    {
+        RepoId = "nomic-ai/nomic-embed-text-v1.5",
+        AliasName = "nomic-embed-text-v1.5",
+        Dimensions = 768,
+        MaxSequenceLength = 8192,
+        PoolingMode = PoolingMode.Mean,
+        DoLowerCase = false,
+        Description = "137M params, English-first, Matryoshka 64–768d, 8K context",
+        Subfolder = "onnx"
+    };
 
     /// <summary>
     /// all-mpnet-base-v2, 110M params, legacy quality model, English.
@@ -216,12 +235,13 @@ internal static class DefaultModels
     public static IReadOnlyList<ModelInfo> All { get; } =
     [
         // Alias models (4 standard aliases)
-        NomicEmbedV15Alias,         // default
-        MultilingualE5SmallAlias,   // fast
-        BgeM3Alias,                 // quality
-        MultilingualE5LargeAlias,   // large
+        BgeM3DefaultAlias,              // default
+        MultilingualE5SmallAlias,       // fast
+        BgeM3QualityAlias,              // quality
+        MultilingualE5LargeAlias,       // large
 
         // Explicit models (by short name)
+        NomicEmbedTextV15,
         AllMpnetBaseV2,
         BgeBaseEnV15,
         BgeLargeEnV15,

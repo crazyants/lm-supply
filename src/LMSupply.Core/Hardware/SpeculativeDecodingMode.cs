@@ -16,7 +16,8 @@ public enum SpeculativeDecodingMode
     None = 1,
 
     /// <summary>
-    /// N-gram based speculation (no draft model required, --spec-type ngram).
+    /// N-gram based speculation (no draft model required).
+    /// Emits --spec-type ngram-simple on llama-server ≥ b8994, ngram on b8500–b8993.
     /// Provides 1.5–3× speedup with no quality loss.
     /// </summary>
     Ngram = 2,

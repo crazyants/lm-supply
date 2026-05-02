@@ -7,9 +7,15 @@ namespace LMSupply.Generator.Models;
 public sealed record ChatStreamChunk
 {
     /// <summary>
-    /// Text content delta, or null if this chunk contains only tool calls.
+    /// Text content delta, or null if this chunk contains only tool calls or reasoning.
     /// </summary>
     public string? Text { get; init; }
+
+    /// <summary>
+    /// Reasoning/thinking content delta (b8994+ servers with Gemma 4 and similar models).
+    /// Only populated when <see cref="GenerationOptions.ExtractReasoningTokens"/> is true.
+    /// </summary>
+    public string? ReasoningDelta { get; init; }
 
     /// <summary>
     /// Tool call deltas in this chunk, or null if no tool calls.

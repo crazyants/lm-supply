@@ -81,7 +81,7 @@ public class GgufIntegrationTests
         var result = new StringBuilder();
         await foreach (var token in model.GenerateChatAsync(
             messages,
-            new GenerationOptions { MaxTokens = 50 }))
+            new GenerationOptions { MaxTokens = 512 }))
         {
             result.Append(token);
         }

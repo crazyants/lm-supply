@@ -589,7 +589,14 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     }).ToList();
                 }
 
-                // Apply reasoning filter to text delta
+                // b8994+: reasoning_content arrives as ReasoningDelta (separate from content).
+                // Route it to ChatStreamChunk.ReasoningDelta when extraction is requested;
+                // silently discard when only filtering is requested (server already separates it).
+                string? reasoningDelta = null;
+                if (data.ReasoningDelta is not null && options.ExtractReasoningTokens)
+                    reasoningDelta = data.ReasoningDelta;
+
+                // Apply reasoning filter to text delta (old-server path: <think> tags in content).
                 var text = data.TextDelta;
                 if (text is not null && reasoningFilter is not null)
                 {
@@ -610,11 +617,12 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 }
 
                 // Yield structured chunk
-                if (text is not null || toolCallDeltas is not null || data.FinishReason is not null)
+                if (text is not null || reasoningDelta is not null || toolCallDeltas is not null || data.FinishReason is not null)
                 {
                     yield return new ChatStreamChunk
                     {
                         Text = text,
+                        ReasoningDelta = reasoningDelta,
                         ToolCalls = toolCallDeltas,
                         FinishReason = data.FinishReason
                     };
@@ -826,13 +834,18 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         SpeculativeDecodingMode mode,
         string? serverVersion)
     {
+        // b8994+ renamed --spec-type ngram to ngram-simple.
+        // Auto probes the newer name first, falls back to the old name for b8500-b8993.
+        bool hasNgramSimple = IsFeatureSupported("spec-ngram-simple", serverVersion);
+        bool hasNgram       = IsFeatureSupported("spec-ngram",        serverVersion);
+
         return mode switch
         {
             SpeculativeDecodingMode.None       => null,
-            SpeculativeDecodingMode.Ngram      => "ngram",
+            SpeculativeDecodingMode.Ngram      => hasNgramSimple ? "ngram-simple" : "ngram",
             SpeculativeDecodingMode.DraftModel => null,  // handled via ModelDraft
-            SpeculativeDecodingMode.Auto
-                => IsFeatureSupported("spec-ngram", serverVersion) ? "ngram" : null,
+            SpeculativeDecodingMode.Auto       => hasNgramSimple ? "ngram-simple" :
+                                                  hasNgram       ? "ngram"        : null,
             _ => null
         };
     }

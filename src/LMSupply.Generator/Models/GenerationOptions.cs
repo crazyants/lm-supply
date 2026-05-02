@@ -196,4 +196,17 @@ public sealed class GenerationOptions
         TopK = 10,
         RepetitionPenalty = 1.0f
     };
+
+    /// <summary>
+    /// Creates options tuned for Gemma 4 models per Google's published recommendations.
+    /// temperature=1.0, top_p=0.95, top_k=64 — required for stable tool-call generation
+    /// on E4B and larger. Use instead of <see cref="Default"/> when loading a Gemma 4 model.
+    /// </summary>
+    public static GenerationOptions Gemma4 => new()
+    {
+        Temperature = 1.0f,
+        TopP = 0.95f,
+        TopK = 64,
+        RepetitionPenalty = 1.0f,
+    };
 }

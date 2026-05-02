@@ -174,21 +174,22 @@ public class GgufModelRegistryTests
     [Fact]
     public void GetAutoSelection_KvCacheCountedInBudget()
     {
-        // 7GB total card (budget = 7 × 0.85 = 5.95 GB).
+        // 6.5GB total card (budget = 6.5 × 0.85 = 5.53 GB, non-low-VRAM margin).
         // gguf:default weights = 5.3GB, KV @ 4096 ctx ≈ 1.4GB → total ~6.7GB (over budget)
-        // → must demote to gguf:fast (3.1GB + ~1GB KV ≈ 4.1GB).
+        // gguf:qwen2.5-7b weights = 4.7GB, KV @ 4096 ctx ≈ 1.6GB → total ~6.3GB (over budget)
+        // → must demote to gguf:fast (3.1GB + ~0.9GB KV ≈ 4.0GB).
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
-            DeviceName = "Test 7GB",
-            TotalMemoryBytes = 7L * 1024 * 1024 * 1024,
-            FreeMemoryBytes = 6L * 1024 * 1024 * 1024,
+            DeviceName = "Test 6.5GB",
+            TotalMemoryBytes = (long)(6.5 * 1024L * 1024 * 1024),
+            FreeMemoryBytes = (long)(5.5 * 1024L * 1024 * 1024),
         };
 
         var result = GgufModelRegistry.GetAutoSelection(gpu);
 
         result.Selected.AliasName.Should().Be("gguf:fast",
-            because: "with KV cache @ 4096 included, default (E4B) exceeds 5.95 GB budget");
+            because: "with KV cache @ 4096 included, default (E4B) and qwen2.5-7b both exceed 5.53 GB budget");
         result.Reason.Should().Be(ModelSelectionReason.Fits);
     }
 
@@ -252,12 +253,12 @@ public class GgufModelRegistryTests
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
-            TotalMemoryBytes = 7L * 1024 * 1024 * 1024,
-            FreeMemoryBytes = 6L * 1024 * 1024 * 1024
+            TotalMemoryBytes = 6L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 5L * 1024 * 1024 * 1024
         };
-        // 7GB × 0.85 = 5.95GB. With KV @ 4096:
-        // - default (5.3GB + ~1.4GB KV ≈ 6.7GB) does NOT fit
-        // - fast (3.1GB + ~1GB KV ≈ 4.1GB) fits
+        // 6GB × 0.85 = 5.10GB (Linux); 6GB × 0.75 = 4.50GB (Windows low-VRAM margin, ≤6GB).
+        // In both cases qwen2.5-7b (~6.3GB total) and gguf:default (~6.7GB total) don't fit.
+        // fast (3.1GB + ~0.9GB KV ≈ 4.0GB) fits.
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q4_K_M");
         model.ParameterCount.Should().Be(2_300_000_000);

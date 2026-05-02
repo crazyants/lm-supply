@@ -67,11 +67,14 @@ public class LlamaOptionsDefaultsTests
     }
 
     // ─── ResolveSpecType ──────────────────────────────────────────────────
+    // b8994 renamed --spec-type ngram → ngram-simple.
     [Theory]
-    [InlineData(SpeculativeDecodingMode.Auto,  "b8863", "ngram")]  // ≥ 8500
-    [InlineData(SpeculativeDecodingMode.Auto,  "b8000", null)]     // < 8500 → None
-    [InlineData(SpeculativeDecodingMode.Auto,  null,    null)]     // unknown → None
-    [InlineData(SpeculativeDecodingMode.Ngram, "b8000", "ngram")]  // explicit Ngram always
+    [InlineData(SpeculativeDecodingMode.Auto,  "b8994", "ngram-simple")]  // ≥ 8994 → new name
+    [InlineData(SpeculativeDecodingMode.Auto,  "b8863", "ngram")]         // 8500–8993 → old name
+    [InlineData(SpeculativeDecodingMode.Auto,  "b8000", null)]            // < 8500 → None
+    [InlineData(SpeculativeDecodingMode.Auto,  null,    null)]            // unknown → None
+    [InlineData(SpeculativeDecodingMode.Ngram, "b8994", "ngram-simple")]  // explicit, new server
+    [InlineData(SpeculativeDecodingMode.Ngram, "b8000", "ngram")]         // explicit, old server
     [InlineData(SpeculativeDecodingMode.None,  "b8863", null)]
     public void ResolveSpecType_ReturnsExpectedString(
         SpeculativeDecodingMode mode, string? version, string? expected)

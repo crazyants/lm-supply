@@ -13,9 +13,9 @@ public sealed class EmbedderModelRegistry : ModelRegistryBase<ModelInfo>
     /// </summary>
     private static readonly ModelInfo[] AutoCandidates =
     [
-        DefaultModels.BgeM3Alias,               // 568M params, 1024 dims, 8K context
+        DefaultModels.BgeM3DefaultAlias,         // 568M params, 1024 dims, 8K context, 100+ langs
         DefaultModels.MultilingualE5LargeAlias,  // 560M params, 1024 dims
-        DefaultModels.NomicEmbedV15Alias,        // 137M params, 768 dims, 8K context, Matryoshka
+        DefaultModels.NomicEmbedTextV15,         // 137M params, 768 dims, 8K context, Matryoshka
         DefaultModels.MultilingualE5SmallAlias,  // 118M params, 384 dims
     ];
 

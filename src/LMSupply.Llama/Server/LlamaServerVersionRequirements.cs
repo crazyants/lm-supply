@@ -15,7 +15,9 @@ public static partial class LlamaServerVersionRequirements
     /// </summary>
     private static readonly Dictionary<string, int> MinBuildByFormat = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["gemma4"] = 8672,   // Gemma 4 native support (GGUF metadata auto-detect)
+        ["gemma4"]       = 8672,   // Gemma 4 native support (GGUF metadata auto-detect)
+        ["spec-ngram"]   = 8500,   // --spec-type ngram support
+        ["kv-q8-vulkan"] = 8500,   // KV cache Q8_0 stable on Vulkan
     };
 
     [GeneratedRegex(@"^b(\d+)", RegexOptions.IgnoreCase)]

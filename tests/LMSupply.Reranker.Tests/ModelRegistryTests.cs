@@ -91,11 +91,19 @@ public class ModelRegistryTests
     }
 
     [Fact]
+    public void Resolve_FastMultilingualAlias_ShouldReturnBgeRerankerV25Lightweight()
+    {
+        var model = _registry.Resolve("fast-multilingual");
+        model.Should().NotBeNull();
+        model.Id.Should().Be("BAAI/bge-reranker-v2.5-gemma2-lightweight");
+    }
+
+    [Fact]
     public void GetAvailableModels_ShouldReturnAllBuiltInModels()
     {
         var models = _registry.GetAvailableModels();
 
-        models.Should().HaveCount(6);
+        models.Should().HaveCount(7);
     }
 
     [Fact]

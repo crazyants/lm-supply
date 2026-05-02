@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using LMSupply.Exceptions;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.Models;
@@ -339,16 +340,102 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel, IDiagnosticsSink
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// ONNX models emit tool calls as a single JSON object in the text stream rather
+    /// than via native streaming markers. To make tool calls reach upstream consumers
+    /// while still supporting streamed text for plain conversational responses, this
+    /// method:
+    /// <list type="number">
+    /// <item>Injects tool definitions into the system prompt (matching the non-streaming
+    /// <see cref="GenerateChatWithToolsAsync"/> path) so the model is aware of available tools.</item>
+    /// <item>Sniffs the first non-whitespace character of the model output. If it is
+    /// <c>{</c>, the entire response is buffered for tool-call parsing at end of stream;
+    /// otherwise tokens are forwarded immediately as streaming text.</item>
+    /// <item>On stream completion, attempts to parse buffered text via
+    /// <see cref="ToolCallTextParser"/>. Successful parses are emitted as
+    /// <see cref="ChatToolCallDelta"/> with <c>finish_reason = "tool_calls"</c>; failed
+    /// parses fall back to flushing the buffered text verbatim.</item>
+    /// </list>
+    /// Without this, ONNX-backed models (e.g. Phi-4-mini-instruct) silently bypass
+    /// tool calling under the streaming code path that filer-host's OpenAI-compatible
+    /// endpoint uses, leaving search_knowledge / RAG tools effectively unreachable.
+    /// </remarks>
     public async IAsyncEnumerable<ChatStreamChunk> GenerateChatStreamAsync(
         IEnumerable<ChatMessage> messages,
         GenerationOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // ONNX models don't support native streaming tool calls.
-        // Wrap text-only streaming as ChatStreamChunk.
-        await foreach (var token in GenerateChatAsync(messages, options, cancellationToken))
+        options ??= GenerationOptions.Default;
+
+        var messageList = messages.ToList();
+        var hasTools = options.Tools is { Count: > 0 };
+        if (hasTools)
         {
-            yield return new ChatStreamChunk { Text = token };
+            messageList = InjectToolDefinitions(messageList, options.Tools!);
+        }
+
+        var buffer = new StringBuilder();
+        var bufferingForToolCall = hasTools;
+        var firstNonWhitespaceDecided = false;
+
+        await foreach (var token in GenerateChatAsync(messageList, options, cancellationToken))
+        {
+            if (bufferingForToolCall)
+            {
+                buffer.Append(token);
+
+                if (!firstNonWhitespaceDecided)
+                {
+                    var probe = buffer.ToString().AsSpan().TrimStart();
+                    if (probe.Length > 0)
+                    {
+                        firstNonWhitespaceDecided = true;
+                        if (probe[0] != '{')
+                        {
+                            // Plain text response — flush the buffer and continue streaming.
+                            bufferingForToolCall = false;
+                            yield return new ChatStreamChunk { Text = buffer.ToString() };
+                            buffer.Clear();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                yield return new ChatStreamChunk { Text = token };
+            }
+        }
+
+        if (bufferingForToolCall && buffer.Length > 0)
+        {
+            var fullText = buffer.ToString();
+            var toolCalls = ToolCallTextParser.TryParse(fullText);
+            if (toolCalls is { Count: > 0 })
+            {
+                var deltas = new List<ChatToolCallDelta>(toolCalls.Count);
+                for (var i = 0; i < toolCalls.Count; i++)
+                {
+                    var call = toolCalls[i];
+                    deltas.Add(new ChatToolCallDelta
+                    {
+                        Index = i,
+                        Id = call.Id,
+                        Name = call.FunctionName,
+                        Arguments = call.Arguments
+                    });
+                }
+
+                yield return new ChatStreamChunk
+                {
+                    ToolCalls = deltas,
+                    FinishReason = "tool_calls"
+                };
+                yield break;
+            }
+
+            // Started with '{' but did not parse as a recognizable tool call —
+            // surface the raw text so the caller still receives useful output.
+            yield return new ChatStreamChunk { Text = fullText };
         }
 
         yield return new ChatStreamChunk { FinishReason = "stop" };

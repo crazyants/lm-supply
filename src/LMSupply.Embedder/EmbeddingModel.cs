@@ -159,7 +159,7 @@ internal sealed class EmbeddingModel : IEmbeddingModel
             return full;
 
         var truncated = full[..dimensions];
-        NormalizeL2(truncated);
+        VectorOperations.NormalizeL2(truncated.AsSpan());
         return truncated;
     }
 
@@ -181,18 +181,9 @@ internal sealed class EmbeddingModel : IEmbeddingModel
         for (int i = 0; i < full.Length; i++)
         {
             result[i] = full[i][..dimensions];
-            NormalizeL2(result[i]);
+            VectorOperations.NormalizeL2(result[i].AsSpan());
         }
         return result;
-    }
-
-    private static void NormalizeL2(float[] vector)
-    {
-        float norm = 0f;
-        for (int i = 0; i < vector.Length; i++) norm += vector[i] * vector[i];
-        norm = MathF.Sqrt(norm);
-        if (norm > 0f)
-            for (int i = 0; i < vector.Length; i++) vector[i] /= norm;
     }
 
     public async Task WarmupAsync(CancellationToken cancellationToken = default)

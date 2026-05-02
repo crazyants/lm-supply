@@ -65,7 +65,6 @@ public class MatryoshkaTests : IAsyncDisposable
 internal sealed class FakeEmbeddingModel : IEmbeddingModel
 {
     private readonly int _dims;
-    private readonly Random _rng = new(42);
 
     public FakeEmbeddingModel(int fullDimensions) => _dims = fullDimensions;
 
@@ -78,16 +77,18 @@ internal sealed class FakeEmbeddingModel : IEmbeddingModel
 
     public ValueTask<float[]> EmbedAsync(string text, CancellationToken ct = default)
     {
-        var v = Enumerable.Range(0, _dims).Select(_ => (float)_rng.NextDouble()).ToArray();
+        var rng = new Random(text.GetHashCode());
+        var v = Enumerable.Range(0, _dims).Select(_ => (float)rng.NextDouble()).ToArray();
         NormalizeL2(v);
         return ValueTask.FromResult(v);
     }
 
     public ValueTask<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct = default)
     {
-        var result = texts.Select(_ =>
+        var result = texts.Select(t =>
         {
-            var v = Enumerable.Range(0, _dims).Select(__ => (float)_rng.NextDouble()).ToArray();
+            var rng = new Random(t.GetHashCode());
+            var v = Enumerable.Range(0, _dims).Select(_ => (float)rng.NextDouble()).ToArray();
             NormalizeL2(v);
             return v;
         }).ToArray();

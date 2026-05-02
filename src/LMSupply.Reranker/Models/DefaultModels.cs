@@ -138,27 +138,6 @@ public static class DefaultModels
     };
 
     /// <summary>
-    /// BGE Reranker v2.5 Gemma2 Lightweight — fast multilingual model with token compression.
-    /// ~500M params, 8192 max sequence length, 100+ languages.
-    /// Note: Architecture is Gemma2-based. Verify ONNX path on HuggingFace if loading fails.
-    /// </summary>
-    public static ModelInfo BgeRerankerV25Gemma2Lightweight { get; } = new()
-    {
-        Id = "BAAI/bge-reranker-v2.5-gemma2-lightweight",
-        AliasName = "fast-multilingual",
-        DisplayName = "BGE Reranker v2.5 Gemma2 Lightweight",
-        Parameters = 500_000_000,
-        MaxSequenceLength = 8192,
-        SizeBytes = 1_000_000_000,
-        OnnxFile = "onnx/model.onnx",
-        TokenizerFile = "tokenizer.json",
-        Description = "Fast-multilingual: token compression, 8K context, 100+ languages",
-        IsMultilingual = true,
-        Architecture = ModelArchitecture.Bert,
-        OutputShape = OutputShape.SingleLogit
-    };
-
-    /// <summary>
     /// Gets all built-in models.
     /// </summary>
     public static IReadOnlyList<ModelInfo> All { get; } =
@@ -169,6 +148,5 @@ public static class DefaultModels
         BgeRerankerBase,
         BgeRerankerLarge,
         BgeRerankerV2M3,
-        BgeRerankerV25Gemma2Lightweight,
     ];
 }

@@ -173,4 +173,88 @@ public class ToolCallTextParserTests
 
         result.Should().BeNull();
     }
+
+    [Fact]
+    public void TryParse_ToolCallsWithTrailingBrace_StillParses()
+    {
+        // Phi-4-mini occasionally appends a stray closing brace after the
+        // legitimate tool-call object (Filer Sprint-RR1 RR-A evidence,
+        // 2026-05-02). The balanced-brace extractor must isolate the first
+        // valid object so the parse succeeds.
+        var json = "{\"tool_calls\": [{\"id\": \"call_x\", \"type\": \"function\", " +
+                   "\"function\": {\"name\": \"search_knowledge\", " +
+                   "\"arguments\": {\"query\": \"python uses\"}}}]}}";
+
+        var result = ToolCallTextParser.TryParse(json);
+
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result![0].FunctionName.Should().Be("search_knowledge");
+        result[0].Arguments.Should().Contain("python uses");
+    }
+
+    [Fact]
+    public void TryParse_DirectCallWithTrailingWhitespaceAndBrace_StillParses()
+    {
+        var json = "{\"name\": \"calc\", \"arguments\": {\"x\": 1}}\n}\n  ";
+
+        var result = ToolCallTextParser.TryParse(json);
+
+        result.Should().NotBeNull();
+        result![0].FunctionName.Should().Be("calc");
+    }
+
+    [Fact]
+    public void TryParse_BraceInsideStringLiteral_NotConfusingExtractor()
+    {
+        // Argument value contains a '}' character — must not be mistaken for
+        // the end of the top-level object.
+        var json = "{\"name\": \"echo\", \"arguments\": {\"text\": \"a}b\"}}";
+
+        var result = ToolCallTextParser.TryParse(json);
+
+        result.Should().NotBeNull();
+        result![0].FunctionName.Should().Be("echo");
+        result[0].Arguments.Should().Contain("a}b");
+    }
+
+    [Fact]
+    public void TryParse_MissingOuterClose_RecoversAndParses()
+    {
+        // Phi-4-mini RR-M evidence (2026-05-02): the model emitted a tool-call
+        // envelope that closed the inner objects but forgot the outer object
+        // brace (writing `]}]]` instead of `]}}`). Recovery pad supplies the
+        // missing `}` and re-walks.
+        var json = "{\"tool_calls\": [{\"id\": \"call_x\", \"type\": \"function\", " +
+                   "\"function\": {\"name\": \"search_knowledge\", " +
+                   "\"arguments\": {\"query\": \"Kafka stages\"}}]}]]";
+
+        var result = ToolCallTextParser.TryParse(json);
+
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result![0].FunctionName.Should().Be("search_knowledge");
+        result[0].Arguments.Should().Contain("Kafka");
+    }
+
+    [Fact]
+    public void TryParse_StrayEscapeBeforeClosingQuote_RecoversAndParses()
+    {
+        // Phi-4-mini RR-K evidence (2026-05-02): the model emitted an extra
+        // backslash before the legitimate closing quote of the arguments
+        // string. The strict balanced extractor leaves the parser inside an
+        // unterminated string; the best-effort recovery removes the stray
+        // backslash and re-runs the walk so the legitimate envelope still
+        // parses cleanly.
+        var json = "{\"tool_calls\": [{\"id\": \"call_x\", \"type\": \"function\", " +
+                   "\"function\": {\"name\": \"search_knowledge\", " +
+                   "\"arguments\": \"{\\\"query\\\": \\\"Kafka data pipeline stages\\\"}\\\"\"}}]}]}";
+
+        var result = ToolCallTextParser.TryParse(json);
+
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result![0].FunctionName.Should().Be("search_knowledge");
+        result[0].Arguments.Should().Contain("Kafka");
+    }
 }

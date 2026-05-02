@@ -119,6 +119,28 @@ public static class GgufModelRegistry
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
+
+        // ============================================================
+        // Qwen 2.5 — Apache 2.0, strong multilingual (KO/ZH/EN), ChatML, 32K context
+        // Recommended default for Korean RAG workloads where Gemma 4 family shows silent floor
+        // ============================================================
+
+        // Qwen2.5-7B: Best KO/ZH multilingual quality per GB; 32K context; ~4.4GB VRAM
+        ["gguf:qwen2.5-7b"] = new GgufModelInfo
+        {
+            RepoId = "bartowski/Qwen2.5-7B-Instruct-GGUF",
+            DisplayName = "Qwen 2.5 7B Instruct",
+            DefaultFile = "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+            ChatFormat = "chatml",
+            ContextLength = 32768,
+            ParameterCount = 7_620_000_000,
+            EstimatedSizeBytes = 4_682_024_960L,
+            QuantizationType = "Q4_K_M",
+            NumLayers = 28,
+            HiddenSize = 3584,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+        },
     };
 
     /// <summary>

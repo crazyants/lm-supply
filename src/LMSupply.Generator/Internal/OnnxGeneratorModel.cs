@@ -412,29 +412,53 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel, IDiagnosticsSink
             var toolCalls = ToolCallTextParser.TryParse(fullText);
             if (toolCalls is { Count: > 0 })
             {
+                // Validate against advertised tool names — Phi-4-mini and similar
+                // small ONNX models occasionally hallucinate tool names that do
+                // not exist in the request's tools array (e.g. invented
+                // <c>search_memoized_documents</c> when the legitimate tool is
+                // <c>search_knowledge</c>). Forwarding a hallucinated name to
+                // the upstream FunctionInvokingChatClient triggers an infinite
+                // retry loop because the dispatcher cannot resolve the name and
+                // re-prompts the model. Drop unknown names before they leave
+                // the generator boundary so the caller surfaces the assistant
+                // text instead. Sprint-RR1 RR-N evidence (2026-05-02).
+                var validNames = options.Tools is { Count: > 0 } toolDefs
+                    ? new HashSet<string>(toolDefs.Select(t => t.Name), StringComparer.Ordinal)
+                    : null;
+
                 var deltas = new List<ChatToolCallDelta>(toolCalls.Count);
                 for (var i = 0; i < toolCalls.Count; i++)
                 {
                     var call = toolCalls[i];
+                    if (validNames is not null && !string.IsNullOrEmpty(call.FunctionName)
+                        && !validNames.Contains(call.FunctionName))
+                    {
+                        continue;
+                    }
                     deltas.Add(new ChatToolCallDelta
                     {
-                        Index = i,
+                        Index = deltas.Count,
                         Id = call.Id,
                         Name = call.FunctionName,
                         Arguments = call.Arguments
                     });
                 }
 
-                yield return new ChatStreamChunk
+                if (deltas.Count > 0)
                 {
-                    ToolCalls = deltas,
-                    FinishReason = "tool_calls"
-                };
-                yield break;
+                    yield return new ChatStreamChunk
+                    {
+                        ToolCalls = deltas,
+                        FinishReason = "tool_calls"
+                    };
+                    yield break;
+                }
             }
 
-            // Started with '{' but did not parse as a recognizable tool call —
-            // surface the raw text so the caller still receives useful output.
+            // Either nothing parsed, or every parsed call referenced an unknown
+            // tool — surface the raw text so the user still sees what the model
+            // produced (the assistant message often contains useful prose mixed
+            // with the malformed tool envelope).
             yield return new ChatStreamChunk { Text = fullText };
         }
 

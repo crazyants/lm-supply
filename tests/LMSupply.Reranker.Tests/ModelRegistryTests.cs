@@ -192,4 +192,47 @@ public class ModelRegistryTests
         models.Should().Contain("auto");
         models.Should().AllSatisfy(m => m.Should().BeOfType<string>());
     }
+
+    [Fact]
+    public void LocalReranker_CheckRuntimeAvailability_ReturnsWithoutCrash()
+    {
+        var (available, errorMessage) = LocalReranker.CheckRuntimeAvailability();
+
+        if (available)
+            errorMessage.Should().BeNull();
+        else
+            errorMessage.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void LocalReranker_IsModelDownloaded_ReturnsFalseForEmptyCache()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"reranker-cache-{Guid.NewGuid():N}");
+        try
+        {
+            var result = LocalReranker.IsModelDownloaded("default", tempDir);
+            result.Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LocalReranker_IsModelDownloaded_ReturnsFalseForUnknownModel()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"reranker-cache-{Guid.NewGuid():N}");
+        try
+        {
+            var result = LocalReranker.IsModelDownloaded("nonexistent/model-xyz", tempDir);
+            result.Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }

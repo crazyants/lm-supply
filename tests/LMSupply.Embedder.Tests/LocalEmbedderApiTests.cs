@@ -164,4 +164,57 @@ public class LocalEmbedderApiTests
         var models = LocalEmbedder.GetAvailableModels().ToList();
         models.Should().Contain(expectedAlias);
     }
+
+    [Fact]
+    public void CheckRuntimeAvailability_ReturnsWithoutCrash()
+    {
+        var (available, errorMessage) = LocalEmbedder.CheckRuntimeAvailability();
+
+        // On dev machines this should be true; on bare containers it may be false.
+        // The key invariant: the call itself must not throw or crash the process.
+        if (available)
+            errorMessage.Should().BeNull();
+        else
+            errorMessage.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void IsModelDownloaded_ReturnsFalseForNonCachedModel()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"embedder-cache-{Guid.NewGuid():N}");
+        try
+        {
+            // Empty cache dir → no model can be downloaded
+            var result = LocalEmbedder.IsModelDownloaded("default", tempDir);
+            result.Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsModelDownloaded_ReturnsFalseForUnknownModel()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"embedder-cache-{Guid.NewGuid():N}");
+        try
+        {
+            var result = LocalEmbedder.IsModelDownloaded("nonexistent/model-xyz", tempDir);
+            result.Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadModelAsync_ThrowsForUnknownModel()
+    {
+        var act = () => LocalEmbedder.DownloadModelAsync("completely-unknown-model-xyz");
+        await act.Should().ThrowAsync<ModelNotFoundException>();
+    }
 }

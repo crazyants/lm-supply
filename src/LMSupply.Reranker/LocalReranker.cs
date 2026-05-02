@@ -1,5 +1,7 @@
 using LMSupply.Core.Download;
 using LMSupply.Download;
+using LMSupply.Inference;
+using LMSupply.Reranker.Infrastructure;
 using LMSupply.Reranker.Inference;
 using LMSupply.Reranker.Models;
 using LMSupply.Reranker.Utils;
@@ -170,6 +172,102 @@ public static class LocalReranker
             options,
             progress,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks whether the ONNX Runtime native library can be loaded in the current environment.
+    /// Call this before <see cref="LoadAsync"/> to verify that the host has the required
+    /// shared libraries (e.g., libstdc++, libgomp on Linux; VC++ Redistributable on Windows).
+    /// </summary>
+    /// <returns>
+    /// A tuple where <c>Available</c> is <see langword="true"/> when the runtime can be loaded,
+    /// and <c>ErrorMessage</c> contains a diagnostic string when it cannot.
+    /// </returns>
+    public static (bool Available, string? ErrorMessage) CheckRuntimeAvailability()
+        => OnnxSessionFactory.CheckOnnxRuntimeAvailability();
+
+    /// <summary>
+    /// Checks whether a model is already downloaded and available in the local cache.
+    /// This does NOT load the model into memory or initialize the ONNX Runtime.
+    /// </summary>
+    /// <param name="modelId">
+    /// A model alias (e.g., "default"), a known model ID, or a HuggingFace repo ID.
+    /// </param>
+    /// <param name="cacheDirectory">Custom cache directory, or <see langword="null"/> for default.</param>
+    /// <returns><see langword="true"/> if the model files exist in cache and are not LFS pointers.</returns>
+    public static bool IsModelDownloaded(string modelId, string? cacheDirectory = null)
+    {
+        var cacheDir = cacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
+
+        // Resolve alias to model info
+        var registry = RerankerModelRegistry.Default;
+        ModelInfo modelInfo;
+        try
+        {
+            modelInfo = registry.Resolve(modelId);
+        }
+        catch (ModelNotFoundException)
+        {
+            // Unknown model — check raw repo ID
+            var snapshotDir = CacheManager.GetModelDirectory(cacheDir, modelId);
+            var onnxPath = Path.Combine(snapshotDir, "model.onnx");
+            return File.Exists(onnxPath) && !CacheManager.IsLfsPointerFile(onnxPath);
+        }
+
+        using var manager = new ModelManager(cacheDir, autoDownload: false);
+        return manager.GetCachedModel(modelInfo) != null;
+    }
+
+    /// <summary>
+    /// Downloads a model without loading it into memory.
+    /// If the model is already cached, this is a no-op.
+    /// Use this to pre-fetch models (e.g., during container build or CI) without requiring
+    /// the ONNX Runtime to be available at download time.
+    /// </summary>
+    /// <param name="modelId">
+    /// A model alias (e.g., "default"), a known model ID, or a HuggingFace repo ID.
+    /// </param>
+    /// <param name="options">Optional configuration (cache directory).</param>
+    /// <param name="progress">Optional progress reporting for downloads.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public static async Task DownloadModelAsync(
+        string modelId,
+        RerankerOptions? options = null,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new RerankerOptions();
+
+        // Parse variant qualifier
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelId);
+        options.ModelId = baseId;
+        options.QuantizationHint ??= qualifier;
+
+        var cacheDir = options.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
+        var registry = RerankerModelRegistry.Default;
+
+        ModelInfo modelInfo;
+        try
+        {
+            modelInfo = registry.Resolve(options.ModelId);
+        }
+        catch (ModelNotFoundException)
+        {
+            // Unknown alias — try as raw HuggingFace repo ID
+            if (options.ModelId.Contains('/'))
+            {
+                using var downloader = new HuggingFaceDownloader(cacheDir);
+                await downloader.DownloadModelAsync(
+                    options.ModelId,
+                    progress: progress,
+                    cancellationToken: cancellationToken);
+                return;
+            }
+            throw;
+        }
+
+        using var manager = new ModelManager(cacheDir, autoDownload: true);
+        await manager.EnsureModelAsync(modelInfo, progress, cancellationToken);
     }
 
     /// <summary>

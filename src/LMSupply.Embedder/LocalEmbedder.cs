@@ -4,6 +4,7 @@ using LMSupply.Embedder.Inference;
 using LMSupply.Embedder.Pooling;
 using LMSupply.Embedder.Utils;
 using LMSupply.Hardware;
+using LMSupply.Inference;
 using LMSupply.Text;
 
 namespace LMSupply.Embedder;
@@ -216,6 +217,126 @@ public static class LocalEmbedder
             $"[LocalEmbedder.auto] Requested={requested}, Active={active}, " +
             $"GPU={gpu.Vendor} {gpu.DeviceName ?? "n/a"}, " +
             $"Recommended={gpu.RecommendedProvider}, model={modelId}");
+    }
+
+    /// <summary>
+    /// Checks whether the ONNX Runtime native library can be loaded in the current environment.
+    /// Call this before <see cref="LoadAsync"/> to verify that the host has the required
+    /// shared libraries (e.g., libstdc++, libgomp on Linux; VC++ Redistributable on Windows).
+    /// </summary>
+    /// <returns>
+    /// A tuple where <c>Available</c> is <see langword="true"/> when the runtime can be loaded,
+    /// and <c>ErrorMessage</c> contains a diagnostic string when it cannot.
+    /// </returns>
+    public static (bool Available, string? ErrorMessage) CheckRuntimeAvailability()
+        => OnnxSessionFactory.CheckOnnxRuntimeAvailability();
+
+    /// <summary>
+    /// Checks whether a model is already downloaded and available in the local cache.
+    /// This does NOT load the model into memory or initialize the ONNX Runtime.
+    /// </summary>
+    /// <param name="modelId">
+    /// A model alias (e.g., "default"), a known model ID, or a HuggingFace repo ID.
+    /// </param>
+    /// <param name="cacheDirectory">Custom cache directory, or <see langword="null"/> for default.</param>
+    /// <returns><see langword="true"/> if the model files exist in cache and are not LFS pointers.</returns>
+    public static bool IsModelDownloaded(string modelId, string? cacheDirectory = null)
+    {
+        var cacheDir = cacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
+
+        // Resolve alias to repo ID
+        string repoId;
+        string? subfolder = null;
+        if (EmbedderModelRegistry.Default.TryResolve(modelId, out var modelInfo))
+        {
+            repoId = modelInfo!.RepoId;
+            subfolder = modelInfo.Subfolder;
+        }
+        else
+        {
+            repoId = modelId;
+        }
+
+        var snapshotDir = CacheManager.GetModelDirectory(cacheDir, repoId);
+
+        // When a subfolder is specified, model.onnx lives inside it
+        var modelDir = subfolder != null ? Path.Combine(snapshotDir, subfolder) : snapshotDir;
+
+        // Check for the essential model file
+        var modelOnnx = Path.Combine(modelDir, "model.onnx");
+        if (!File.Exists(modelOnnx) || CacheManager.IsLfsPointerFile(modelOnnx))
+            return false;
+
+        // Check for at least one tokenizer file (model dir first, then snapshot root)
+        return DirectoryHasTokenizer(modelDir)
+            || (subfolder != null && DirectoryHasTokenizer(snapshotDir));
+    }
+
+    /// <summary>
+    /// Downloads a model without loading it into memory.
+    /// If the model is already cached, this is a no-op.
+    /// Use this to pre-fetch models (e.g., during container build or CI) without requiring
+    /// the ONNX Runtime to be available at download time.
+    /// </summary>
+    /// <param name="modelId">
+    /// A model alias (e.g., "default"), a known model ID, or a HuggingFace repo ID.
+    /// </param>
+    /// <param name="options">Optional configuration (cache directory, quantization hint).</param>
+    /// <param name="progress">Optional progress reporting for downloads.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The local directory path containing the downloaded model files.</returns>
+    public static async Task<string> DownloadModelAsync(
+        string modelId,
+        EmbedderOptions? options = null,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new EmbedderOptions();
+
+        // Parse variant qualifier
+        var (baseId, qualifier) = LMSupplyOptionsBase.SplitQualifier(modelId);
+        modelId = baseId;
+        options.QuantizationHint ??= qualifier;
+
+        var cacheDir = options.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
+        using var downloader = new HuggingFaceDownloader(cacheDir);
+
+        // Known model alias / registered model
+        if (EmbedderModelRegistry.Default.TryResolve(modelId, out var modelInfo))
+        {
+            return await downloader.DownloadModelAsync(
+                modelInfo!.RepoId,
+                subfolder: modelInfo.Subfolder,
+                progress: progress,
+                cancellationToken: cancellationToken);
+        }
+
+        // HuggingFace repo ID with auto-discovery
+        if (modelId.Contains('/'))
+        {
+            var hwPrefs = ModelPreferences.ForCurrentHardware();
+            var preferences = options.QuantizationHint is { } hint
+                ? new ModelPreferences
+                {
+                    PreferLowMemory = hwPrefs.PreferLowMemory,
+                    QuantizationPriority = ModelPreferences.ForQuantizationHint(hint).QuantizationPriority,
+                    PreferredProvider = options.Provider != ExecutionProvider.Auto
+                        ? options.Provider : hwPrefs.PreferredProvider
+                }
+                : hwPrefs;
+
+            var (downloadedDir, _) = await downloader.DownloadWithDiscoveryAsync(
+                modelId,
+                preferences: preferences,
+                progress: progress,
+                cancellationToken: cancellationToken);
+            return downloadedDir;
+        }
+
+        throw new ModelNotFoundException(
+            $"Unknown model '{modelId}'. Use a known model alias, a HuggingFace repo ID, " +
+            "or a local path to an ONNX model file.",
+            modelId);
     }
 
     /// <summary>

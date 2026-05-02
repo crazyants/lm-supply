@@ -754,8 +754,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
 
     /// <summary>
     /// Maps KV cache quantization type to llama-server CLI format.
+    /// Returns null for Auto (let llama-server decide) and unknown values.
     /// </summary>
-    private static string? MapKvCacheType(KvCacheQuantizationType? type)
+    private static string? MapKvCacheType(KvCacheQuantizationType type)
     {
         return type switch
         {
@@ -763,8 +764,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             KvCacheQuantizationType.Q8_0 => "q8_0",
             KvCacheQuantizationType.Q4_0 => "q4_0",
             KvCacheQuantizationType.F32 => "f32",
-            null => null,
-            _ => null
+            _ => null  // Auto and unknown: let llama-server decide
         };
     }
 

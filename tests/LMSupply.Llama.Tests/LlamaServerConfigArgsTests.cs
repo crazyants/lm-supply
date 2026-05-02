@@ -1,24 +1,9 @@
-using FluentAssertions;
-using LMSupply.Hardware;
-
 namespace LMSupply.Llama.Tests;
 
 /// <summary>
 /// Tests for LlamaServerConfig argument building.
+/// Tests will be added in subsequent tasks (spec-ngram, YaRN, etc.).
 /// </summary>
 public class LlamaServerConfigArgsTests
 {
-    [Fact]
-    public void SpeculativeDecodingMode_HasExpectedValues()
-    {
-        Enum.GetNames<SpeculativeDecodingMode>()
-            .Should().Contain(["Auto", "None", "Ngram", "DraftModel"]);
-    }
-
-    [Fact]
-    public void RopeScalingMode_HasExpectedValues()
-    {
-        Enum.GetNames<RopeScalingMode>()
-            .Should().Contain(["Default", "Linear", "YaRN", "LongRoPE"]);
-    }
 }

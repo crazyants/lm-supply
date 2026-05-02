@@ -8,21 +8,21 @@ public enum RopeScalingMode
     /// <summary>
     /// No explicit scaling; llama-server reads from model metadata automatically.
     /// </summary>
-    Default,
+    Default = 0,
 
     /// <summary>
     /// Linear RoPE scaling (--rope-scaling linear).
     /// </summary>
-    Linear,
+    Linear = 1,
 
     /// <summary>
     /// YaRN scaling (--rope-scaling yarn). Best for extending to 4–8× original context.
     /// Requires YarnOriginalContext to be set in LlamaOptions.
     /// </summary>
-    YaRN,
+    YaRN = 2,
 
     /// <summary>
     /// LongRoPE scaling (--rope-scaling longrope). For extreme context extension.
     /// </summary>
-    LongRoPE,
+    LongRoPE = 3,
 }

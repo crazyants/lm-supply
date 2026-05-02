@@ -76,7 +76,7 @@ public class LlamaOptionsDefaultsTests
     public void ResolveSpecType_ReturnsExpectedString(
         SpeculativeDecodingMode mode, string? version, string? expected)
     {
-        var result = LlamaServerGeneratorModel.ResolveSpecType(mode, version, null);
+        var result = LlamaServerGeneratorModel.ResolveSpecType(mode, version);
         result.Should().Be(expected);
     }
 }

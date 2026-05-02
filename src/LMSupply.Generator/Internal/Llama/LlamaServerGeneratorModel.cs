@@ -189,6 +189,21 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             additionalArgs.Add(llamaOpts.Threads.Value.ToString(CultureInfo.InvariantCulture));
         }
 
+        // Validate speculative decoding configuration
+        if (llamaOpts.SpeculativeDecoding == SpeculativeDecodingMode.DraftModel
+            && string.IsNullOrEmpty(llamaOpts.DraftModelPath))
+        {
+            throw new InvalidOperationException(
+                "SpeculativeDecoding = DraftModel requires DraftModelPath to be set.");
+        }
+
+        // Validate YaRN configuration
+        if (llamaOpts.RopeScaling == RopeScalingMode.YaRN && !llamaOpts.YarnOriginalContext.HasValue)
+        {
+            throw new InvalidOperationException(
+                "RopeScaling = YaRN requires YarnOriginalContext to be set (original training context size, e.g., 4096).");
+        }
+
         var serverConfig = new LlamaServerConfig
         {
             ModelPath = modelPath,
@@ -211,7 +226,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             RopeFreqBase = llamaOpts.RopeFrequencyBase,
             RopeFreqScale = llamaOpts.RopeFrequencyScale,
             // Speculative decoding
-            SpecType = ResolveSpecType(llamaOpts.SpeculativeDecoding, serverVersion, llamaOpts.DraftModelPath),
+            SpecType = ResolveSpecType(llamaOpts.SpeculativeDecoding, serverVersion),
             ModelDraft = llamaOpts.SpeculativeDecoding == SpeculativeDecodingMode.DraftModel
                 ? llamaOpts.DraftModelPath : null,
             // YaRN RoPE scaling
@@ -809,8 +824,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     /// </summary>
     internal static string? ResolveSpecType(
         SpeculativeDecodingMode mode,
-        string? serverVersion,
-        string? draftModelPath)
+        string? serverVersion)
     {
         return mode switch
         {

@@ -9,9 +9,10 @@ namespace LMSupply.Llama.Server;
 public static partial class LlamaServerVersionRequirements
 {
     /// <summary>
-    /// Minimum llama-server build number required by model architecture.
-    /// Key: chat format name (matches IChatFormatter.FormatName).
-    /// Value: minimum build number (e.g., 8672 for "b8672").
+    /// Minimum llama-server build number required by chat format or runtime feature.
+    /// Key: a chat format name (matches IChatFormatter.FormatName)
+    ///      or a runtime feature key (e.g., "spec-ngram", "kv-q8-vulkan").
+    /// Value: minimum build number (e.g., 8500 for "b8500").
     /// </summary>
     private static readonly Dictionary<string, int> MinBuildByFormat = new(StringComparer.OrdinalIgnoreCase)
     {

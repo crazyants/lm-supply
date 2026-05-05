@@ -140,6 +140,17 @@ public sealed class GenerationOptions
     public bool ExtractReasoningTokens { get; set; }
 
     /// <summary>
+    /// Gets or sets whether to activate the model's thinking mode by injecting
+    /// the formatter-supplied thinking token (e.g. <c>&lt;|think|&gt;</c> for Gemma 4)
+    /// at the start of the first system message before sending to the server.
+    /// Recommended for Gemma 4 E2B/E4B when tool calling is required: small models
+    /// benefit from internal reasoning before deciding whether to invoke a tool.
+    /// Has no effect on formatters that do not implement <c>IChatFormatter.GetThinkingToken</c>.
+    /// Defaults to false.
+    /// </summary>
+    public bool EnableThinking { get; set; }
+
+    /// <summary>
     /// Tool definitions available for the model to call.
     /// When set, the model may respond with tool calls instead of text.
     /// </summary>

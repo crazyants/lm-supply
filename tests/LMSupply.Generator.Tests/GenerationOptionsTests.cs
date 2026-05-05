@@ -85,4 +85,18 @@ public class GenerationOptionsTests
         options.MaxTokens.Should().Be(2048);
         options.MaxNewTokens.Should().Be(100);
     }
+
+    [Fact]
+    public void Default_EnableThinking_IsFalse()
+    {
+        GenerationOptions.Default.EnableThinking.Should().BeFalse(
+            because: "thinking mode must be opt-in — enabling by default would change behavior for all existing consumers");
+    }
+
+    [Fact]
+    public void Gemma4Preset_EnableThinking_IsFalse()
+    {
+        GenerationOptions.Gemma4.EnableThinking.Should().BeFalse(
+            because: "Gemma4 preset controls sampler params only; thinking is an independent opt-in per call site");
+    }
 }

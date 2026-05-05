@@ -227,10 +227,11 @@ public class ChatFormatterTests
         var result = formatter.FormatPrompt(messages);
 
         // Gemma 4 supports native system role (unlike Gemma 2 which mapped system→user)
-        result.Should().Contain("<start_of_turn>system\nYou are a helpful assistant.<end_of_turn>");
-        result.Should().Contain("<start_of_turn>user\nHello!<end_of_turn>");
-        result.Should().Contain("<start_of_turn>model\nHi there!<end_of_turn>");
-        result.Should().EndWith("<start_of_turn>model\n");
+        // Uses <|turn> / <turn|> tokens (Gemma 4 format), not <start_of_turn> (Gemma 2).
+        result.Should().Contain("<|turn>system\nYou are a helpful assistant.<turn|>");
+        result.Should().Contain("<|turn>user\nHello!<turn|>");
+        result.Should().Contain("<|turn>model\nHi there!<turn|>");
+        result.Should().EndWith("<|turn>model\n");
     }
 
     [Fact]
@@ -246,8 +247,8 @@ public class ChatFormatterTests
         var formatter = new Gemma4ChatFormatter();
         var stops = formatter.GetStopSequences();
 
-        stops.Should().Contain("<end_of_turn>");
-        stops.Should().Contain("<start_of_turn>");
+        stops.Should().Contain("<turn|>");
+        stops.Should().Contain("<|turn>");
     }
 
     [Fact]

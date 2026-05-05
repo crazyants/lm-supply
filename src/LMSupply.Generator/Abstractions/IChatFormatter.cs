@@ -72,4 +72,16 @@ public interface IChatFormatter
     /// no tool ever invokes (chat-rag flow 0% success on gguf:default).
     /// </remarks>
     IToolCallStreamParser? CreateToolCallStreamParser() => null;
+
+    /// <summary>
+    /// Returns the token string that activates the model's built-in thinking mode
+    /// when prepended to the first system message, or <c>null</c> if the model does
+    /// not support a thinking mode via prompt injection.
+    /// </summary>
+    /// <remarks>
+    /// Gemma 4 returns <c>"&lt;|think|&gt;"</c>. All other formatters return <c>null</c>.
+    /// <see cref="LMSupply.Generator.Models.GenerationOptions.EnableThinking"/> must also
+    /// be <c>true</c> for the token to be injected by the generator.
+    /// </remarks>
+    string? GetThinkingToken() => null;
 }

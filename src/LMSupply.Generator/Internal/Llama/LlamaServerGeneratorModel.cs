@@ -410,6 +410,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         {
             // Convert to llama-server format
             var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
 
@@ -546,6 +547,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         try
         {
             var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
 
@@ -687,6 +689,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         try
         {
             var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
 
@@ -1071,6 +1074,37 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     /// (default for all formatters except Gemma 4) or when no tools are passed —
     /// avoids polluting other model families' prompts with redundant text.
     /// </remarks>
+    /// <summary>
+    /// Prepends the formatter's thinking token to the first system message when
+    /// <paramref name="enableThinking"/> is <c>true</c> and the formatter opts in via
+    /// <see cref="IChatFormatter.GetThinkingToken"/>. If no system message exists, a
+    /// bare system message containing only the token is prepended.
+    /// </summary>
+    /// <remarks>
+    /// For Gemma 4 E2B/E4B, Google recommends activating thinking mode (via
+    /// <c>&lt;|think|&gt;</c>) when complex function calling is required; the model reasons
+    /// internally before deciding to invoke a tool.
+    /// Call after <see cref="MaybeInjectToolPromptFragment"/> so the thinking token
+    /// lands at the top of the combined system message.
+    /// </remarks>
+    internal static IEnumerable<ChatMessage> MaybeInjectThinkingToken(
+        IEnumerable<ChatMessage> messages,
+        bool enableThinking,
+        IChatFormatter formatter)
+    {
+        var token = enableThinking ? formatter.GetThinkingToken() : null;
+        if (token is null)
+            return messages;
+
+        var list = messages.ToList();
+        var idx = list.FindIndex(m => m.Role == ChatRole.System);
+        if (idx >= 0)
+            list[idx] = ChatMessage.System(token + "\n" + list[idx].Content);
+        else
+            list.Insert(0, ChatMessage.System(token));
+        return list;
+    }
+
     internal static IEnumerable<ChatMessage> MaybeInjectToolPromptFragment(
         IEnumerable<ChatMessage> messages,
         IReadOnlyList<ChatToolDefinition>? tools,

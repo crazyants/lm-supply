@@ -134,6 +134,98 @@ public class LlamaServerGeneratorModelHelperTests
 
         result.Should().HaveCount(1);
     }
+
+    // ─── MaybeInjectThinkingToken (Gap A — Gemma 4 thinking mode, 2026-05-05) ───
+
+    [Fact]
+    public void MaybeInjectThinkingToken_EnabledWithGemma4_PrependsTokenToSystemMessage()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.System("You are helpful."),
+            ChatMessage.User("call a tool")
+        };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectThinkingToken(messages, enableThinking: true, formatter).ToList();
+
+        result.Should().HaveCount(2, because: "no new messages are inserted — the existing system message is modified");
+        result[0].Role.Should().Be(ChatRole.System);
+        result[0].Content.Should().StartWith("<|think|>",
+            because: "thinking token must be the first content in the system message");
+        result[0].Content.Should().Contain("You are helpful.",
+            because: "original system content must be preserved");
+        result[1].Should().Be(messages[1]);
+    }
+
+    [Fact]
+    public void MaybeInjectThinkingToken_EnabledWithNoSystemMessage_PrependsBareSytemMessage()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var messages = new[] { ChatMessage.User("call a tool") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectThinkingToken(messages, enableThinking: true, formatter).ToList();
+
+        result.Should().HaveCount(2, because: "a bare system message with the thinking token is prepended");
+        result[0].Role.Should().Be(ChatRole.System);
+        result[0].Content.Should().Be("<|think|>");
+        result[1].Should().Be(messages[0]);
+    }
+
+    [Fact]
+    public void MaybeInjectThinkingToken_DisabledWithGemma4_PassesMessagesThrough()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.System("You are helpful."),
+            ChatMessage.User("hello")
+        };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectThinkingToken(messages, enableThinking: false, formatter).ToList();
+
+        result.Should().HaveCount(2);
+        result[0].Content.Should().Be("You are helpful.", because: "system content must not be modified when thinking is disabled");
+    }
+
+    [Fact]
+    public void MaybeInjectThinkingToken_EnabledWithNonThinkingFormatter_PassesMessagesThrough()
+    {
+        // Phi3 returns null from GetThinkingToken() — must be a no-op.
+        var formatter = new Phi3ChatFormatter();
+        var messages = new[]
+        {
+            ChatMessage.System("sys"),
+            ChatMessage.User("user")
+        };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectThinkingToken(messages, enableThinking: true, formatter).ToList();
+
+        result.Should().HaveCount(2);
+        result[0].Content.Should().Be("sys", because: "non-thinking formatters must leave messages unchanged");
+    }
+
+    [Fact]
+    public void MaybeInjectThinkingToken_WithToolFragmentAlreadyInjected_TokenLeadsFragment()
+    {
+        // Simulates the real call order: MaybeInjectToolPromptFragment first, then MaybeInjectThinkingToken.
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "q":{"type":"string"} }, "required":["q"] }""");
+        var tools = new[] { new ChatToolDefinition("search", "search tool", schema) };
+        var original = new[] { ChatMessage.User("search something") };
+
+        // Step 1: tool fragment prepended as first system message
+        var withFragment = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter).ToList();
+        // Step 2: thinking token prepended to that system message
+        var result = LlamaServerGeneratorModel.MaybeInjectThinkingToken(withFragment, enableThinking: true, formatter).ToList();
+
+        result.Should().HaveCount(2);
+        result[0].Role.Should().Be(ChatRole.System);
+        result[0].Content.Should().StartWith("<|think|>",
+            because: "thinking token must precede the tool fragment in the combined system message");
+        result[0].Content.Should().Contain("Required parameters",
+            because: "tool fragment content must be preserved");
+    }
 }
 
 /// <summary>

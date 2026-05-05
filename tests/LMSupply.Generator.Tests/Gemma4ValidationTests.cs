@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.ChatFormatters;
 using LMSupply.Generator.Internal.Llama;
 using LMSupply.Generator.Models;
@@ -120,7 +121,7 @@ public class Gemma4StaticValidationTests
     }
 
     [Fact]
-    public void Gemma4ChatFormatter_FormatPrompt_ProducesStartOfTurnTokens()
+    public void Gemma4ChatFormatter_FormatPrompt_ProducesTurnTokens()
     {
         var formatter = new Gemma4ChatFormatter();
         var messages = new[]
@@ -131,10 +132,33 @@ public class Gemma4StaticValidationTests
 
         var prompt = formatter.FormatPrompt(messages);
 
-        prompt.Should().Contain("<start_of_turn>system");
-        prompt.Should().Contain("<start_of_turn>user");
+        // Gemma 4 uses <|turn> / <turn|> (new format), not <start_of_turn> (Gemma 2).
+        prompt.Should().Contain("<|turn>system");
+        prompt.Should().Contain("<|turn>user");
         // Final token opens the model's generation slot.
-        prompt.Should().EndWith("<start_of_turn>model\n");
+        prompt.Should().EndWith("<|turn>model\n");
+    }
+
+    [Fact]
+    public void Gemma4ChatFormatter_GetThinkingToken_ReturnsThinkToken()
+    {
+        var formatter = new Gemma4ChatFormatter();
+
+        var token = formatter.GetThinkingToken();
+
+        token.Should().Be("<|think|>",
+            because: "Gemma 4 activates thinking mode via <|think|> at the start of the system prompt");
+    }
+
+    [Fact]
+    public void OtherFormatters_GetThinkingToken_ReturnsNull()
+    {
+        // Default interface method — non-Gemma formatters must return null.
+        IChatFormatter phi3 = new Phi3ChatFormatter();
+        IChatFormatter llama3 = new Llama3ChatFormatter();
+
+        phi3.GetThinkingToken().Should().BeNull();
+        llama3.GetThinkingToken().Should().BeNull();
     }
 
     [Fact]

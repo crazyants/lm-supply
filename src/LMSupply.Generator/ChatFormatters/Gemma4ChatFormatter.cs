@@ -6,15 +6,15 @@ namespace LMSupply.Generator.ChatFormatters;
 
 /// <summary>
 /// Chat formatter for Gemma 4 models with native system role support.
-/// Format: &lt;start_of_turn&gt;system\n{content}&lt;end_of_turn&gt;\n&lt;start_of_turn&gt;user\n...
+/// Format: &lt;|turn&gt;system\n{content}&lt;turn|&gt;\n&lt;|turn&gt;user\n...
 /// Unlike Gemma 2 which mapped system to user, Gemma 4 supports system natively.
 /// Tool results are folded into a user turn with a [tool_result: id] marker
 /// because Gemma's chat template does not define a dedicated tool turn.
 /// </summary>
 public sealed class Gemma4ChatFormatter : IChatFormatter
 {
-    private const string StartOfTurn = "<start_of_turn>";
-    private const string EndOfTurn = "<end_of_turn>";
+    private const string StartOfTurn = "<|turn>";
+    private const string EndOfTurn = "<turn|>";
 
     /// <inheritdoc />
     public string FormatName => "gemma4";
@@ -93,6 +93,15 @@ public sealed class Gemma4ChatFormatter : IChatFormatter
     {
         return new Gemma4ToolCallStreamParser();
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Gemma 4 activates built-in thinking by including <c>&lt;|think|&gt;</c> at the
+    /// start of the system prompt. Google recommends this for E2B/E4B when complex
+    /// function calling is required (ISSUE lmsupply-gemma4-thinking-mode-tool-call-gap,
+    /// 2026-05-05).
+    /// </remarks>
+    public string? GetThinkingToken() => "<|think|>";
 
     /// <inheritdoc />
     /// <remarks>

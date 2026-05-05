@@ -52,4 +52,17 @@ public class GgufModelDownloaderTests
         result.Should().AllSatisfy(f => f.Should().StartWith("subfolder/deep/model-"));
         result[4].Should().Be("subfolder/deep/model-00005-of-00005.gguf");
     }
+
+    [Theory]
+    [InlineData("mmproj-gemma-4-E4B-it-bf16.gguf", true)]
+    [InlineData("mmproj-gemma-4-E4B-it-Q8_0.gguf", true)]
+    [InlineData("MMPROJ-model.gguf", true)]
+    [InlineData("MmProj-mixed-case.gguf", true)]
+    [InlineData("gemma-4-E4B-it-Q4_K_M.gguf", false)]
+    [InlineData("gemma-4-E4B-it-Q8_0.gguf", false)]
+    [InlineData("model-mmproj-suffix.gguf", false)]
+    public void IsMmprojFile_DetectsMmprojPrefix(string filename, bool expected)
+    {
+        GgufModelDownloader.IsMmprojFile(filename).Should().Be(expected);
+    }
 }

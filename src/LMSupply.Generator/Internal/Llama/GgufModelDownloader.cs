@@ -221,6 +221,7 @@ public sealed class GgufModelDownloader : IDisposable
 
         var rawFiles = files
             .Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !IsMmprojFile(Path.GetFileName(f.Path)))
             .Select(f => new GgufRawFile(Path.GetFileName(f.Path), f.Size))
             .ToList();
 
@@ -359,6 +360,9 @@ public sealed class GgufModelDownloader : IDisposable
 
         // Download with progress - use explicit block to ensure streams are closed before File.Move
         {
+            var downloadStarted = DateTimeOffset.UtcNow;
+            Trace.TraceInformation($"[GgufModelDownloader] Download started: {filename} ({totalBytes / (1024.0 * 1024 * 1024):F2} GB from {url})");
+
             await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
             var fileMode = startPosition > 0 ? FileMode.Append : FileMode.Create;
             await using var fileStream = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, 81920, true);
@@ -366,6 +370,7 @@ public sealed class GgufModelDownloader : IDisposable
             var buffer = new byte[81920];
             long bytesDownloaded = startPosition;
             int bytesRead;
+            var lastLoggedAt = DateTimeOffset.UtcNow;
 
             while ((bytesRead = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
             {
@@ -378,7 +383,18 @@ public sealed class GgufModelDownloader : IDisposable
                     BytesDownloaded = bytesDownloaded,
                     TotalBytes = totalBytes
                 });
+
+                var now = DateTimeOffset.UtcNow;
+                if (totalBytes > 0 && (now - lastLoggedAt).TotalSeconds >= 30)
+                {
+                    var pct = bytesDownloaded * 100.0 / totalBytes;
+                    Trace.TraceInformation($"[GgufModelDownloader] Downloading {filename}: {pct:F1}% ({bytesDownloaded / (1024.0 * 1024):F0} MB / {totalBytes / (1024.0 * 1024):F0} MB)");
+                    lastLoggedAt = now;
+                }
             }
+
+            var elapsed = DateTimeOffset.UtcNow - downloadStarted;
+            Trace.TraceInformation($"[GgufModelDownloader] Download complete: {filename} ({elapsed.TotalSeconds:F0}s)");
 
             // Ensure data is flushed to disk
             await fileStream.FlushAsync(cancellationToken);
@@ -427,6 +443,9 @@ public sealed class GgufModelDownloader : IDisposable
 
         return index >= 0 ? DefaultQuantizationPriority.Length - index : -1;
     }
+
+    internal static bool IsMmprojFile(string filename) =>
+        filename.StartsWith("mmproj", StringComparison.OrdinalIgnoreCase);
 
     public void Dispose()
     {

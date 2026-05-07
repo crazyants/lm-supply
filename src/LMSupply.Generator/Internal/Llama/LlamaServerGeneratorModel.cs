@@ -186,9 +186,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 var availableMb = (gpu.EffectiveAvailableBytes ?? 0) / mb;
                 var totalMb = (gpu.TotalMemoryBytes ?? 0) / mb;
                 var freeMb = (gpu.FreeMemoryBytes ?? gpu.TotalMemoryBytes ?? 0) / mb;
-                Trace.TraceInformation(
-                    $"[LlamaServerGeneratorModel] Context capped: {contextLength} → {safeContext} " +
-                    $"(VRAM available={availableMb:F0}MB, free={freeMb:F0}MB, total={totalMb:F0}MB)");
+                var ctxMsg = $"[LlamaServerGeneratorModel] ctx-size adjusted: requested={contextLength}, actual={safeContext} " +
+                    $"(VRAM available={availableMb:F0}MB, free={freeMb:F0}MB, total={totalMb:F0}MB)";
+                // Warn when the caller explicitly set MaxContextLength and it was silently reduced.
+                if (options.MaxContextLength is not null)
+                    Trace.TraceWarning(ctxMsg);
+                else
+                    Trace.TraceInformation(ctxMsg);
                 contextLength = safeContext;
             }
         }

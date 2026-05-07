@@ -616,16 +616,18 @@ if (msg.IsMultimodal) { /* contains at least one image */ }
 
 ### Tool Calling with GGUF
 
-GGUF models support native tool calling via the `--jinja` flag (enabled by default). Models with llama.cpp native handlers (Hermes, Mistral Nemo) provide the most stable experience.
+GGUF models support native tool calling via the `--jinja` flag (enabled by default).
 
 ```csharp
 // Tool calling is automatically available with GGUF models
-await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Hermes 3 (chatml handler)
+await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Gemma 4 E4B (gemma4 formatter)
 
 // Tool definitions use OpenAI-compatible format via llama-server
 ```
 
-> **Recommended models for tool calling:** `gguf:default` (Hermes 3), `gguf:fast` (Ministral 3), `gguf:quality` (Mistral Nemo) — these use llama.cpp native chat handlers for stable tool calling.
+> **Gemma 4 W1 advisory (v0.34.3+):** When loading any `gguf:fast`/`default`/`balanced`/`quality`/`large` alias (all Gemma 4), a W1-level warning is emitted via `Trace.TraceWarning` at load time. Upstream llama.cpp PRs #21375 (chat-template/rope) and #21882 (instruction-following) are not yet in a stable release; tool-use with Korean instructional prompts and Q4_K_M quants may produce empty responses. Subscribe to `System.Diagnostics.Trace` listeners to receive this advisory. For production tool-calling workloads, Qwen2.5-7B-Instruct GGUF is a reliable alternative until the upstream PRs land.
+
+> **Gemma 4 tool prompt injection:** `Gemma4ChatFormatter` automatically injects a `Required parameters (MUST be provided): name (type)` block as a system message for each tool, working around Gemma 4's tendency to emit empty tool arguments under llama-server's native Jinja template.
 
 ### Generation Options
 
@@ -643,6 +645,31 @@ await foreach (var token in model.GenerateAsync(prompt, genOptions))
     Console.Write(token);
 }
 ```
+
+### Gemma 4 Thinking Mode (v0.34+)
+
+Gemma 4 models support an **extended thinking** mode activated by including `<|think|>` at the start of the system prompt. Google recommends this for E2B/E4B models when complex function calling is required:
+
+```csharp
+await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Gemma 4 E4B
+
+var messages = new[]
+{
+    ChatMessage.System("<|think|>You are a helpful assistant."),  // <|think|> activates thinking
+    ChatMessage.User("Solve this step by step: 17 × 23")
+};
+
+await foreach (var token in model.GenerateChatAsync(messages))
+{
+    Console.Write(token);
+}
+```
+
+When thinking mode is active, llama-server (b8994+) separates the internal reasoning into a `reasoning_content` field and delivers the final answer in `content`. LMSupply transparently skips `reasoning_content` tokens in the public stream, so the caller only receives the final response.
+
+> `Gemma4ChatFormatter.GetThinkingToken()` returns `"<|think|>"` — this is used by orchestration layers that need to inject the thinking activation token programmatically.
+
+> For DeepSeek R1's `<think>...</think>` tag format, see the section below.
 
 ### Reasoning Model Support (DeepSeek R1)
 

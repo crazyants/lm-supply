@@ -307,14 +307,40 @@ rm -rf ~/.local/share/LMSupply/cache/llama-server
 |-------------|---------------|--------|
 | `gemma4` | `b8672` | Native Gemma 4 architecture support (GGUF metadata auto-detect) |
 
-If the cached binary is too old, `LoadAsync()` throws `InvalidOperationException` with a clear remediation hint:
+#### Auto-upgrade retry (v0.34.1+)
+
+Before throwing, `LlamaServerGeneratorModel.CreateAsync` calls `CheckAndApplyUpdateAsync` automatically when the cached binary fails the minimum-build check. This means **you no longer need to manually delete the cache** in most cases:
+
+1. LoadAsync detects cached version is too old via `LlamaServerVersionRequirements.MeetsMinimum(serverVersion, chatFormatName)`
+2. `CheckAndApplyUpdateAsync` downloads the latest release and replaces the cached binary
+3. `Validate` is then called on the new version — throws `InvalidOperationException` only if the upgrade itself fails or the new version still doesn't meet the requirement
 
 ```
 llama-server b7898 is too old for gemma4 models. Minimum required: b8672.
 Delete the cached llama-server to trigger a fresh download of the latest version.
 ```
 
-Validation degrades gracefully — if the version string can't be parsed, model loading is allowed to proceed.
+The error message above is only reached if the auto-upgrade path also fails. Validation degrades gracefully — if the version string can't be parsed (non-standard builds), model loading proceeds without error.
+
+#### Public API
+
+`LlamaServerVersionRequirements` exposes three public members:
+
+| Member | Description |
+|--------|-------------|
+| `ParseBuildNumber(string? version)` | Parses the build number from a version tag (e.g., `"b8672"` → `8672`). Returns `null` if unparseable. |
+| `GetMinimumBuild(string chatFormatName)` | Returns the minimum build number for a given chat format name, or `null` if none required. |
+| `MeetsMinimum(string? serverVersion, string chatFormatName)` | Returns `true` if the server version satisfies the minimum for the format. Returns `true` on unparseable version (graceful degradation). |
+| `Validate(string? serverVersion, string chatFormatName)` | Throws `InvalidOperationException` if the version is too old; silently passes on unparseable version. |
+
+```csharp
+// Check programmatically before loading
+bool ok = LlamaServerVersionRequirements.MeetsMinimum(serverVersion, "gemma4");
+if (!ok)
+{
+    Console.WriteLine("Cached llama-server is too old; will auto-upgrade on next LoadAsync.");
+}
+```
 
 ## Split GGUF Downloads
 

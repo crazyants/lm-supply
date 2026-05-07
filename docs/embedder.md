@@ -40,12 +40,15 @@ float[][] embeddings = await model.EmbedAsync(new[]
 
 ## Available Models (ONNX)
 
+> **v0.34+ change:** `default` now resolves to **BGE-M3** (1024-dim, 8K context, 100+ languages).
+> The former `multilingual` alias has been removed — use `default` instead.
+
 | Alias | Model | Dimensions | Params | Context | Best For |
 |-------|-------|------------|--------|---------|----------|
-| `auto` | Hardware-optimized | varies | varies | varies | Auto-select by hardware |
-| `default` | multilingual-e5-base | 768 | 278M | 512 | Balanced quality/speed, 100+ langs |
+| `auto` | Hardware-optimized | varies | varies | varies | Auto-select by available VRAM |
+| `default` | bge-m3 | 1024 | 568M | 8192 | SOTA multilingual, 100+ langs, dense+sparse (v0.34+) |
+| `quality` | bge-m3 | 1024 | 568M | 8192 | Same as `default`; for pipelines that pin quality tier |
 | `fast` | multilingual-e5-small | 384 | 118M | 512 | Lightweight, 100+ langs |
-| `quality` | bge-m3 | 1024 | 568M | 8192 | SOTA multilingual, dense+sparse |
 | `large` | multilingual-e5-large | 1024 | 560M | 512 | Highest dense quality, 100+ langs |
 
 ### Using HuggingFace Repository ID
@@ -100,11 +103,11 @@ await using var model = await LocalEmbedder.LoadAsync("/path/to/embedding-model.
 
 ## Multilingual Support
 
-For non-English text, use the `multilingual` model (BGE-M3) which supports 100+ languages with 8K context:
+`default` (BGE-M3) supports 100+ languages with 1024-dim embeddings and 8K context. It is the recommended model for all new projects:
 
 ```csharp
-// Load multilingual model (BGE-M3 - SOTA multilingual embedding)
-await using var model = await LocalEmbedder.LoadAsync("multilingual");
+// default = BGE-M3 since v0.34 (the former "multilingual" alias has been removed)
+await using var model = await LocalEmbedder.LoadAsync("default");
 
 // Korean text embedding
 float[] koreanEmbedding = await model.EmbedAsync("안녕하세요, 세계!");

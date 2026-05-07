@@ -224,11 +224,10 @@ Console.WriteLine($"Real-time factor: {result.RealTimeFactor:F1}x");
 
 | Alias | Model | Dims | Params | Context | Best For |
 |-------|-------|------|--------|---------|----------|
-| `default` | bge-small-en-v1.5 | 384 | 33M | 512 | Balanced speed/quality |
-| `fast` | all-MiniLM-L6-v2 | 384 | 22M | 256 | Ultra-low latency |
-| `quality` | bge-base-en-v1.5 | 768 | 110M | 512 | Higher accuracy |
-| `large` | nomic-embed-text-v1.5 | 768 | 137M | 8192 | Long context RAG |
-| `multilingual` | bge-m3 | 1024 | 568M | 8192 | 100+ languages, SOTA |
+| `default` | bge-m3 | 1024 | 568M | 8192 | SOTA multilingual, 100+ languages (v0.34+) |
+| `quality` | bge-m3 | 1024 | 568M | 8192 | Same as `default`; for pipelines that pin quality tier |
+| `fast` | multilingual-e5-small | 384 | 118M | 512 | Lightweight multilingual, low latency |
+| `large` | multilingual-e5-large | 1024 | 560M | 512 | Highest dense quality, 100+ languages |
 
 ### Embedder (GGUF via llama-server)
 
@@ -346,12 +345,14 @@ LMSupply detects your hardware and selects models accordingly:
 
 ### ONNX Models
 
-| Performance Tier | Hardware | Embedder | Generator | Reranker |
-|------------------|----------|----------|-----------|----------|
-| **Low** | CPU only or GPU <4GB | bge-small (33M) | Phi-4-mini (3.8B) | MiniLM-L6 (22M) |
-| **Medium** | GPU 4-8GB | bge-base (110M) | Phi-4-mini (3.8B) | bge-reranker-base |
-| **High** | GPU 8-16GB | gte-large (434M) | Phi-4 (14B) | bge-reranker-large |
-| **Ultra** | GPU 16GB+ | gte-large (434M) | Phi-4 (14B) | bge-reranker-large |
+`LocalEmbedder.LoadAsync("auto")` selects the largest model whose estimated size fits available VRAM. Candidates (largest first): BGE-M3 (568M), multilingual-e5-large (560M), nomic-embed-text-v1.5 (137M), multilingual-e5-small (118M). Falls back to multilingual-e5-small when nothing fits.
+
+| Performance Tier | Hardware | Embedder (auto) | Generator | Reranker |
+|------------------|----------|-----------------|-----------|----------|
+| **Low** | CPU only or GPU <4GB | multilingual-e5-small (118M) | Phi-4-mini (3.8B) | MiniLM-L6 (22M) |
+| **Medium** | GPU 4-8GB | nomic-embed-text-v1.5 (137M) | Phi-4-mini (3.8B) | bge-reranker-base |
+| **High** | GPU 8-16GB | multilingual-e5-large (560M) | Phi-4 (14B) | bge-reranker-large |
+| **Ultra** | GPU 16GB+ | bge-m3 (568M) | Phi-4 (14B) | bge-reranker-large |
 
 ### GGUF Models (via `gguf:auto`)
 
@@ -461,7 +462,7 @@ Use predefined aliases for quick access to popular models:
 
 ```csharp
 await using var embedder = await LocalEmbedder.LoadAsync("default");      // bge-small-en-v1.5
-await using var embedder = await LocalEmbedder.LoadAsync("multilingual"); // bge-m3
+await using var embedder = await LocalEmbedder.LoadAsync("default");      // bge-m3 (multilingual SOTA, v0.34+)
 await using var generator = await LocalGenerator.LoadAsync("gguf:auto");    // Hardware-optimized
 await using var generator = await LocalGenerator.LoadAsync("gguf:quality"); // Mistral Nemo 12B
 ```

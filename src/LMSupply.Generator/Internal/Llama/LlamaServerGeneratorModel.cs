@@ -434,8 +434,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         await _concurrencyLimiter.WaitAsync(cancellationToken);
         try
         {
+            var trimmedMessages = await TrimToFitContextAsync(messages, options, cancellationToken);
             // Convert to llama-server format
-            var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter);
             augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
@@ -572,7 +573,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         await _concurrencyLimiter.WaitAsync(cancellationToken);
         try
         {
-            var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            var trimmedMessages = await TrimToFitContextAsync(messages, options, cancellationToken);
+            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter);
             augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
@@ -714,7 +716,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         await _concurrencyLimiter.WaitAsync(cancellationToken);
         try
         {
-            var augmentedMessages = MaybeInjectToolPromptFragment(messages, options.Tools, _chatFormatter);
+            var trimmedMessages = await TrimToFitContextAsync(messages, options, cancellationToken);
+            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter);
             augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
@@ -1162,6 +1165,81 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         GgufMetadata? ggufMetadata,
         int vramCappedBudget)
         => options.MaxContextLength ?? ggufMetadata?.ContextLength ?? vramCappedBudget;
+
+    /// <summary>
+    /// Removes the oldest non-system conversation turn in-place.
+    /// A turn is: User + optional (Assistant + optional Tool*).
+    /// System messages are never removed. The last User message is protected.
+    /// Tool call / result pairs are treated atomically: removing an Assistant with ToolCalls
+    /// also removes the following Tool result messages.
+    /// </summary>
+    /// <returns><c>true</c> if a turn was removed; <c>false</c> when trimming is impossible.</returns>
+    internal static bool TryTrimOldestTurn(List<ChatMessage> messages)
+    {
+        var firstNonSystem = messages.FindIndex(m => m.Role != ChatRole.System);
+        if (firstNonSystem < 0)
+            return false;
+
+        var turnEnd = firstNonSystem;
+        if (turnEnd < messages.Count && messages[turnEnd].Role == ChatRole.User)
+            turnEnd++;
+        if (turnEnd < messages.Count && messages[turnEnd].Role == ChatRole.Assistant)
+            turnEnd++;
+        while (turnEnd < messages.Count && messages[turnEnd].Role == ChatRole.Tool)
+            turnEnd++;
+
+        // Ensure at least one User message remains after removing this turn
+        var hasRemainingUser = false;
+        for (var i = turnEnd; i < messages.Count; i++)
+        {
+            if (messages[i].Role == ChatRole.User)
+            {
+                hasRemainingUser = true;
+                break;
+            }
+        }
+        if (!hasRemainingUser)
+            return false;
+
+        messages.RemoveRange(firstNonSystem, turnEnd - firstNonSystem);
+        return true;
+    }
+
+    /// <summary>
+    /// Returns a (possibly trimmed) copy of <paramref name="messages"/> whose augmented prompt
+    /// fits within the input token budget: MaxContextLength minus reserved output tokens.
+    /// Skips trimming when MaxContextLength is unknown (0).
+    /// Throws <see cref="ContextLengthExceededException"/> if the current turn alone exceeds the budget.
+    /// </summary>
+    private async Task<List<ChatMessage>> TrimToFitContextAsync(
+        IEnumerable<ChatMessage> messages,
+        GenerationOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (MaxContextLength <= 0)
+            return messages.ToList();
+
+        var outputReserved = options.MaxNewTokens ?? options.MaxTokens;
+        var inputBudget = MaxContextLength - outputReserved;
+        if (inputBudget <= 0)
+            return messages.ToList();
+
+        var list = messages.ToList();
+
+        while (true)
+        {
+            var augmented = MaybeInjectToolPromptFragment(list, options.Tools, _chatFormatter);
+            augmented = MaybeInjectThinkingToken(augmented, options.EnableThinking, _chatFormatter);
+            var prompt = _chatFormatter.FormatPrompt(augmented);
+            var tokenCount = await _serverLease.Client.CountTokensAsync(prompt, cancellationToken);
+
+            if (tokenCount <= inputBudget)
+                return list;
+
+            if (!TryTrimOldestTurn(list))
+                throw new ContextLengthExceededException(tokenCount, MaxContextLength);
+        }
+    }
 
     private void ThrowIfDisposed()
     {

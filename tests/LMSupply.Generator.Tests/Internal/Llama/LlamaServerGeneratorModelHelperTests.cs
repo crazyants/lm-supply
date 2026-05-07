@@ -135,6 +135,162 @@ public class LlamaServerGeneratorModelHelperTests
         result.Should().HaveCount(1);
     }
 
+    // ─── MaybeInjectToolPromptFragment — thinking mode (Gap B, 2026-05-08) ───
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_ThinkingEnabled_Gemma4_UsesMinimalFragment()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "query":{"type":"string"} }, "required":["query"] }""");
+        var tools = new[] { new ChatToolDefinition("search_knowledge", "Search tool", schema) };
+        var original = new[] { ChatMessage.User("search something") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter, enableThinking: true).ToList();
+
+        result.Should().HaveCount(2, because: "minimal fragment is still prepended as a system message");
+        result[0].Role.Should().Be(ChatRole.System);
+        result[0].Content.Should().Contain("search_knowledge",
+            because: "tool name must be present in the minimal hint");
+        result[0].Content.Should().Contain("query (string)",
+            because: "required parameter hint must be present");
+        result[0].Content.Should().NotContain("You have access to the following tools",
+            because: "full D-1 preamble must be absent — only the minimal hint is injected when thinking is on");
+        result[0].Content.Should().NotContain("Optional parameters",
+            because: "optional params are omitted in the minimal fragment to reduce context pressure");
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_ThinkingEnabled_NonGemma4_SkipsFragment()
+    {
+        // Non-Gemma4 formatters return null from RenderToolPromptFragmentWhenThinking → no fragment.
+        var formatter = new Phi3ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "q":{"type":"string"} }, "required":["q"] }""");
+        var tools = new[] { new ChatToolDefinition("AnyTool", "any", schema) };
+        var original = new[] { ChatMessage.System("sys"), ChatMessage.User("u") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter, enableThinking: true).ToList();
+
+        result.Should().HaveCount(2,
+            because: "Phi3 returns null from RenderToolPromptFragmentWhenThinking — no extra system message when thinking is on");
+        result[0].Should().Be(original[0]);
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_ThinkingDisabled_Gemma4_UsesFullFragment()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "path":{"type":"string"} }, "required":["path"] }""");
+        var tools = new[] { new ChatToolDefinition("WriteFile", "Write a file", schema) };
+        var original = new[] { ChatMessage.User("write") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter, enableThinking: false).ToList();
+
+        result.Should().HaveCount(2);
+        result[0].Content.Should().Contain("You have access to the following tools",
+            because: "enableThinking=false uses the full D-1 fragment as before");
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_ThinkingEnabled_NoRequiredParams_SkipsFragment()
+    {
+        // All-optional tool: RenderToolPromptFragmentWhenThinking returns null → no fragment.
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "opt":{"type":"string"} } }""");
+        var tools = new[] { new ChatToolDefinition("OptTool", "optional tool", schema) };
+        var original = new[] { ChatMessage.User("go") };
+
+        var result = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter, enableThinking: true).ToList();
+
+        result.Should().HaveCount(1,
+            because: "no required parameters → RenderToolPromptFragmentWhenThinking returns null → no fragment injected");
+    }
+
+    // ─── Gemma4ChatFormatter.RenderToolPromptFragmentWhenThinking (Gap B, 2026-05-08) ───
+
+    [Fact]
+    public void Gemma4_RenderToolPromptFragmentWhenThinking_SingleTool_RequiredParamsOnly()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "query":{"type":"string"}, "limit":{"type":"integer"} }, "required":["query"] }""");
+        var tools = new[] { new ChatToolDefinition("search", "Search docs", schema) };
+
+        var result = formatter.RenderToolPromptFragmentWhenThinking(tools);
+
+        result.Should().NotBeNull();
+        result.Should().Contain("search: query (string)",
+            because: "only required params are listed, with tool name prefix");
+        result.Should().NotContain("limit",
+            because: "optional params are omitted entirely");
+        result.Should().NotContain("Search docs",
+            because: "tool description is omitted to minimize context pressure");
+    }
+
+    [Fact]
+    public void Gemma4_RenderToolPromptFragmentWhenThinking_MultipleTools_RequiredOnly()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema1 = BuildSchema("""{ "type":"object", "properties":{ "q":{"type":"string"} }, "required":["q"] }""");
+        var schema2 = BuildSchema("""{ "type":"object", "properties":{ "id":{"type":"integer"} }, "required":["id"] }""");
+        var tools = new[]
+        {
+            new ChatToolDefinition("search", "s", schema1),
+            new ChatToolDefinition("get_item", "g", schema2)
+        };
+
+        var result = formatter.RenderToolPromptFragmentWhenThinking(tools);
+
+        result.Should().NotBeNull();
+        result.Should().Contain("search: q (string)");
+        result.Should().Contain("get_item: id (integer)");
+    }
+
+    [Fact]
+    public void Gemma4_RenderToolPromptFragmentWhenThinking_NullTools_ReturnsNull()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        formatter.RenderToolPromptFragmentWhenThinking(null).Should().BeNull();
+    }
+
+    [Fact]
+    public void Gemma4_RenderToolPromptFragmentWhenThinking_EmptyTools_ReturnsNull()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        formatter.RenderToolPromptFragmentWhenThinking(Array.Empty<ChatToolDefinition>()).Should().BeNull();
+    }
+
+    [Fact]
+    public void Gemma4_RenderToolPromptFragmentWhenThinking_AllOptionalParams_ReturnsNull()
+    {
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "opt":{"type":"string"} } }""");
+        var tools = new[] { new ChatToolDefinition("tool", "desc", schema) };
+
+        formatter.RenderToolPromptFragmentWhenThinking(tools).Should().BeNull(
+            because: "tools with no required params produce no hint, so null is returned to skip fragment injection");
+    }
+
+    [Fact]
+    public void MaybeInjectToolPromptFragment_ThinkingEnabled_ThenThinkingToken_MinimalFragmentFirst()
+    {
+        // Simulates real call order with thinking ON: minimal fragment then thinking token.
+        var formatter = new Gemma4ChatFormatter();
+        var schema = BuildSchema("""{ "type":"object", "properties":{ "query":{"type":"string"} }, "required":["query"] }""");
+        var tools = new[] { new ChatToolDefinition("search_knowledge", "Search", schema) };
+        var original = new[] { ChatMessage.User("search something") };
+
+        var withFragment = LlamaServerGeneratorModel.MaybeInjectToolPromptFragment(original, tools, formatter, enableThinking: true).ToList();
+        var result = LlamaServerGeneratorModel.MaybeInjectThinkingToken(withFragment, enableThinking: true, formatter).ToList();
+
+        result.Should().HaveCount(2);
+        result[0].Role.Should().Be(ChatRole.System);
+        result[0].Content.Should().StartWith("<|think|>",
+            because: "thinking token precedes the minimal fragment in the combined system message");
+        result[0].Content.Should().Contain("search_knowledge: query (string)",
+            because: "minimal required-params hint is preserved after thinking token injection");
+        result[0].Content.Should().NotContain("You have access to the following tools",
+            because: "full D-1 preamble must not be present when thinking is active");
+    }
+
     // ─── MaybeInjectThinkingToken (Gap A — Gemma 4 thinking mode, 2026-05-05) ───
 
     [Fact]

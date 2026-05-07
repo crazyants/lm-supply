@@ -135,6 +135,32 @@ public sealed class Gemma4ChatFormatter : IChatFormatter
         return sb.ToString();
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// When thinking is active, the Jinja2 template in llama-server already injects the
+    /// full structured tool schema (<c>&lt;|tool&gt;declaration:...&lt;tool|&gt;</c>).
+    /// Repeating the full D-1 text fragment creates system-prompt pressure that can
+    /// degrade tool-call accuracy on small models. This override reduces the fragment
+    /// to a minimal per-tool required-params line to preserve the "required args hint"
+    /// benefit while eliminating redundant tool descriptions.
+    /// Reference: ecosystem ISSUE Gap B (2026-05-08), Option T-2.
+    /// </remarks>
+    public string? RenderToolPromptFragmentWhenThinking(IReadOnlyList<ChatToolDefinition>? tools)
+    {
+        if (tools is null || tools.Count == 0)
+            return null;
+
+        var sb = new StringBuilder();
+        foreach (var tool in tools)
+        {
+            var (required, _) = ExtractParameters(tool.Parameters);
+            if (required.Count == 0)
+                continue;
+            sb.Append(tool.Name).Append(": ").AppendLine(string.Join(", ", required));
+        }
+        return sb.Length > 0 ? sb.ToString().TrimEnd() : null;
+    }
+
     private static void AppendToolFragment(StringBuilder sb, ChatToolDefinition tool)
     {
         if (string.IsNullOrEmpty(tool.Description))

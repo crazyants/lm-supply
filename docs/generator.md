@@ -627,7 +627,7 @@ await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Gemm
 
 > **Gemma 4 W1 advisory (v0.34.3+):** When loading any `gguf:fast`/`default`/`balanced`/`quality`/`large` alias (all Gemma 4), a W1-level warning is emitted via `Trace.TraceWarning` at load time. Upstream llama.cpp PRs #21375 (chat-template/rope) and #21882 (instruction-following) are not yet in a stable release; tool-use with Korean instructional prompts and Q4_K_M quants may produce empty responses. Subscribe to `System.Diagnostics.Trace` listeners to receive this advisory. For production tool-calling workloads, Qwen2.5-7B-Instruct GGUF is a reliable alternative until the upstream PRs land.
 
-> **Gemma 4 tool prompt injection:** `Gemma4ChatFormatter` automatically injects a `Required parameters (MUST be provided): name (type)` block as a system message for each tool, working around Gemma 4's tendency to emit empty tool arguments under llama-server's native Jinja template.
+> **Gemma 4 tool prompt injection:** `Gemma4ChatFormatter` automatically injects tool parameter hints as a system message, working around Gemma 4's tendency to emit empty tool arguments under llama-server's native Jinja template. The fragment content adapts to `GenerationOptions.EnableThinking`: when `false` (default), the full `Required parameters (MUST be provided): name (type)` block is injected; when `true`, only a compact per-tool required-params hint is injected (e.g. `search_knowledge: query (string)`) since the Jinja2 structured schema already covers full definitions, reducing system-prompt pressure on small models.
 
 ### Generation Options
 
@@ -648,26 +648,29 @@ await foreach (var token in model.GenerateAsync(prompt, genOptions))
 
 ### Gemma 4 Thinking Mode (v0.34+)
 
-Gemma 4 models support an **extended thinking** mode activated by including `<|think|>` at the start of the system prompt. Google recommends this for E2B/E4B models when complex function calling is required:
+Gemma 4 models support an **extended thinking** mode activated via `GenerationOptions.EnableThinking`. Google recommends this for E2B/E4B models when complex function calling is required:
 
 ```csharp
 await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Gemma 4 E4B
 
 var messages = new[]
 {
-    ChatMessage.System("<|think|>You are a helpful assistant."),  // <|think|> activates thinking
+    ChatMessage.System("You are a helpful assistant."),
     ChatMessage.User("Solve this step by step: 17 × 23")
 };
 
-await foreach (var token in model.GenerateChatAsync(messages))
+var options = new GenerationOptions { EnableThinking = true };
+await foreach (var token in model.GenerateChatAsync(messages, options))
 {
     Console.Write(token);
 }
 ```
 
-When thinking mode is active, llama-server (b8994+) separates the internal reasoning into a `reasoning_content` field and delivers the final answer in `content`. LMSupply transparently skips `reasoning_content` tokens in the public stream, so the caller only receives the final response.
+When `EnableThinking = true`, LMSupply prepends `<|think|>` to the first system message before sending the request to llama-server. The server (b8994+) separates internal reasoning into a `reasoning_content` field; LMSupply transparently skips those tokens, so the caller only receives the final response.
 
-> `Gemma4ChatFormatter.GetThinkingToken()` returns `"<|think|>"` — this is used by orchestration layers that need to inject the thinking activation token programmatically.
+**Thinking + tool calling:** When `EnableThinking = true` and tools are provided, the Gemma 4 tool prompt fragment (see note above) is automatically reduced to compact required-params hints. This avoids doubling the tool schema (Jinja2 structured schema + text fragment) in the system prompt, which would increase context pressure on small models.
+
+> `Gemma4ChatFormatter.GetThinkingToken()` returns `"<|think|>"` — used by orchestration layers that inject the thinking activation token programmatically.
 
 > For DeepSeek R1's `<think>...</think>` tag format, see the section below.
 

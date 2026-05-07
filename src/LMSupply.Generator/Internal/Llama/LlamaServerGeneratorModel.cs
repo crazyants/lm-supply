@@ -436,7 +436,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         {
             var trimmedMessages = await TrimToFitContextAsync(messages, options, cancellationToken);
             // Convert to llama-server format
-            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter);
+            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter, options.EnableThinking);
             augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
@@ -574,7 +574,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         try
         {
             var trimmedMessages = await TrimToFitContextAsync(messages, options, cancellationToken);
-            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter);
+            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter, options.EnableThinking);
             augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
@@ -717,7 +717,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         try
         {
             var trimmedMessages = await TrimToFitContextAsync(messages, options, cancellationToken);
-            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter);
+            var augmentedMessages = MaybeInjectToolPromptFragment(trimmedMessages, options.Tools, _chatFormatter, options.EnableThinking);
             augmentedMessages = MaybeInjectThinkingToken(augmentedMessages, options.EnableThinking, _chatFormatter);
             var serverMessages = ConvertMessages(augmentedMessages);
             var chatOptions = CreateChatOptions(options);
@@ -1137,9 +1137,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     internal static IEnumerable<ChatMessage> MaybeInjectToolPromptFragment(
         IEnumerable<ChatMessage> messages,
         IReadOnlyList<ChatToolDefinition>? tools,
-        IChatFormatter formatter)
+        IChatFormatter formatter,
+        bool enableThinking = false)
     {
-        var fragment = formatter.RenderToolPromptFragment(tools);
+        var fragment = enableThinking
+            ? formatter.RenderToolPromptFragmentWhenThinking(tools)
+            : formatter.RenderToolPromptFragment(tools);
+
         if (string.IsNullOrEmpty(fragment))
         {
             foreach (var msg in messages)
@@ -1228,7 +1232,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
 
         while (true)
         {
-            var augmented = MaybeInjectToolPromptFragment(list, options.Tools, _chatFormatter);
+            var augmented = MaybeInjectToolPromptFragment(list, options.Tools, _chatFormatter, options.EnableThinking);
             augmented = MaybeInjectThinkingToken(augmented, options.EnableThinking, _chatFormatter);
             var prompt = _chatFormatter.FormatPrompt(augmented);
             var tokenCount = await _serverLease.Client.CountTokensAsync(prompt, cancellationToken);

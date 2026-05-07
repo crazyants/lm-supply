@@ -50,6 +50,18 @@ public interface IChatFormatter
     string? RenderToolPromptFragment(IReadOnlyList<ChatToolDefinition>? tools) => null;
 
     /// <summary>
+    /// Renders a reduced textual reinforcement of tool schemas for use when the model's
+    /// thinking mode is active (see <see cref="GetThinkingToken"/>). Returns <c>null</c>
+    /// by default — meaning no fragment is injected when thinking is enabled, because
+    /// the llama-server Jinja2 template already injects the full structured schema.
+    /// Formatters that opt in to thinking-mode-specific fragments override this method
+    /// (e.g. Gemma 4 provides required-params-only hints to reduce system prompt pressure).
+    /// </summary>
+    /// <param name="tools">The tool definitions visible to the model on this turn.</param>
+    /// <returns>A minimal hint fragment, or <c>null</c> to skip injection entirely.</returns>
+    string? RenderToolPromptFragmentWhenThinking(IReadOnlyList<ChatToolDefinition>? tools) => null;
+
+    /// <summary>
     /// Creates a stateful parser that extracts model-native tool-call wrapper
     /// tokens from the streaming text channel and converts them into structured
     /// <c>ChatToolCallDelta</c> events. Returns <c>null</c> by default — formatters

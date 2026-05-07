@@ -53,6 +53,23 @@ public static partial class LlamaServerVersionRequirements
     }
 
     /// <summary>
+    /// Returns true if the server version meets the minimum requirement for the model.
+    /// Returns true when the version cannot be parsed (graceful degradation).
+    /// </summary>
+    public static bool MeetsMinimum(string? serverVersion, string chatFormatName)
+    {
+        var minBuild = GetMinimumBuild(chatFormatName);
+        if (minBuild == null)
+            return true;
+
+        var actualBuild = ParseBuildNumber(serverVersion);
+        if (actualBuild == null)
+            return true; // Can't determine version — allow to proceed
+
+        return actualBuild.Value >= minBuild.Value;
+    }
+
+    /// <summary>
     /// Validates that the server version meets the minimum requirement for the model.
     /// Throws <see cref="InvalidOperationException"/> if the version is too old.
     /// Silently passes if the version cannot be parsed (graceful degradation).

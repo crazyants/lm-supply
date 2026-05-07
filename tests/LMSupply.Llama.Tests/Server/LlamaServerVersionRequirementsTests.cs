@@ -89,4 +89,43 @@ public class LlamaServerVersionRequirementsTests
         var act = () => LlamaServerVersionRequirements.Validate(null, "gemma4");
         act.Should().NotThrow();
     }
+
+    // --- MeetsMinimum ---
+
+    [Fact]
+    public void MeetsMinimum_SufficientVersion_ReturnsTrue()
+    {
+        LlamaServerVersionRequirements.MeetsMinimum("b9000", "gemma4").Should().BeTrue();
+    }
+
+    [Fact]
+    public void MeetsMinimum_ExactMinimumVersion_ReturnsTrue()
+    {
+        LlamaServerVersionRequirements.MeetsMinimum("b8672", "gemma4").Should().BeTrue();
+    }
+
+    [Fact]
+    public void MeetsMinimum_OldVersion_ReturnsFalse()
+    {
+        LlamaServerVersionRequirements.MeetsMinimum("b7898", "gemma4").Should().BeFalse();
+    }
+
+    [Fact]
+    public void MeetsMinimum_NoRequirement_ReturnsTrue()
+    {
+        LlamaServerVersionRequirements.MeetsMinimum("b1000", "chatml").Should().BeTrue();
+    }
+
+    [Fact]
+    public void MeetsMinimum_UnparsableVersion_ReturnsTrue()
+    {
+        // Graceful degradation — unknown version format should not block model loading
+        LlamaServerVersionRequirements.MeetsMinimum("unknown", "gemma4").Should().BeTrue();
+    }
+
+    [Fact]
+    public void MeetsMinimum_NullVersion_ReturnsTrue()
+    {
+        LlamaServerVersionRequirements.MeetsMinimum(null, "gemma4").Should().BeTrue();
+    }
 }

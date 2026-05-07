@@ -91,7 +91,18 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         var backend = updateResult.Backend;
         var serverVersion = updateResult.NewVersion ?? updateResult.PreviousVersion;
 
-        // 1b. Validate server version meets model requirements
+        // 1b. Validate server version meets model requirements.
+        // If the cached version is too old, trigger an immediate update and retry once
+        // before throwing — avoids requiring manual cache deletion.
+        if (!LlamaServerVersionRequirements.MeetsMinimum(serverVersion, chatFormatter.FormatName))
+        {
+            var retryResult = await updateService.CheckAndApplyUpdateAsync(
+                preferredBackend, progress, cancellationToken);
+            serverPath    = retryResult.ServerPath;
+            backend       = retryResult.Backend;
+            serverVersion = retryResult.NewVersion ?? retryResult.PreviousVersion;
+        }
+
         LlamaServerVersionRequirements.Validate(serverVersion, chatFormatter.FormatName);
 
         // 2. Read GGUF metadata (best effort)

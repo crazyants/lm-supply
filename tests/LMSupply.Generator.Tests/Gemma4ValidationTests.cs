@@ -161,6 +161,35 @@ public class Gemma4StaticValidationTests
         llama3.GetThinkingToken().Should().BeNull();
     }
 
+    // ---- W1: Gemma 4 tool-use risk advisory path -----------------------------------------
+
+    [Fact]
+    public void Gemma4ChatFormatter_IsGemma4FormatterInstance_EvaluatesTrue()
+    {
+        // LlamaServerGeneratorModel.LoadAsync uses `chatFormatter is Gemma4ChatFormatter`
+        // to gate the W1 Trace.TraceWarning advisory (llama.cpp #21375 / #21882).
+        // Verify the type-check holds for the formatter produced by the factory.
+        IChatFormatter formatter = ChatFormatterFactory.CreateByFormat("gemma4");
+
+        (formatter is Gemma4ChatFormatter).Should().BeTrue(
+            because: "LoadAsync W1 path requires Gemma4ChatFormatter identity check to fire; " +
+                     "if the factory changes the concrete type the warning will silently stop emitting");
+    }
+
+    [Theory]
+    [InlineData("llama3")]
+    [InlineData("chatml")]
+    [InlineData("phi3")]
+    [InlineData("qwen")]
+    public void NonGemma4Formatters_AreNotGemma4Instance(string format)
+    {
+        // W1 warning must NOT fire for other model families.
+        IChatFormatter formatter = ChatFormatterFactory.CreateByFormat(format);
+
+        (formatter is Gemma4ChatFormatter).Should().BeFalse(
+            because: $"{format} formatter must not trigger the Gemma 4 W1 advisory");
+    }
+
     [Fact]
     public void Gemma4ChatFormatter_RenderToolPromptFragment_ListsRequiredParams()
     {

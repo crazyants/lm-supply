@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using LMSupply.Download;
 using LMSupply.Exceptions;
 using LMSupply.Generator.Abstractions;
+using LMSupply.Generator.ChatFormatters;
 using LMSupply.Hardware;
 using LMSupply.Generator.Models;
 using LMSupply.Llama.Server;
@@ -284,7 +285,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             Phase = DownloadPhase.Complete
         });
 
-        return new LlamaServerGeneratorModel(
+        var model = new LlamaServerGeneratorModel(
             modelId,
             modelPath,
             serverLease,
@@ -293,6 +294,20 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             SelectReportedContextLength(options, ggufMetadata, contextLength),
             ggufMetadata,
             serverVersion ?? "unknown");
+
+        // W1: Gemma 4 tool-use risk advisory (llama.cpp #21375 / #21882 not yet merged).
+        // Emitted once at load time so operators see the warning before any inference request.
+        if (chatFormatter is Gemma4ChatFormatter)
+        {
+            Trace.TraceWarning(
+                "[LlamaServerGeneratorModel] Gemma 4 model loaded. " +
+                "llama.cpp #21375 (chat-template/rope) and #21882 (instruction-following) " +
+                "are not yet in a stable release. " +
+                "Tool-use + Korean instructional prompts may produce empty responses (Q4_K_M). " +
+                "Consider Qwen2.5-7B-Instruct GGUF for reliable tool-use until upstream PRs land.");
+        }
+
+        return model;
     }
 
     /// <inheritdoc />

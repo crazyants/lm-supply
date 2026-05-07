@@ -16,6 +16,7 @@ public sealed class LlamaServerClient : IDisposable
     private readonly HttpClient _httpClient;
     private readonly string _baseUrl;
     private readonly bool _ownsHttpClient;
+    private readonly int _maxContextLength;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -26,9 +27,13 @@ public sealed class LlamaServerClient : IDisposable
     /// <summary>
     /// Creates a new client for the specified server URL.
     /// </summary>
-    public LlamaServerClient(string baseUrl, HttpClient? httpClient = null)
+    /// <param name="baseUrl">llama-server base URL.</param>
+    /// <param name="httpClient">Optional shared HttpClient. If null, a new one is created and owned.</param>
+    /// <param name="maxContextLength">Model context window size — carried in ContextLengthExceededException on overflow.</param>
+    public LlamaServerClient(string baseUrl, HttpClient? httpClient = null, int maxContextLength = 0)
     {
         _baseUrl = baseUrl.TrimEnd('/');
+        _maxContextLength = maxContextLength;
 
         if (httpClient != null)
         {
@@ -84,7 +89,7 @@ public sealed class LlamaServerClient : IDisposable
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
+        await EnsureSuccessOrThrowContextExceptionAsync(response, _maxContextLength, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -166,7 +171,7 @@ public sealed class LlamaServerClient : IDisposable
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
+        await EnsureSuccessOrThrowContextExceptionAsync(response, _maxContextLength, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -270,7 +275,7 @@ public sealed class LlamaServerClient : IDisposable
             content,
             cancellationToken);
 
-        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
+        await EnsureSuccessOrThrowContextExceptionAsync(response, _maxContextLength, cancellationToken);
 
         var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
         var result = JsonSerializer.Deserialize<ChatCompletionFullResponse>(responseJson, JsonOptions);
@@ -319,7 +324,7 @@ public sealed class LlamaServerClient : IDisposable
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        await EnsureSuccessOrThrowContextExceptionAsync(response, cancellationToken);
+        await EnsureSuccessOrThrowContextExceptionAsync(response, _maxContextLength, cancellationToken);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -497,6 +502,7 @@ public sealed class LlamaServerClient : IDisposable
     /// </summary>
     private static async Task EnsureSuccessOrThrowContextExceptionAsync(
         HttpResponseMessage response,
+        int maxContextLength,
         CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
@@ -508,7 +514,7 @@ public sealed class LlamaServerClient : IDisposable
         if (response.StatusCode == System.Net.HttpStatusCode.BadRequest &&
             IsContextOverflowError(errorBody))
         {
-            throw new ContextLengthExceededException(null, 0);
+            throw new ContextLengthExceededException(null, maxContextLength);
         }
 
         // Fallback to default behavior for non-context errors

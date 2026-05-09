@@ -222,4 +222,36 @@ public class OnnxSessionFactoryTests
 
         await action.Should().ThrowAsync<Exception>();
     }
+
+    [Fact]
+    public async Task CreateWithInfoAsync_ExplicitGpuProvider_WhenSessionCreateThrows_FallsBackToCpu()
+    {
+        // Skip if ONNX Runtime native library is not available (CI without runtime installed).
+        var (available, _) = OnnxSessionFactory.CheckOnnxRuntimeAvailability();
+        Skip.IfNot(available, "ONNX Runtime not available in this environment");
+
+        // Simulate a session-creation failure on the first attempt (DML) by injecting a
+        // configureOptions callback that throws. The factory should catch this and retry
+        // with CPU. The CPU attempt then fails on the nonexistent model file, which is the
+        // expected final exception (not the simulated DML error).
+        var attemptCount = 0;
+        Action<Microsoft.ML.OnnxRuntime.SessionOptions> failOnFirstAttempt = _ =>
+        {
+            if (Interlocked.Increment(ref attemptCount) == 1)
+                throw new InvalidOperationException("Simulated DirectML init failure");
+        };
+
+        Func<Task> action = async () => await OnnxSessionFactory.CreateWithInfoAsync(
+            "nonexistent_model_for_fallback_test.onnx",
+            ExecutionProvider.DirectML,
+            failOnFirstAttempt);
+
+        // Before the fix: InvalidOperationException propagates directly (no CPU fallback).
+        // After the fix: InvalidOperationException is caught; CPU fallback is attempted;
+        //   the final exception is from the CPU session attempt (model file not found).
+        var ex = await Assert.ThrowsAnyAsync<Exception>(action);
+        ex.Should().NotBeOfType<InvalidOperationException>(
+            "the simulated GPU failure should be caught and CPU fallback should be attempted");
+        attemptCount.Should().Be(2, "configureOptions should have been called twice: once for GPU, once for CPU fallback");
+    }
 }

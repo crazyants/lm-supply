@@ -111,7 +111,7 @@ public static class OnnxSessionFactory
             return await CreateWithFallbackChainAsync(modelPath, skipProviders, configureOptions, progress, cancellationToken);
         }
 
-        // Explicit provider specified - use single provider with CPU fallback
+        // Explicit provider specified
         var providerString = provider switch
         {
             ExecutionProvider.Cuda => "cuda12",  // Try CUDA 12 first
@@ -119,6 +119,7 @@ public static class OnnxSessionFactory
             ExecutionProvider.CoreML => "coreml",
             _ => "cpu"
         };
+        var isGpuRequested = provider is ExecutionProvider.Cuda or ExecutionProvider.DirectML or ExecutionProvider.CoreML;
 
         // Download runtime binaries if needed
         await RuntimeManager.Instance.EnsureRuntimeAsync(
@@ -127,17 +128,48 @@ public static class OnnxSessionFactory
             progress: progress,
             cancellationToken: cancellationToken);
 
-        // Create session on a dedicated thread to avoid thread pool starvation.
-        // InferenceSession construction blocks for several seconds on large models.
-        var session = await Task.Factory.StartNew(
-            () => Create(modelPath, provider, configureOptions),
-            cancellationToken,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
+        InferenceSession session;
+        try
+        {
+            // Create session on a dedicated thread to avoid thread pool starvation.
+            // InferenceSession construction blocks for several seconds on large models.
+            session = await Task.Factory.StartNew(
+                () => Create(modelPath, provider, configureOptions),
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (isGpuRequested)
+        {
+            // GPU session initialization failed (e.g., DirectML DX12 device unavailable,
+            // CUDA driver mismatch). Fall back to CPU so the caller gets a working session.
+            var msg = ex.Message.Length > 100 ? ex.Message[..100] + "..." : ex.Message;
+            Trace.TraceWarning($"[OnnxSessionFactory] {provider} session init failed: {msg}. Falling back to CPU.");
+
+            await RuntimeManager.Instance.EnsureRuntimeAsync(
+                "onnxruntime", provider: "cpu", progress: progress, cancellationToken: cancellationToken);
+
+            session = await Task.Factory.StartNew(
+                () => Create(modelPath, ExecutionProvider.Cpu, configureOptions),
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+
+            return new SessionCreationResult
+            {
+                Session = session,
+                RequestedProvider = provider,
+                ActiveProviders = new[] { "CPUExecutionProvider" }
+            };
+        }
+
         var activeProviders = GetActiveProviders(session);
 
         // Log warning if GPU was requested but not active
-        var isGpuRequested = provider is ExecutionProvider.Cuda or ExecutionProvider.DirectML or ExecutionProvider.CoreML;
         var hasGpuProvider = activeProviders.Any(p =>
             p.Contains("CUDA", StringComparison.OrdinalIgnoreCase) ||
             p.Contains("DML", StringComparison.OrdinalIgnoreCase) ||

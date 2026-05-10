@@ -167,11 +167,12 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     YarnBetaFast         = llamaOpts.YarnBetaFast,
                     YarnBetaSlow         = llamaOpts.YarnBetaSlow,
                 };
-                Trace.TraceInformation(
-                    $"[LlamaServerGeneratorModel] Auto partial offload: " +
-                    $"{estimate.RecommendedGpuLayers}/{estimate.TotalLayers} layers on GPU " +
-                    $"(VRAM: {estimate.EstimatedVramBytes / (1024.0 * 1024 * 1024):F1}GB, " +
-                    $"RAM: {estimate.EstimatedRamBytes / (1024.0 * 1024 * 1024):F1}GB)");
+                // Severity-aware trace: TraceWarning for full CPU fallback (0 GPU layers),
+                // TraceInformation for partial offload. See LlamaOffloadTraceHelper.
+                LlamaOffloadTraceHelper.TraceOffloadDecision(
+                    estimate,
+                    freeVramBytes: profile.GpuInfo.FreeMemoryBytes ?? 0,
+                    totalVramBytes: profile.GpuInfo.TotalMemoryBytes ?? 0);
             }
         }
 

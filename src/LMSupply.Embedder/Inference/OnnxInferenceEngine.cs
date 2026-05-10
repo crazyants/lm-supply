@@ -219,7 +219,7 @@ internal sealed class OnnxInferenceEngine : IDisposable
 
                 return outputArray;
             }
-            catch (OnnxRuntimeException ex) when (allowRetry && _requestedProvider == ExecutionProvider.Auto && TryFallback(ex))
+            catch (OnnxRuntimeException ex) when (allowRetry && _requestedProvider != ExecutionProvider.Cpu && TryFallback(ex))
             {
                 // After successful fallback, retry exactly once on the new session.
                 // Pass allowRetry: false to avoid runaway recursion if the next provider also fails

@@ -9,7 +9,7 @@ Two orthogonal changes ship together as v0.28.0. The bug fix adds level-2 recurs
 
 **Tech Stack:** .NET 10.0, xUnit 2.9.3, FluentAssertions 8.8.0, ONNX Runtime GenAI 0.12.2.
 
-**Spec:** `docs/superpowers/specs/2026-04-13-generator-default-platform-aware-design.md`
+**Spec:** `claudedocs/superpowers/specs/2026-04-13-generator-default-platform-aware-design.md`
 
 ---
 

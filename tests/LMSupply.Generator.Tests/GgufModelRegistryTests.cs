@@ -240,8 +240,8 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 12L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 11L * 1024 * 1024 * 1024
         };
-        // 11GB × 0.85 = 9.35GB. Balanced (7.5GB Q8_0 + ~1.4GB KV @ 4096 ≈ 8.9GB) fits.
-        // Quality (16.8GB + KV) doesn't fit.
+        // budget = min(12 × 0.85, 11 × 0.95) = min(10.2GB, 10.45GB) = 10.2GB (totalCap binding).
+        // Balanced (7.5GB Q8_0 + ~1.4GB KV ≈ 8.9GB) fits. Quality (16.8GB + KV) doesn't fit.
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q8_0");
         model.ParameterCount.Should().Be(4_500_000_000);
@@ -267,9 +267,27 @@ public class GgufModelRegistryTests
     [Fact]
     public void GetAutoModel_8GBVram_SelectsDefault()
     {
-        // 8GB total × 0.85 = 6.8GB budget.
+        // 8GB total, 7.5GB free → totalCap = 8 × 0.85 = 6.8GB, freeCap = 7.5 × 0.95 = 7.125GB
+        // budget = min(6.8, 7.125) = 6.8GB (totalCap is binding here).
         // - default (5.3GB + ~1.4GB KV ≈ 6.7GB) fits
         // - balanced (7.5GB + ~1.4GB KV ≈ 8.9GB) does NOT fit
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = (long)(7.5 * 1024 * 1024 * 1024)
+        };
+        var model = GgufModelRegistry.GetAutoModel(gpu);
+        model.QuantizationType.Should().Be("Q4_K_M");
+        model.ParameterCount.Should().Be(4_500_000_000);
+    }
+
+    [Fact]
+    public void GetAutoModel_8GBVram_LowFree_SelectsFast()
+    {
+        // 8GB total but only 6GB free (external process consuming VRAM).
+        // totalCap = 8 × 0.85 = 6.8GB, freeCap = 6 × 0.95 = 5.7GB → budget = 5.7GB.
+        // default (5.3GB + ~1.4GB KV ≈ 6.7GB) does NOT fit → falls back to fast.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -277,8 +295,8 @@ public class GgufModelRegistryTests
             FreeMemoryBytes = 6L * 1024 * 1024 * 1024
         };
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.QuantizationType.Should().Be("Q4_K_M");
-        model.ParameterCount.Should().Be(4_500_000_000);
+        model.ParameterCount.Should().Be(2_300_000_000,
+            because: "free VRAM cap prevents selecting default when only 6GB is actually available");
     }
 
     [Fact]

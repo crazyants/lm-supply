@@ -6,8 +6,9 @@ namespace LMSupply.Hardware;
 
 /// <summary>
 /// Calculates available VRAM budget for model loading.
-/// Uses total VRAM (the model host is assumed to own the GPU for its lifetime);
-/// falls back to free VRAM only when total is unknown.
+/// Budget is <c>min(total × (1 - margin), free × <see cref="FreeVramSafetyFactor"/>)</c>:
+/// the total-based cap guards thermal/stability headroom; the free-based cap prevents
+/// selecting a model that exceeds what is actually available when other processes share the GPU.
 /// Absolute override via environment variable <see cref="BudgetOverrideEnvVar"/> (megabytes).
 /// </summary>
 public static class VramBudget
@@ -15,8 +16,17 @@ public static class VramBudget
     /// <summary>
     /// Environment variable that overrides the computed budget with an absolute value in megabytes.
     /// When set to a positive integer, the value is returned as-is (safety margin is not applied).
+    /// Use this to force a specific budget when the auto-calculated value is incorrect
+    /// (e.g., <c>LMSUPPLY_VRAM_BUDGET_MB=10000</c> for a 10 GB budget).
     /// </summary>
     public const string BudgetOverrideEnvVar = "LMSUPPLY_VRAM_BUDGET_MB";
+
+    /// <summary>
+    /// Safety factor applied to the free VRAM reading when computing the budget ceiling.
+    /// Free VRAM is probed at startup and can fluctuate between probe and model load;
+    /// retaining a 5 % buffer prevents selecting a model that barely fits the polled reading.
+    /// </summary>
+    public const double FreeVramSafetyFactor = 0.95;
 
     /// <summary>
     /// Default safety margin (15%) to reserve for OS, other processes, and runtime overhead.
@@ -62,6 +72,7 @@ public static class VramBudget
     /// <summary>
     /// Gets available VRAM bytes for model loading from the specified GPU,
     /// using the platform-recommended safety margin (see <see cref="GetRecommendedSafetyMargin"/>).
+    /// Returns <c>min(total × (1 - margin), free × <see cref="FreeVramSafetyFactor"/>)</c>.
     /// Prefers TotalMemoryBytes; falls back to FreeMemoryBytes only when total is unknown.
     /// </summary>
     public static long GetAvailableBytes(GpuInfo gpu)
@@ -69,8 +80,9 @@ public static class VramBudget
 
     /// <summary>
     /// Gets available VRAM bytes for model loading from the specified GPU using an explicit safety margin.
-    /// Prefers TotalMemoryBytes (long-running hosts own the GPU for their lifetime);
-    /// falls back to FreeMemoryBytes only when total is unknown.
+    /// Returns <c>min(total × (1 - margin), free × <see cref="FreeVramSafetyFactor"/>)</c> so that
+    /// other processes sharing the GPU do not cause an over-large budget.
+    /// When only one of total/free is known, uses whichever is available.
     /// Honors <see cref="BudgetOverrideEnvVar"/> as an absolute override (MB, margin ignored).
     /// </summary>
     public static long GetAvailableBytes(GpuInfo gpu, double safetyMargin)
@@ -78,11 +90,24 @@ public static class VramBudget
         if (TryGetEnvOverrideBytes(out var overrideBytes))
             return overrideBytes;
 
-        var rawBytes = gpu.TotalMemoryBytes ?? gpu.FreeMemoryBytes;
-        if (rawBytes is null or <= 0)
-            return 0;
+        var clampedMargin = Math.Clamp(safetyMargin, 0.0, 0.5);
 
-        var usable = (long)(rawBytes.Value * (1.0 - Math.Clamp(safetyMargin, 0.0, 0.5)));
+        long? totalCap = gpu.TotalMemoryBytes is > 0
+            ? (long)(gpu.TotalMemoryBytes.Value * (1.0 - clampedMargin))
+            : null;
+
+        long? freeCap = gpu.FreeMemoryBytes is > 0
+            ? (long)(gpu.FreeMemoryBytes.Value * FreeVramSafetyFactor)
+            : null;
+
+        var usable = (totalCap, freeCap) switch
+        {
+            ({ } t, { } f) => Math.Min(t, f),
+            ({ } t, null)  => t,
+            (null, { } f)  => f,
+            _              => 0L,
+        };
+
         return Math.Max(usable, 0);
     }
 

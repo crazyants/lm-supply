@@ -75,17 +75,17 @@ public class VramBudgetTests
 
         var available = VramBudget.GetAvailableBytes(gpu);
 
-        // Should use recommended (0.25), not default (0.15). Budget is based on total (not free)
-        // since the model host owns the GPU for its lifetime → 4GB * 0.75 = 3GB.
-        available.Should().Be((long)(4 * GB * 0.75));
+        // Low-VRAM Windows margin = 0.25 → totalCap = 4GB × 0.75 = 3.0GB
+        // freeCap = 3GB × 0.95 = 2.85GB → budget = min(3.0, 2.85) = 2.85GB.
+        var expected = (long)(3 * GB * VramBudget.FreeVramSafetyFactor);
+        available.Should().Be(expected);
     }
 
     [Fact]
-    public void GetAvailableBytes_PrefersTotalOverFree()
+    public void GetAvailableBytes_FreeIsBindingWhenLower()
     {
-        // Arrange: 16GB total, 12GB free. The budget is based on total (owner-of-GPU assumption),
-        // not the transient free reading — otherwise a 24GB card can look like a 2GB card when
-        // other processes briefly allocate VRAM.
+        // 16GB total, 12GB free → totalCap = 16 × 0.85 = 13.6GB, freeCap = 12 × 0.95 = 11.4GB
+        // Budget = min(13.6, 11.4) = 11.4GB — free is the binding constraint.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -93,12 +93,27 @@ public class VramBudgetTests
             FreeMemoryBytes = 12 * GB,
         };
 
-        // Act
         var available = VramBudget.GetAvailableBytes(gpu);
 
-        // Assert: 16GB * 0.85 = 13.6GB
-        var expected = (long)(16 * GB * 0.85);
+        var expected = (long)(12 * GB * VramBudget.FreeVramSafetyFactor);
         available.Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetAvailableBytes_TotalIsBindingWhenFreeIsHigh()
+    {
+        // 16GB total, 15.5GB free → totalCap = 16 × 0.85 = 13.6GB, freeCap = 15.5 × 0.95 = 14.7GB
+        // Budget = min(13.6, 14.7) = 13.6GB — total cap is the binding constraint (normal case).
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 16 * GB,
+            FreeMemoryBytes = (long)(15.5 * GB),
+        };
+
+        var available = VramBudget.GetAvailableBytes(gpu);
+
+        available.Should().Be((long)(16 * GB * (1.0 - VramBudget.DefaultSafetyMargin)));
     }
 
     [Fact]
@@ -141,7 +156,8 @@ public class VramBudgetTests
     [Fact]
     public void GetAvailableBytes_CustomSafetyMargin()
     {
-        // Arrange: 16GB total, 10GB free, 0.1 margin → expect ~14.4GB (based on total)
+        // 16GB total, 10GB free, margin=0.1
+        // totalCap = 16 × 0.9 = 14.4GB, freeCap = 10 × 0.95 = 9.5GB → budget = min = 9.5GB
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -149,11 +165,9 @@ public class VramBudgetTests
             FreeMemoryBytes = 10 * GB,
         };
 
-        // Act
         var available = VramBudget.GetAvailableBytes(gpu, safetyMargin: 0.1);
 
-        // Assert: 16GB * 0.9 = 14.4GB
-        var expected = (long)(16 * GB * 0.9);
+        var expected = (long)(10 * GB * VramBudget.FreeVramSafetyFactor);
         available.Should().Be(expected);
     }
 
@@ -198,7 +212,7 @@ public class VramBudgetTests
         // Act
         var result = VramBudget.CanFitModel(gpu, modelSize);
 
-        // Assert: 12GB * 0.85 = 10.2GB > 4GB
+        // budget = min(16×0.85, 12×0.95) = min(13.6, 11.4) = 11.4GB > 4GB → fits
         result.Should().BeTrue();
     }
 
@@ -217,7 +231,37 @@ public class VramBudgetTests
         // Act
         var result = VramBudget.CanFitModel(gpu, modelSize);
 
-        // Assert: 6GB * 0.85 = 5.1GB < 8GB
+        // budget = min(6×0.85, 4×0.95) = min(5.1, 3.8) = 3.8GB < 8GB → cannot fit
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetAvailableBytes_LowFreeVram_FreeCapsSelection()
+    {
+        // Regression: RTX 3090 (24GB total) with external process consuming most VRAM.
+        // Old behavior: budget = 24 × 0.85 = 20890MB → 26B model selected → 0 GPU layers.
+        // New behavior: budget = min(20480, 2384) = 2384MB → correct (model won't fit).
+        const long totalMb = 24576;
+        const long freeMb = 2509;
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            DeviceName = "NVIDIA GeForce RTX 3090",
+            TotalMemoryBytes = totalMb * 1024L * 1024,
+            FreeMemoryBytes = freeMb * 1024L * 1024,
+        };
+
+        var available = VramBudget.GetAvailableBytes(gpu);
+
+        // freeCap = 2509 × 0.95 = ~2383MB — must be the binding constraint
+        var freeCap = (long)(freeMb * 1024L * 1024 * VramBudget.FreeVramSafetyFactor);
+        var totalCap = (long)(totalMb * 1024L * 1024 * (1.0 - VramBudget.DefaultSafetyMargin));
+        freeCap.Should().BeLessThan(totalCap, "free is the binding constraint in this scenario");
+        available.Should().Be(freeCap);
+
+        // A 26B model (~18962MB) should not fit in the corrected budget
+        const long modelBytes = 18962L * 1024 * 1024;
+        VramBudget.CanFitModel(gpu, modelBytes).Should().BeFalse(
+            because: "26B model must not be selected when only 2509MB is actually free");
     }
 }

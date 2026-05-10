@@ -229,6 +229,22 @@ public static class LocalGenerator
             $"selected={selection.Selected.AliasName} ({selection.Selected.RepoId}), " +
             $"reason={selection.Reason}");
 
+        // Warn when free VRAM is the binding constraint (total-based cap would have been larger).
+        if (profile.GpuInfo.TotalMemoryBytes is > 0 && profile.GpuInfo.FreeMemoryBytes is > 0)
+        {
+            var totalCapMb = profile.GpuInfo.TotalMemoryBytes.Value * (1.0 - selection.SafetyMargin) / mb;
+            var freeCapMb = profile.GpuInfo.FreeMemoryBytes.Value * Hardware.VramBudget.FreeVramSafetyFactor / mb;
+            if (freeCapMb < totalCapMb * 0.99)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    $"[LocalGenerator.auto] Free VRAM cap binding: budget capped at {budgetMb:F0}MB " +
+                    $"by free VRAM ({vramFreeMb:F0}MB × {Hardware.VramBudget.FreeVramSafetyFactor:P0}), " +
+                    $"not by total × margin ({totalCapMb:F0}MB). " +
+                    $"Another process may be occupying GPU memory. " +
+                    $"Set {Hardware.VramBudget.BudgetOverrideEnvVar}=<MB> to override.");
+            }
+        }
+
         // Verbose breakdown of all candidates considered
         foreach (var c in selection.Candidates)
         {

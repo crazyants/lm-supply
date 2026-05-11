@@ -37,7 +37,9 @@ internal static class LlamaOffloadTraceHelper
                 $"is insufficient for any GPU offload. " +
                 $"Model will run entirely on RAM ({estimate.EstimatedRamBytes / BytesPerGb:F1}GB). " +
                 $"Performance severely degraded. " +
-                $"To override: set LMSUPPLY_VRAM_BUDGET_MB env var or close other GPU-using processes.");
+                $"To override: set LMSUPPLY_VRAM_BUDGET_MB env var or close other GPU-using processes. " +
+                $"Note: this is a System.Diagnostics.Trace event; ILogger pipelines must call " +
+                $"LMSupplyTraceListener.Attach at startup to surface it.");
         }
         else
         {

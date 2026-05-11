@@ -426,6 +426,46 @@ For NVIDIA CUDA support, ensure you have:
 
 ---
 
+## Logging & Diagnostics
+
+LMSupply emits operational logs (model auto-selection, GPU layer offload decisions, VRAM warnings, runtime download progress) via `System.Diagnostics.Trace.TraceInformation` / `TraceWarning`. These do **not** automatically surface in `Microsoft.Extensions.Logging` (ILogger) pipelines — `Trace.*` writes to `Trace.Listeners`, which is a separate channel.
+
+To surface LMSupply diagnostics in an ILogger sink (Serilog, Console logging, Application Insights, etc.), attach `LMSupplyTraceListener` at host startup:
+
+```csharp
+using LMSupply.Diagnostics;
+using Microsoft.Extensions.Logging;
+
+var logger = loggerFactory.CreateLogger("LMSupply");
+LMSupplyTraceListener.Attach((message, severity) =>
+    logger.Log(severity switch
+    {
+        TraceEventType.Warning => LogLevel.Warning,
+        TraceEventType.Error   => LogLevel.Error,
+        _                      => LogLevel.Information
+    }, message));
+```
+
+After attaching, the following diagnostic events become visible in your standard logging pipeline:
+
+- Auto model selection (`[EmbedderModelRegistry] Auto-selecting model for VRAM: ...`)
+- Llama-server GPU layer decisions (`[LlamaServerGeneratorModel] Auto partial offload: 18/32 layers on GPU` or `CPU-only fallback: 0/32 layers ...`)
+- Runtime binary download progress
+- VRAM budget warnings (when `LMSUPPLY_VRAM_BUDGET_MB` overrides take effect)
+
+### VRAM Budget Override
+
+LMSupply caps GPU model loading using `min(total × (1 - margin), free × 0.95)`. To override the computed budget with an absolute value (megabytes), set the environment variable **`LMSUPPLY_VRAM_BUDGET_MB`** before process start:
+
+```bash
+# Force 8 GB budget regardless of GPU free/total
+LMSUPPLY_VRAM_BUDGET_MB=8000
+```
+
+When set to a positive integer, the override is applied **before any safety margin** and feeds into all VRAM-aware decisions: model auto-selection, GGUF quantization variant selection, llama-server GPU layer count, and context length capping. If the override results in 0 GPU layers (full CPU fallback), `LlamaOffloadTraceHelper` emits a `Trace.TraceWarning` with the VRAM figures and the override hint — attach `LMSupplyTraceListener` per the section above to surface it.
+
+---
+
 ## Thread Safety & Batch Processing
 
 All LMSupply models are **thread-safe** for concurrent inference. ONNX Runtime's `InferenceSession.Run()` is thread-safe by design.

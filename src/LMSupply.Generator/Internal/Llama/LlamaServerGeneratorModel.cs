@@ -133,10 +133,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         {
             var fileSize = new FileInfo(modelPath).Length;
             var profile = Hardware.HardwareProfile.Current;
+            // Use VramBudget so LMSUPPLY_VRAM_BUDGET_MB override + safety margins
+            // flow into the offload decision. Raw EffectiveAvailableBytes ignored both.
+            var budgetVram = VramBudget.GetAvailableBytes(profile.GpuInfo);
             var estimate = MemoryEstimator.EstimateForGguf(
                 fileSize,
                 contextLength,
-                availableVramBytes: profile.GpuInfo.EffectiveAvailableBytes,
+                availableVramBytes: budgetVram > 0 ? budgetVram : profile.GpuInfo.EffectiveAvailableBytes,
                 availableRamBytes: profile.SystemMemoryBytes);
 
             if (!estimate.CanFitInVram && estimate.RecommendedGpuLayers < estimate.TotalLayers)
@@ -184,11 +187,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             {
                 const double mb = 1024.0 * 1024.0;
                 var gpu = Hardware.HardwareProfile.Current.GpuInfo;
-                var availableMb = (gpu.EffectiveAvailableBytes ?? 0) / mb;
+                var budgetMb = VramBudget.GetAvailableBytes(gpu) / mb;
                 var totalMb = (gpu.TotalMemoryBytes ?? 0) / mb;
                 var freeMb = (gpu.FreeMemoryBytes ?? gpu.TotalMemoryBytes ?? 0) / mb;
                 var ctxMsg = $"[LlamaServerGeneratorModel] ctx-size adjusted: requested={contextLength}, actual={safeContext} " +
-                    $"(VRAM available={availableMb:F0}MB, free={freeMb:F0}MB, total={totalMb:F0}MB)";
+                    $"(VRAM budget={budgetMb:F0}MB, free={freeMb:F0}MB, total={totalMb:F0}MB)";
                 // Warn when the caller explicitly set MaxContextLength and it was silently reduced.
                 if (options.MaxContextLength is not null)
                     Trace.TraceWarning(ctxMsg);
@@ -983,7 +986,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     internal static int EstimateSafeContextLength(string modelPath, int requestedContext, int gpuLayerCount)
     {
         var profile = Hardware.HardwareProfile.Current;
-        var availableVram = profile.GpuInfo.EffectiveAvailableBytes ?? 0;
+        // Use VramBudget so context cap honors LMSUPPLY_VRAM_BUDGET_MB override + safety margins.
+        var budgetVram = VramBudget.GetAvailableBytes(profile.GpuInfo);
+        var availableVram = budgetVram > 0 ? budgetVram : (profile.GpuInfo.EffectiveAvailableBytes ?? 0);
         if (availableVram <= 0 || gpuLayerCount == 0)
             return requestedContext; // CPU-only, no VRAM constraint
 

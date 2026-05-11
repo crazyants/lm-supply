@@ -37,8 +37,9 @@ public class LlamaOffloadTraceHelperTests
             listener.Warnings.Should().ContainSingle(w =>
                 w.Contains("CPU-only fallback") &&
                 w.Contains("0/32") &&
-                w.Contains("LMSUPPLY_VRAM_BUDGET_MB"),
-                "0 GPU layers must emit TraceWarning with VRAM figures and override hint");
+                w.Contains("LMSUPPLY_VRAM_BUDGET_MB") &&
+                w.Contains("LMSupplyTraceListener"),
+                "0 GPU layers must emit TraceWarning with VRAM figures, override hint, and ILogger bridge hint");
             listener.Information.Should().BeEmpty(
                 "the 0-layer path must NOT also emit TraceInformation");
         }

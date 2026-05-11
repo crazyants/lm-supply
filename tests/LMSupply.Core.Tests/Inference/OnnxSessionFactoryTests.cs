@@ -223,7 +223,7 @@ public class OnnxSessionFactoryTests
         await action.Should().ThrowAsync<Exception>();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateWithInfoAsync_ExplicitGpuProvider_WhenSessionCreateThrows_FallsBackToCpu()
     {
         // Skip if ONNX Runtime native library is not available (CI without runtime installed).

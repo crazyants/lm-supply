@@ -158,6 +158,15 @@ var generator = await TextGeneratorBuilder.Create()
     .BuildAsync();
 
 string response = await generator.GenerateCompleteAsync("What is machine learning?");
+
+// Fallback chain — try candidates in order, load first that succeeds
+await using var robust = await LocalGenerator.LoadWithFallbackChainAsync(
+    ["gguf:phi-4-mini", "gguf:default"],
+    onFailure: (id, ex) => Console.WriteLine($"Skipped {id}: {ex.Message}"));
+
+// Quality floor — prefer a specific model in 'auto' selection, fall back if unavailable
+var options = new GeneratorOptions { PreferredAutoModelId = "gguf:phi-4-mini" };
+await using var preferred = await LocalGenerator.LoadAsync("auto", options);
 ```
 
 ### Translation

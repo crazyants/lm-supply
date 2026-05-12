@@ -56,8 +56,8 @@ public class VramAwareSelectionIntegrationTests
 
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.Should().NotBeNull();
-        // Should select smallest model (Gemma 4 E2B)
-        model.ParameterCount.Should().Be(2_300_000_000);
+        // Should select smallest model by TotalBytes: phi-4-mini (2.4GB + 1.5GB KV = 3.9GB) < gguf:fast (4.0GB)
+        model.AliasName.Should().Be("gguf:phi-4-mini");
 
         var options = LlamaOptions.GetOptimalForHardware(
             gpu, model.EstimatedSizeBytes ?? 2_000_000_000L);

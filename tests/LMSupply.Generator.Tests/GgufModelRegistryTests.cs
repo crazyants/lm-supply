@@ -77,7 +77,7 @@ public class GgufModelRegistryTests
     [Fact]
     public void AllModels_HaveValidChatFormats()
     {
-        var validFormats = new[] { "chatml", "gemma", "gemma4" };
+        var validFormats = new[] { "chatml", "gemma", "gemma4", "phi3" };
         var models = GgufModelRegistry.GetAllModels();
 
         models.Should().AllSatisfy(m =>
@@ -150,7 +150,9 @@ public class GgufModelRegistryTests
     [Fact]
     public void GetAutoSelection_LowVramLaptop_FallsBackWithReason()
     {
-        // 4GB Windows NVIDIA laptop: smallest fast (3.1GB weights + ~1GB KV) won't fit.
+        // 4GB NVIDIA laptop: phi-4-mini (2.4GB + 1.5GB KV = 3.9GB) and gguf:fast (3.1GB + 0.9GB KV = 4.0GB)
+        // both exceed the ~2.85GB budget (4GB × 0.75 on Windows, min(3.4,2.85)=2.85 on Linux/macOS).
+        // phi-4-mini is the smallest by TotalBytes → selected as fallback.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -161,7 +163,7 @@ public class GgufModelRegistryTests
 
         var result = GgufModelRegistry.GetAutoSelection(gpu);
 
-        result.Selected.AliasName.Should().Be("gguf:fast",
+        result.Selected.AliasName.Should().Be("gguf:phi-4-mini",
             because: "smallest available model is the safest fallback");
         // On Windows the recommended margin is 25% for 4GB cards
         if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
@@ -307,9 +309,9 @@ public class GgufModelRegistryTests
             Vendor = GpuVendor.Intel,
             TotalMemoryBytes = 2L * 1024 * 1024 * 1024
         };
-        // 2GB × 0.85 = 1.7GB → gguf:fast (3.1GB) doesn't fit → still returns smallest
+        // 2GB × 0.85 = 1.7GB → nothing fits → returns smallest by TotalBytes (phi-4-mini: 2.4GB + 1.5GB KV)
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(2_300_000_000);
+        model.AliasName.Should().Be("gguf:phi-4-mini");
     }
 
     [Fact]
@@ -319,8 +321,9 @@ public class GgufModelRegistryTests
         {
             Vendor = GpuVendor.Unknown
         };
+        // CPU-only → 0 VRAM → nothing fits → fallback to smallest (phi-4-mini: 3.9GB total < gguf:fast 4.0GB)
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(2_300_000_000);
+        model.AliasName.Should().Be("gguf:phi-4-mini");
     }
 
     [Fact]

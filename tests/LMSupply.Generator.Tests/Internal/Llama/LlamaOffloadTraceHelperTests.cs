@@ -10,6 +10,7 @@ namespace LMSupply.Generator.Tests.Internal.Llama;
 /// Verifies the regression fix for B-3 (silent CPU-only fallback): full CPU fallback emits
 /// TraceWarning, partial offload stays at TraceInformation.
 /// </summary>
+[Collection("TraceListeners")]
 public class LlamaOffloadTraceHelperTests
 {
     [Fact]

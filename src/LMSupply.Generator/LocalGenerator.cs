@@ -54,11 +54,12 @@ public static class LocalGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         options ??= new GeneratorOptions();
 
-        // GGUF aliases use "gguf:" as a domain prefix, not a variant qualifier.
-        // Skip SplitQualifier so "gguf:fast" does not get shredded into
-        // modelId="gguf" + qualifier="fast" (which then tries to fetch a repo
-        // literally named "gguf" and 401s).
-        if (Internal.Llama.GgufModelRegistry.IsAlias(modelId))
+        // Any "gguf:"-prefixed string is a GGUF domain identifier — never split on ':'.
+        // IsAlias only matches registered aliases, so unregistered "gguf:phi-4-mini" would
+        // fall through to SplitQualifier, producing ("gguf", "phi-4-mini") and then calling
+        // GgufModelDownloader with repoId="gguf", triggering a HF 401.
+        if (modelId.StartsWith("gguf:", StringComparison.OrdinalIgnoreCase) ||
+            Internal.Llama.GgufModelRegistry.IsAlias(modelId))
         {
             return Internal.GeneratorModelLoader.LoadAsync(modelId, options, progress, cancellationToken);
         }
@@ -120,6 +121,56 @@ public static class LocalGenerator
     }
 
     /// <summary>
+    /// Tries each model ID in <paramref name="candidates"/> in order and returns
+    /// the first one that loads successfully.
+    /// </summary>
+    /// <param name="candidates">
+    /// Ordered list of model IDs to try (aliases, repo IDs, or paths).
+    /// Must contain at least one entry. Use <c>"auto"</c> as a final fallback to
+    /// trigger hardware-aware selection.
+    /// </param>
+    /// <param name="options">Model loading options shared across all candidates.</param>
+    /// <param name="onFailure">
+    /// Optional callback invoked when a candidate fails.
+    /// Receives the failed model ID and the exception. Useful for logging.
+    /// </param>
+    /// <param name="progress">Progress callback for model downloading.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The loaded model from the first successful candidate.</returns>
+    /// <exception cref="AggregateException">
+    /// Thrown when all candidates fail. Inner exceptions contain per-candidate failures.
+    /// </exception>
+    public static async Task<IGeneratorModel> LoadWithFallbackChainAsync(
+        IReadOnlyList<string> candidates,
+        GeneratorOptions? options = null,
+        Action<string, Exception>? onFailure = null,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (candidates is null || candidates.Count == 0)
+            throw new ArgumentException("At least one candidate model ID is required.", nameof(candidates));
+
+        var failures = new List<Exception>(candidates.Count);
+
+        foreach (var modelId in candidates)
+        {
+            try
+            {
+                return await LoadAsync(modelId, options, progress, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                failures.Add(ex);
+                onFailure?.Invoke(modelId, ex);
+            }
+        }
+
+        throw new AggregateException(
+            $"All {candidates.Count} candidate model(s) failed to load: {string.Join(", ", candidates)}",
+            failures);
+    }
+
+    /// <summary>
     /// Loads a text generator using the default model.
     /// </summary>
     /// <param name="options">Model loading options.</param>
@@ -144,6 +195,27 @@ public static class LocalGenerator
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken)
     {
+        // Honour caller-specified quality floor: try the preferred model before hardware selection.
+        if (!string.IsNullOrEmpty(options.PreferredAutoModelId))
+        {
+            try
+            {
+                var preferred = await Internal.GeneratorModelLoader.LoadAsync(
+                    options.PreferredAutoModelId, options, progress, cancellationToken)
+                    .ConfigureAwait(false);
+
+                System.Diagnostics.Trace.TraceInformation(
+                    $"[LocalGenerator.auto] Preferred model loaded: {options.PreferredAutoModelId}");
+                return preferred;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    $"[LocalGenerator.auto] Preferred model '{options.PreferredAutoModelId}' failed " +
+                    $"({ex.GetType().Name}: {ex.Message}); falling back to hardware-aware selection.");
+            }
+        }
+
         var profile = HardwareProfile.Current;
         var useOnnx = profile.RecommendedProvider == ExecutionProvider.DirectML &&
                       profile.GpuInfo.Vendor != GpuVendor.Nvidia;

@@ -236,6 +236,12 @@ public sealed class GgufModelDownloader : IDisposable
         string? preferredQuantization,
         CancellationToken cancellationToken)
     {
+        // Prefer local cache over network: avoids HF API calls when the model is already downloaded.
+        // Filer runs air-gapped after initial download; a live API call at boot is a correctness risk.
+        var localFile = TrySelectFromLocalCache(repoId, preferredQuantization);
+        if (localFile != null)
+            return localFile;
+
         var groups = await ListGgufGroupsAsync(repoId, cancellationToken);
 
         if (groups.Count == 0)
@@ -254,13 +260,26 @@ public sealed class GgufModelDownloader : IDisposable
     }
 
     /// <summary>
-    /// Tries to find a file with specific quantization.
+    /// Tries to find a file with specific quantization, checking local cache before the HF API.
     /// </summary>
     private async Task<string?> TryFindQuantizedFileAsync(
         string repoId,
         string quantization,
         CancellationToken cancellationToken)
     {
+        // Local cache first
+        var localCacheDir = Path.GetDirectoryName(GetCachedPath(repoId, "placeholder.gguf"));
+        if (localCacheDir != null && Directory.Exists(localCacheDir))
+        {
+            var localMatch = Directory.EnumerateFiles(localCacheDir, "*.gguf", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .FirstOrDefault(f => f != null &&
+                    f.Contains(quantization, StringComparison.OrdinalIgnoreCase) &&
+                    !IsMmprojFile(f));
+            if (localMatch != null)
+                return localMatch;
+        }
+
         try
         {
             var files = await ListGgufFilesAsync(repoId, cancellationToken);
@@ -274,6 +293,43 @@ public sealed class GgufModelDownloader : IDisposable
             Trace.TraceInformation($"[GgufModelDownloader] GGUF file search failed: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Scans the local cache directory for an existing GGUF file that matches the quantization preference.
+    /// Returns the filename (not full path) of the best match, or null if cache is empty or absent.
+    /// </summary>
+    internal string? TrySelectFromLocalCache(string repoId, string? preferredQuantization)
+    {
+        var cacheDir = Path.GetDirectoryName(GetCachedPath(repoId, "placeholder.gguf"));
+        if (cacheDir == null || !Directory.Exists(cacheDir))
+            return null;
+
+        var ggufFiles = Directory.EnumerateFiles(cacheDir, "*.gguf", SearchOption.TopDirectoryOnly)
+            .Select(Path.GetFileName)
+            .Where(f => f != null && !IsMmprojFile(f))
+            .ToList();
+
+        if (ggufFiles.Count == 0)
+            return null;
+
+        if (!string.IsNullOrEmpty(preferredQuantization))
+        {
+            var preferred = ggufFiles.FirstOrDefault(f =>
+                f!.Contains(preferredQuantization, StringComparison.OrdinalIgnoreCase));
+            if (preferred != null)
+                return preferred;
+        }
+
+        foreach (var quant in DefaultQuantizationPriority)
+        {
+            var match = ggufFiles.FirstOrDefault(f =>
+                f!.Contains(quant, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+                return match;
+        }
+
+        return ggufFiles[0];
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FluentAssertions;
+using LMSupply.Generator.Internal.Llama;
 
 namespace LMSupply.Generator.Tests;
 
@@ -74,6 +75,8 @@ public class LocalGeneratorDefaultRoutingTests
     [InlineData("gguf:fast")]
     [InlineData("gguf:default")]
     [InlineData("gguf:balanced")]
+    [InlineData("gguf:phi-4-mini")]   // registered alias — must not split on ':'
+    [InlineData("gguf:qwen2.5-7b")]   // registered alias with hyphenated suffix
     public async Task LoadAsync_GgufPrefixedAlias_IsNotShreddedByQualifierSplit(string alias)
     {
         // Regression: SplitQualifier("gguf:fast") historically split into
@@ -108,6 +111,31 @@ public class LocalGeneratorDefaultRoutingTests
     }
 
     [Fact]
+    public async Task LoadAsync_UnregisteredGgufPrefixedAlias_ThrowsDescriptiveArgumentException()
+    {
+        // "gguf:unknown-model" is gguf:-prefixed but not in the registry.
+        // Before the fix: SplitQualifier split it to ("gguf", "unknown-model"),
+        // then DownloadAsync("gguf") called HF API with repoId="gguf" and got 401.
+        // After the fix: ArgumentException with a helpful message listing known aliases.
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => LocalGenerator.LoadAsync("gguf:unknown-model"));
+
+        ex.Message.Should().Contain("gguf:unknown-model");
+        ex.Message.Should().Contain("not a registered GGUF alias");
+        ex.Message.Should().Contain("gguf:fast"); // should list known aliases
+    }
+
+    [Fact]
+    public void Phi4MiniGgufAlias_IsRegistered()
+    {
+        var info = GgufModelRegistry.Resolve("gguf:phi-4-mini");
+        info.Should().NotBeNull();
+        info!.RepoId.Should().Be("bartowski/Phi-4-mini-instruct-GGUF");
+        info.ChatFormat.Should().Be("phi3");
+        info.NumLayers.Should().Be(32);
+    }
+
+    [Fact]
     public void FastAlias_StillResolvesToPhi4Mini()
     {
         var registry = GeneratorModelRegistry.Default;
@@ -127,5 +155,79 @@ public class LocalGeneratorDefaultRoutingTests
         resolved.Should().BeTrue();
         info.Should().NotBeNull();
         info!.ModelId.Should().Be("microsoft/Phi-4-mini-instruct-onnx");
+    }
+
+    [Fact]
+    public async Task LoadWithFallbackChainAsync_AllFail_ThrowsAggregateException()
+    {
+        // All candidates are unregistered gguf:* aliases → ArgumentException from LoadGgufAsync
+        var ex = await Assert.ThrowsAsync<AggregateException>(
+            () => LocalGenerator.LoadWithFallbackChainAsync(
+                ["gguf:no-such-model-a", "gguf:no-such-model-b"]));
+
+        ex.InnerExceptions.Should().HaveCount(2);
+        ex.Message.Should().Contain("2 candidate model(s) failed");
+    }
+
+    [Fact]
+    public async Task LoadWithFallbackChainAsync_OnFailureCallback_InvokedForEachFailure()
+    {
+        var failedIds = new List<string>();
+
+        try
+        {
+            await LocalGenerator.LoadWithFallbackChainAsync(
+                ["gguf:no-such-model-x", "gguf:no-such-model-y"],
+                onFailure: (id, _) => failedIds.Add(id));
+        }
+        catch (AggregateException) { /* expected */ }
+
+        failedIds.Should().Equal("gguf:no-such-model-x", "gguf:no-such-model-y");
+    }
+
+    [Fact]
+    public async Task LoadWithFallbackChainAsync_EmptyCandidates_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => LocalGenerator.LoadWithFallbackChainAsync([]));
+    }
+
+    [Fact]
+    public void GeneratorOptions_PreferredAutoModelId_DefaultsToNull()
+    {
+        new GeneratorOptions().PreferredAutoModelId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LoadAsync_AutoWithFailingPreferredModelId_FallsBackToAutoSelection()
+    {
+        // "gguf:no-such-preferred-model" is unregistered → ArgumentException from LoadGgufAsync.
+        // LoadAutoAsync catches it (not OperationCanceledException) and falls through to standard
+        // hardware-aware selection, which emits the [LocalGenerator.auto] trace line.
+        //
+        // Invariant: LoadGgufAsync throws ArgumentException synchronously before any cancellation
+        // check (the guard at GeneratorModelLoader.cs:125-132 runs before any async I/O).
+        // If a future refactor adds early ThrowIfCancellationRequested(), this test needs adjustment.
+        var options = new GeneratorOptions
+        {
+            PreferredAutoModelId = "gguf:no-such-preferred-model"
+        };
+
+        var listener = new CapturingListener();
+        Trace.Listeners.Add(listener);
+        try
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            try { await LocalGenerator.LoadAsync("auto", options, cancellationToken: cts.Token); }
+            catch { }
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        listener.Lines.Should().Contain(l => l.Contains("[LocalGenerator.auto]"),
+            because: "fallback to hardware selection must occur when preferred model is unavailable");
     }
 }

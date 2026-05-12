@@ -3,6 +3,98 @@ using LMSupply.Generator.Internal.Llama;
 
 namespace LMSupply.Generator.Tests;
 
+public class GgufModelDownloaderLocalCacheTests : IDisposable
+{
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "lmsupply_cache_test_" + Guid.NewGuid().ToString("N"));
+
+    private GgufModelDownloader CreateDownloader() => new(_tempDir);
+
+    private string CreateCacheFile(string repoId, string filename)
+    {
+        // Mirrors GgufModelDownloader.GetCachedPath: replace '/' with OS separator, then replace separator with '--'
+        var safeRepo = "models--" + repoId.Replace('/', Path.DirectorySeparatorChar)
+            .Replace(Path.DirectorySeparatorChar.ToString(), "--");
+        var dir = Path.Combine(_tempDir, safeRepo, "snapshots", "main");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, filename);
+        File.WriteAllText(path, "placeholder");
+        return path;
+    }
+
+    [Fact]
+    public void TrySelectFromLocalCache_EmptyCache_ReturnsNull()
+    {
+        using var dl = CreateDownloader();
+        dl.TrySelectFromLocalCache("bartowski/TestModel-GGUF", null).Should().BeNull();
+    }
+
+    [Fact]
+    public void TrySelectFromLocalCache_CachedFile_ReturnsFilename()
+    {
+        CreateCacheFile("bartowski/TestModel-GGUF", "TestModel-Q4_K_M.gguf");
+        using var dl = CreateDownloader();
+
+        var result = dl.TrySelectFromLocalCache("bartowski/TestModel-GGUF", null);
+
+        result.Should().Be("TestModel-Q4_K_M.gguf");
+    }
+
+    [Fact]
+    public void TrySelectFromLocalCache_PreferredQuantization_ReturnsMatchingFile()
+    {
+        CreateCacheFile("bartowski/TestModel-GGUF", "TestModel-Q4_K_M.gguf");
+        CreateCacheFile("bartowski/TestModel-GGUF", "TestModel-Q8_0.gguf");
+        using var dl = CreateDownloader();
+
+        var result = dl.TrySelectFromLocalCache("bartowski/TestModel-GGUF", "Q8_0");
+
+        result.Should().Be("TestModel-Q8_0.gguf");
+    }
+
+    [Fact]
+    public void TrySelectFromLocalCache_SkipsMmprojFiles()
+    {
+        CreateCacheFile("bartowski/TestModel-GGUF", "mmproj-TestModel-bf16.gguf");
+        CreateCacheFile("bartowski/TestModel-GGUF", "TestModel-Q4_K_M.gguf");
+        using var dl = CreateDownloader();
+
+        var result = dl.TrySelectFromLocalCache("bartowski/TestModel-GGUF", null);
+
+        result.Should().Be("TestModel-Q4_K_M.gguf");
+    }
+
+    [Fact]
+    public void TrySelectFromLocalCache_OnlyMmprojFiles_ReturnsNull()
+    {
+        CreateCacheFile("bartowski/TestModel-GGUF", "mmproj-TestModel-bf16.gguf");
+        using var dl = CreateDownloader();
+
+        var result = dl.TrySelectFromLocalCache("bartowski/TestModel-GGUF", null);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void TrySelectFromLocalCache_FallsBackToDefaultPriority_WhenNoPreferred()
+    {
+        CreateCacheFile("bartowski/TestModel-GGUF", "TestModel-Q8_0.gguf");
+        CreateCacheFile("bartowski/TestModel-GGUF", "TestModel-Q4_K_M.gguf");
+        using var dl = CreateDownloader();
+
+        // Q4_K_M has higher default priority than Q8_0
+        var result = dl.TrySelectFromLocalCache("bartowski/TestModel-GGUF", null);
+
+        result.Should().Be("TestModel-Q4_K_M.gguf");
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+        GC.SuppressFinalize(this);
+    }
+}
+
 public class GgufModelDownloaderTests
 {
     [Fact]

@@ -36,4 +36,18 @@ public sealed class GeneratorOptions : LMSupplyOptionsBase
     /// Only applies to GGUF models (gguf:* aliases or .gguf files).
     /// </summary>
     public LlamaOptions? LlamaOptions { get; set; }
+
+    /// <summary>
+    /// When loading with <c>"auto"</c> or <c>"default"</c>, specifies a preferred model ID to try
+    /// before hardware-aware auto-selection. Acts as a quality floor: if the preferred model loads
+    /// successfully it is returned; if it fails (unavailable, download error, etc.) auto-selection
+    /// falls back to hardware-aware selection with a trace warning.
+    /// <para>
+    /// Accepts the same model ID formats as <see cref="LocalGenerator.LoadAsync"/>
+    /// (e.g., <c>"gguf:phi-4-mini"</c>, <c>"gguf:qwen2.5-7b"</c>, a HuggingFace repo ID,
+    /// or a local path).
+    /// </para>
+    /// <para>Default: null (standard hardware-aware selection).</para>
+    /// </summary>
+    public string? PreferredAutoModelId { get; set; }
 }

@@ -121,6 +121,16 @@ internal static class GeneratorModelLoader
         }
         else
         {
+            // Guard: "gguf:*" prefixed IDs are alias-only — passing to HF would use "gguf" as repo ID and 401.
+            if (modelId.StartsWith("gguf:", StringComparison.OrdinalIgnoreCase))
+            {
+                var known = string.Join(", ", GgufModelRegistry.GetAliases());
+                throw new ArgumentException(
+                    $"'{modelId}' is not a registered GGUF alias. Known aliases: {known}. " +
+                    $"Register it in GgufModelRegistry or use a full HuggingFace repo ID (without the 'gguf:' prefix).",
+                    nameof(modelId));
+            }
+
             // Assume it's a HuggingFace repo ID
             using var downloader = new GgufModelDownloader(cacheDir);
             modelPath = await downloader.DownloadAsync(

@@ -124,6 +124,29 @@ public static class GgufModelRegistry
         },
 
         // ============================================================
+        // Phi-4 Mini — MIT, strong multilingual (KO/EN), Phi3 chat format, 16K context
+        // Preferred for Korean RAG workloads where Gemma 4 E2B shows silent floor at Q4_K_M.
+        // GGUF repack via bartowski; matches the ONNX variant at microsoft/Phi-4-mini-instruct-onnx.
+        // ============================================================
+
+        // Phi-4-mini Q4_K_M: 3.8B params, ~2.4GB VRAM, best Korean per-GB below 5GB
+        ["gguf:phi-4-mini"] = new GgufModelInfo
+        {
+            RepoId = "bartowski/Phi-4-mini-instruct-GGUF",
+            DisplayName = "Phi-4 Mini Instruct",
+            DefaultFile = "Phi-4-mini-instruct-Q4_K_M.gguf",
+            ChatFormat = "phi3",
+            ContextLength = 16384,
+            ParameterCount = 3_800_000_000,
+            EstimatedSizeBytes = 2_393_600_000L,
+            QuantizationType = "Q4_K_M",
+            NumLayers = 32,
+            HiddenSize = 3072,
+            License = LicenseTier.MIT,
+            LicenseName = "MIT",
+        },
+
+        // ============================================================
         // Qwen 2.5 — Apache 2.0, strong multilingual (KO/ZH/EN), ChatML, 32K context
         // Recommended default for Korean RAG workloads where Gemma 4 family shows silent floor
         // ============================================================

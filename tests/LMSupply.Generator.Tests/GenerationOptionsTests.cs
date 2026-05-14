@@ -99,4 +99,16 @@ public class GenerationOptionsTests
         GenerationOptions.Gemma4.EnableThinking.Should().BeFalse(
             because: "Gemma4 preset controls sampler params only; thinking is an independent opt-in per call site");
     }
+
+    [Fact]
+    public void Qwen3_HasExpectedSamplingParameters()
+    {
+        var opts = GenerationOptions.Qwen3;
+
+        opts.Temperature.Should().BeApproximately(0.6f, 0.0001f);
+        opts.TopP.Should().BeApproximately(0.95f, 0.0001f);
+        opts.TopK.Should().Be(20);
+        opts.MinP.Should().BeApproximately(0.0f, 0.0001f);
+        opts.RepetitionPenalty.Should().BeApproximately(1.0f, 0.0001f);
+    }
 }

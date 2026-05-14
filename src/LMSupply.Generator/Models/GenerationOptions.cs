@@ -220,4 +220,17 @@ public sealed class GenerationOptions
         TopK = 64,
         RepetitionPenalty = 1.0f,
     };
+
+    /// <summary>
+    /// Sampling parameters per official Qwen3 recommendation for thinking mode.
+    /// Temperature = 0.6, TopP = 0.95, TopK = 20, MinP = 0.0, RepetitionPenalty = 1.0.
+    /// </summary>
+    public static GenerationOptions Qwen3 => new()
+    {
+        Temperature = 0.6f,
+        TopP = 0.95f,
+        TopK = 20,
+        MinP = 0.0f,
+        RepetitionPenalty = 1.0f,
+    };
 }

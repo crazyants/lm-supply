@@ -20,7 +20,7 @@ public static class GgufModelRegistry
         // Q4_K_M is the only tier that fits 4GB VRAM (Q8_0=4.8GB, Q5_K_M=3.2GB w/ no KV margin).
         // Tool-call schema compliance at Q4_K_M is lower than on larger models — prefer gguf:default
         // or above for agentic workloads. Auto-selection picks E2B only when E4B doesn't fit.
-        ["gguf:fast"] = new GgufModelInfo
+        ["gguf:gemma4-fast"] = new GgufModelInfo
         {
             RepoId = "unsloth/gemma-4-E2B-it-GGUF",
             DisplayName = "Gemma 4 E2B Instruct",
@@ -38,7 +38,7 @@ public static class GgufModelRegistry
         },
 
         // Default: Gemma 4 E4B — best balance of size, speed, and quality
-        ["gguf:default"] = new GgufModelInfo
+        ["gguf:gemma4-default"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
             DisplayName = "Gemma 4 E4B Instruct",
@@ -57,7 +57,7 @@ public static class GgufModelRegistry
 
         // Balanced: Gemma 4 E4B Q8_0 — higher quality E4B for 10-12GB VRAM (RTX 3060 12GB, etc.)
         // Fills the gap between default (5.3GB) and quality (16.8GB)
-        ["gguf:balanced"] = new GgufModelInfo
+        ["gguf:gemma4-balanced"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
             DisplayName = "Gemma 4 E4B Instruct (Q8_0)",
@@ -75,7 +75,7 @@ public static class GgufModelRegistry
         },
 
         // Quality: Gemma 4 26B MoE — 31B-class performance with 4B active params
-        ["gguf:quality"] = new GgufModelInfo
+        ["gguf:gemma4-quality"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-26B-A4B-it-GGUF",
             DisplayName = "Gemma 4 26B A4B Instruct (MoE)",
@@ -93,7 +93,7 @@ public static class GgufModelRegistry
         },
 
         // Large: Gemma 4 31B Dense — maximum quality single-GPU model
-        ["gguf:large"] = new GgufModelInfo
+        ["gguf:gemma4-large"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-31B-it-GGUF",
             DisplayName = "Gemma 4 31B Instruct",
@@ -172,7 +172,113 @@ public static class GgufModelRegistry
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
         },
+
+        // ============================================================
+        // Qwen3/3.5/3.6 티어 — Apache 2.0, ChatML, GQA/MoE 혼합
+        // auto-selection pool: qwen3-fast/default/balanced/quality (qwen3-large 제외)
+        // ============================================================
+
+        // Fast: Qwen3.5-2B Q4_K_M — ~1.5GB model, ~2.25GB VRAM@4K, thinking OFF by default
+        ["gguf:qwen3-fast"] = new GgufModelInfo
+        {
+            RepoId = "unsloth/Qwen3.5-2B-GGUF",
+            DisplayName = "Qwen 3.5 2B Instruct",
+            DefaultFile = "Qwen3.5-2B-Q4_K_M.gguf",
+            ChatFormat = "chatml",
+            ContextLength = 262144,
+            ParameterCount = 2_000_000_000,
+            EstimatedSizeBytes = 1_500_000_000L,
+            QuantizationType = "Q4_K_M",
+            NumLayers = 24,
+            HiddenSize = 2048,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+        },
+
+        // Default: Qwen3.5-4B Q4_K_M — ~3.0GB model, ~4.25GB VRAM@4K; thinking ON by default
+        // Use FilterReasoningTokens=true if <think> blocks should not appear in output.
+        ["gguf:qwen3-default"] = new GgufModelInfo
+        {
+            RepoId = "bartowski/Qwen_Qwen3.5-4B-GGUF",
+            DisplayName = "Qwen 3.5 4B Instruct",
+            DefaultFile = "Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+            ChatFormat = "chatml",
+            ContextLength = 262144,
+            ParameterCount = 4_000_000_000,
+            EstimatedSizeBytes = 3_000_000_000L,
+            QuantizationType = "Q4_K_M",
+            NumLayers = 32,
+            HiddenSize = 2560,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ThinkingEnabledByDefault],
+        },
+
+        // Balanced: Qwen3-8B Q4_K_M — ~5.0GB model, ~7.25GB VRAM@4K; thinking opt-in via /think token
+        ["gguf:qwen3-balanced"] = new GgufModelInfo
+        {
+            RepoId = "Qwen/Qwen3-8B-GGUF",
+            DisplayName = "Qwen3 8B Instruct",
+            DefaultFile = "Qwen3-8B-Q4_K_M.gguf",
+            ChatFormat = "chatml",
+            ContextLength = 131072,
+            ParameterCount = 8_000_000_000,
+            EstimatedSizeBytes = 5_000_000_000L,
+            QuantizationType = "Q4_K_M",
+            NumLayers = 36,
+            HiddenSize = 4096,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+        },
+
+        // Quality: Qwen3.6-35B-A3B IQ4_XS — MoE 35B total / 3B active; ~17.7GB model, ~19GB VRAM@4K
+        // Thinking ON by default; use FilterReasoningTokens=true to suppress <think> blocks.
+        ["gguf:qwen3-quality"] = new GgufModelInfo
+        {
+            RepoId = "unsloth/Qwen3.6-35B-A3B-GGUF",
+            DisplayName = "Qwen 3.6 35B A3B Instruct (IQ4_XS)",
+            DefaultFile = "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf",
+            ChatFormat = "chatml",
+            ContextLength = 131072,
+            ParameterCount = 35_000_000_000,
+            EstimatedSizeBytes = 17_700_000_000L,
+            QuantizationType = "IQ4_XS",
+            NumLayers = 40,
+            HiddenSize = 2048,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ThinkingEnabledByDefault],
+        },
+
+        // Large: Qwen3.6-35B-A3B Q4_K_M — ~22.1GB model, ~23.35GB VRAM@4K
+        // Excluded from auto pool: exceeds 24GB × 85% = 20.4 GB; use explicit alias only.
+        ["gguf:qwen3-large"] = new GgufModelInfo
+        {
+            RepoId = "unsloth/Qwen3.6-35B-A3B-GGUF",
+            DisplayName = "Qwen 3.6 35B A3B Instruct (Q4_K_M)",
+            DefaultFile = "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+            ChatFormat = "chatml",
+            ContextLength = 131072,
+            ParameterCount = 35_000_000_000,
+            EstimatedSizeBytes = 22_100_000_000L,
+            QuantizationType = "Q4_K_M",
+            NumLayers = 40,
+            HiddenSize = 2048,
+            License = LicenseTier.MIT,
+            LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ThinkingEnabledByDefault],
+        },
     };
+
+    private static readonly HashSet<string> _autoSelectionAliases =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "gguf:qwen3-fast",
+            "gguf:qwen3-default",
+            "gguf:qwen3-balanced",
+            "gguf:qwen3-quality",
+            // qwen3-large excluded: 23.35 GB exceeds 24GB × 85% = 20.4 GB budget
+        };
 
     /// <summary>
     /// Default context length used to estimate KV cache size when computing the VRAM budget.
@@ -231,6 +337,11 @@ public static class GgufModelRegistry
         => GetAutoSelection(gpu).Selected;
 
     /// <summary>
+    /// Gets the set of aliases eligible for auto-selection via <see cref="GetAutoSelection(GpuInfo)"/>.
+    /// </summary>
+    public static IReadOnlySet<string> GetAutoSelectionAliases() => _autoSelectionAliases;
+
+    /// <summary>
     /// Performs auto-selection and returns the full diagnostic <see cref="ModelSelectionResult"/>
     /// including budget breakdown, candidate list with fit info, and the selection reason.
     /// Uses <see cref="DefaultBudgetContextLength"/> for KV cache estimation.
@@ -257,9 +368,11 @@ public static class GgufModelRegistry
         var safetyMargin = VramBudget.GetRecommendedSafetyMargin(gpu);
         var availableVram = VramBudget.GetAvailableBytes(gpu, safetyMargin);
 
+        var poolFiltered = _models.Where(kv => _autoSelectionAliases.Contains(kv.Key));
+
         var eligible = excludeKnownIssues is { Count: > 0 }
-            ? _models.Where(kv => !kv.Value.KnownIssues.Any(excludeKnownIssues.Contains))
-            : _models.AsEnumerable();
+            ? poolFiltered.Where(kv => !kv.Value.KnownIssues.Any(excludeKnownIssues.Contains))
+            : poolFiltered;
 
         var candidates = eligible
             .Select(kv => EvaluateCandidate(WithAlias(kv.Value, kv.Key), availableVram, budgetContextLength))
@@ -277,9 +390,8 @@ public static class GgufModelRegistry
         }
         else
         {
-            // Nothing fits in VRAM → return smallest (will use CPU or partial offload)
             var smallest = candidates.LastOrDefault()?.Model
-                ?? WithAlias(_models["gguf:fast"], "gguf:fast");
+                ?? WithAlias(_models["gguf:qwen3-fast"], "gguf:qwen3-fast");
             selected = smallest;
             reason = ModelSelectionReason.FallbackToSmallest;
         }

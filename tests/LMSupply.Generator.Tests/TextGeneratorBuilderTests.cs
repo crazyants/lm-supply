@@ -223,8 +223,8 @@ public class TextGeneratorBuilderTests
     }
 
     [Theory]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:default")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-default")]
     public async Task BuildAsync_WithGgufAlias_RoutesThroughLocalGenerator(string alias)
     {
         // GGUF aliases must also bypass the ONNX factory. The negative signal is that

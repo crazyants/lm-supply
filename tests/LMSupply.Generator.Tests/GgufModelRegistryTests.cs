@@ -8,12 +8,15 @@ namespace LMSupply.Generator.Tests;
 public class GgufModelRegistryTests
 {
     [Theory]
-    [InlineData("gguf:default")]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:quality")]
-    [InlineData("gguf:balanced")]
-    [InlineData("gguf:large")]
+    [InlineData("gguf:gemma4-default")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-quality")]
+    [InlineData("gguf:gemma4-balanced")]
+    [InlineData("gguf:gemma4-large")]
     [InlineData("gguf:xlarge")]
+    [InlineData("gguf:qwen3-fast")]
+    [InlineData("gguf:qwen3-default")]
+    [InlineData("gguf:qwen3-balanced")]
     public void Resolve_WithPrefixedAlias_ReturnsModelInfo(string alias)
     {
         var result = GgufModelRegistry.Resolve(alias);
@@ -25,9 +28,11 @@ public class GgufModelRegistryTests
     }
 
     [Theory]
-    [InlineData("default")]
-    [InlineData("fast")]
-    [InlineData("quality")]
+    [InlineData("gemma4-default")]
+    [InlineData("gemma4-fast")]
+    [InlineData("gemma4-quality")]
+    [InlineData("qwen3-fast")]
+    [InlineData("qwen3-balanced")]
     public void Resolve_WithoutPrefix_ReturnsModelInfo(string alias)
     {
         var result = GgufModelRegistry.Resolve(alias);
@@ -65,7 +70,7 @@ public class GgufModelRegistryTests
     [Fact]
     public void DefaultModel_HasValidConfiguration()
     {
-        var model = GgufModelRegistry.Resolve("gguf:default");
+        var model = GgufModelRegistry.Resolve("gguf:gemma4-default");
 
         model.Should().NotBeNull();
         model!.RepoId.Should().Contain("gemma-4");
@@ -92,20 +97,25 @@ public class GgufModelRegistryTests
     {
         var aliases = GgufModelRegistry.GetAliases();
 
-        aliases.Should().Contain("gguf:default");
-        aliases.Should().Contain("gguf:fast");
-        aliases.Should().Contain("gguf:quality");
-        aliases.Should().Contain("gguf:balanced");
-        aliases.Should().Contain("gguf:large");
+        aliases.Should().Contain("gguf:gemma4-default");
+        aliases.Should().Contain("gguf:gemma4-fast");
+        aliases.Should().Contain("gguf:gemma4-quality");
+        aliases.Should().Contain("gguf:gemma4-balanced");
+        aliases.Should().Contain("gguf:gemma4-large");
         aliases.Should().Contain("gguf:xlarge");
+        aliases.Should().Contain("gguf:qwen3-fast");
+        aliases.Should().Contain("gguf:qwen3-default");
+        aliases.Should().Contain("gguf:qwen3-balanced");
+        aliases.Should().Contain("gguf:qwen3-quality");
+        aliases.Should().Contain("gguf:qwen3-large");
     }
 
     [Theory]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:default")]
-    [InlineData("gguf:balanced")]
-    [InlineData("gguf:quality")]
-    [InlineData("gguf:large")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-default")]
+    [InlineData("gguf:gemma4-balanced")]
+    [InlineData("gguf:gemma4-quality")]
+    [InlineData("gguf:gemma4-large")]
     public void RegisteredGemmaModels_HaveArchitectureFields(string alias)
     {
         var model = GgufModelRegistry.Resolve(alias);
@@ -148,11 +158,12 @@ public class GgufModelRegistryTests
     }
 
     [Fact]
-    public void GetAutoSelection_LowVramLaptop_FallsBackWithReason()
+    public void GetAutoSelection_4GBVram_SelectsFast()
     {
-        // 4GB NVIDIA laptop: phi-4-mini (2.4GB + 1.5GB KV = 3.9GB) and gguf:fast (3.1GB + 0.9GB KV = 4.0GB)
-        // both exceed the ~2.85GB budget (4GB × 0.75 on Windows, min(3.4,2.85)=2.85 on Linux/macOS).
-        // phi-4-mini is the smallest by TotalBytes → selected as fallback.
+        // 4GB card, 3GB free.
+        // Windows (≤4GB, low-VRAM): budget = min(4×0.75, 3×0.95) = min(3.0, 2.85) = 2.85GB.
+        // Linux: budget = min(4×0.85, 3×0.95) = min(3.4, 2.85) = 2.85GB.
+        // qwen3-fast (1.5GB + ~0.75GB KV = 2.25GB) fits on both platforms.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -163,23 +174,17 @@ public class GgufModelRegistryTests
 
         var result = GgufModelRegistry.GetAutoSelection(gpu);
 
-        result.Selected.AliasName.Should().Be("gguf:phi-4-mini",
-            because: "smallest available model is the safest fallback");
-        // On Windows the recommended margin is 25% for 4GB cards
-        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-                System.Runtime.InteropServices.OSPlatform.Windows))
-        {
-            result.Reason.Should().Be(ModelSelectionReason.FallbackToSmallest);
-        }
+        result.Selected.AliasName.Should().Be("gguf:qwen3-fast");
+        result.Reason.Should().Be(ModelSelectionReason.Fits);
     }
 
     [Fact]
     public void GetAutoSelection_KvCacheCountedInBudget()
     {
-        // 6.5GB total card (budget = 6.5 × 0.85 = 5.53 GB, non-low-VRAM margin).
-        // gguf:default weights = 5.3GB, KV @ 4096 ctx ≈ 1.4GB → total ~6.7GB (over budget)
-        // gguf:qwen2.5-7b weights = 4.7GB, KV @ 4096 ctx ≈ 1.6GB → total ~6.3GB (over budget)
-        // → must demote to gguf:fast (3.1GB + ~0.9GB KV ≈ 4.0GB).
+        // 6.5GB total, 5.5GB free (non-low-VRAM card, margin 15%).
+        // totalCap = 6.5 × 0.85 = 5.525GB, freeCap = 5.5 × 0.95 = 5.225GB → budget = 5.225GB.
+        // qwen3-balanced (5.0GB + ~2.25GB KV ≈ 7.25GB) does NOT fit.
+        // qwen3-default (3.0GB + ~1.25GB KV ≈ 4.25GB) fits.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -190,17 +195,17 @@ public class GgufModelRegistryTests
 
         var result = GgufModelRegistry.GetAutoSelection(gpu);
 
-        result.Selected.AliasName.Should().Be("gguf:fast",
-            because: "with KV cache @ 4096 included, default (E4B) and qwen2.5-7b both exceed 5.53 GB budget");
+        result.Selected.AliasName.Should().Be("gguf:qwen3-default",
+            because: "with KV cache @ 4096 included, qwen3-balanced (7.25GB) exceeds the 5.225GB budget");
         result.Reason.Should().Be(ModelSelectionReason.Fits);
     }
 
     [Fact]
     public void Resolve_PopulatesAliasName()
     {
-        var model = GgufModelRegistry.Resolve("gguf:default");
+        var model = GgufModelRegistry.Resolve("gguf:gemma4-default");
         model.Should().NotBeNull();
-        model!.AliasName.Should().Be("gguf:default");
+        model!.AliasName.Should().Be("gguf:gemma4-default");
     }
 
     [Fact]
@@ -226,11 +231,11 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 24L * 1024 * 1024 * 1024
         };
-        // 24GB × 0.85 = 20.4GB budget. Including KV @ 4096:
-        // - large (18.7GB + ~5.1GB KV) = 23.8GB → does NOT fit
-        // - quality (16.8GB + ~2.9GB KV) = 19.7GB → fits
+        // 24GB × 0.85 = 20.4GB budget. Auto pool (qwen3-*):
+        // - qwen3-large excluded from pool; not considered
+        // - qwen3-quality (17.7GB + ~1.25GB KV = 18.95GB) → fits
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(26_000_000_000);
+        model.ParameterCount.Should().Be(35_000_000_000);
     }
 
     [Fact]
@@ -243,14 +248,14 @@ public class GgufModelRegistryTests
             FreeMemoryBytes = 11L * 1024 * 1024 * 1024
         };
         // budget = min(12 × 0.85, 11 × 0.95) = min(10.2GB, 10.45GB) = 10.2GB (totalCap binding).
-        // Balanced (7.5GB Q8_0 + ~1.4GB KV ≈ 8.9GB) fits. Quality (16.8GB + KV) doesn't fit.
+        // qwen3-balanced (5.0GB Q4_K_M + ~2.25GB KV ≈ 7.25GB) fits. qwen3-quality (~19GB) doesn't fit.
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.QuantizationType.Should().Be("Q8_0");
-        model.ParameterCount.Should().Be(4_500_000_000);
+        model.QuantizationType.Should().Be("Q4_K_M");
+        model.ParameterCount.Should().Be(8_000_000_000);
     }
 
     [Fact]
-    public void GetAutoModel_MediumVram_SelectsFast()
+    public void GetAutoModel_6GBVram_SelectsDefault()
     {
         var gpu = new GpuInfo
         {
@@ -258,21 +263,20 @@ public class GgufModelRegistryTests
             TotalMemoryBytes = 6L * 1024 * 1024 * 1024,
             FreeMemoryBytes = 5L * 1024 * 1024 * 1024
         };
-        // 6GB × 0.85 = 5.10GB (Linux); 6GB × 0.75 = 4.50GB (Windows low-VRAM margin, ≤6GB).
-        // In both cases qwen2.5-7b (~6.3GB total) and gguf:default (~6.7GB total) don't fit.
-        // fast (3.1GB + ~0.9GB KV ≈ 4.0GB) fits.
+        // Windows (≤6GB, low-VRAM margin 25%): budget = min(6×0.75, 5×0.95) = min(4.5, 4.75) = 4.5GB.
+        // Linux (margin 15%): budget = min(6×0.85, 5×0.95) = min(5.1, 4.75) = 4.75GB.
+        // qwen3-default (3.0GB + ~1.25GB KV ≈ 4.25GB) fits on both platforms.
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q4_K_M");
-        model.ParameterCount.Should().Be(2_300_000_000);
+        model.ParameterCount.Should().Be(4_000_000_000);
     }
 
     [Fact]
     public void GetAutoModel_8GBVram_SelectsDefault()
     {
-        // 8GB total, 7.5GB free → totalCap = 8 × 0.85 = 6.8GB, freeCap = 7.5 × 0.95 = 7.125GB
-        // budget = min(6.8, 7.125) = 6.8GB (totalCap is binding here).
-        // - default (5.3GB + ~1.4GB KV ≈ 6.7GB) fits
-        // - balanced (7.5GB + ~1.4GB KV ≈ 8.9GB) does NOT fit
+        // budget = min(8 × 0.85, 7.5 × 0.95) = min(6.8, 7.125) = 6.8GB (totalCap is binding here).
+        // - qwen3-default (3.0GB + ~1.25GB KV ≈ 4.25GB) fits
+        // - qwen3-balanced (5.0GB + ~2.25GB KV ≈ 7.25GB) does NOT fit
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -281,15 +285,15 @@ public class GgufModelRegistryTests
         };
         var model = GgufModelRegistry.GetAutoModel(gpu);
         model.QuantizationType.Should().Be("Q4_K_M");
-        model.ParameterCount.Should().Be(4_500_000_000);
+        model.ParameterCount.Should().Be(4_000_000_000);
     }
 
     [Fact]
-    public void GetAutoModel_8GBVram_LowFree_SelectsFast()
+    public void GetAutoModel_8GBVram_LowFree_SelectsDefault()
     {
         // 8GB total but only 6GB free (external process consuming VRAM).
         // totalCap = 8 × 0.85 = 6.8GB, freeCap = 6 × 0.95 = 5.7GB → budget = 5.7GB.
-        // default (5.3GB + ~1.4GB KV ≈ 6.7GB) does NOT fit → falls back to fast.
+        // qwen3-default (3.0GB + ~1.25GB KV ≈ 4.25GB) fits within 5.7GB budget.
         var gpu = new GpuInfo
         {
             Vendor = GpuVendor.Nvidia,
@@ -297,8 +301,8 @@ public class GgufModelRegistryTests
             FreeMemoryBytes = 6L * 1024 * 1024 * 1024
         };
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.ParameterCount.Should().Be(2_300_000_000,
-            because: "free VRAM cap prevents selecting default when only 6GB is actually available");
+        model.ParameterCount.Should().Be(4_000_000_000,
+            because: "qwen3-default (4.25GB total) fits within the 5.7GB budget");
     }
 
     [Fact]
@@ -309,9 +313,9 @@ public class GgufModelRegistryTests
             Vendor = GpuVendor.Intel,
             TotalMemoryBytes = 2L * 1024 * 1024 * 1024
         };
-        // 2GB × 0.85 = 1.7GB → nothing fits → returns smallest by TotalBytes (phi-4-mini: 2.4GB + 1.5GB KV)
+        // 2GB × 0.85 = 1.7GB → nothing in auto pool fits → fallback to smallest (qwen3-fast: ~2.25GB total)
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.AliasName.Should().Be("gguf:phi-4-mini");
+        model.AliasName.Should().Be("gguf:qwen3-fast");
     }
 
     [Fact]
@@ -321,9 +325,9 @@ public class GgufModelRegistryTests
         {
             Vendor = GpuVendor.Unknown
         };
-        // CPU-only → 0 VRAM → nothing fits → fallback to smallest (phi-4-mini: 3.9GB total < gguf:fast 4.0GB)
+        // CPU-only → 0 VRAM → nothing fits → fallback to smallest in auto pool (qwen3-fast)
         var model = GgufModelRegistry.GetAutoModel(gpu);
-        model.AliasName.Should().Be("gguf:phi-4-mini");
+        model.AliasName.Should().Be("gguf:qwen3-fast");
     }
 
     [Fact]
@@ -372,9 +376,9 @@ public class GgufModelRegistryTests
     }
 
     [Theory]
-    [InlineData("gguf:default", true)]
-    [InlineData("gguf:fast", true)]
-    [InlineData("gguf:quality", true)]
+    [InlineData("gguf:gemma4-default", true)]
+    [InlineData("gguf:gemma4-fast", true)]
+    [InlineData("gguf:gemma4-quality", true)]
     [InlineData("gguf:xlarge", true)]
     [InlineData("default", false)] // Plain aliases are reserved for ONNX
     [InlineData("fast", false)]    // Plain aliases are reserved for ONNX
@@ -387,11 +391,11 @@ public class GgufModelRegistryTests
     }
 
     [Theory]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:default")]
-    [InlineData("gguf:balanced")]
-    [InlineData("gguf:quality")]
-    [InlineData("gguf:large")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-default")]
+    [InlineData("gguf:gemma4-balanced")]
+    [InlineData("gguf:gemma4-quality")]
+    [InlineData("gguf:gemma4-large")]
     public void Gemma4Models_HaveToolUseKnownIssue(string alias)
     {
         var model = GgufModelRegistry.Resolve(alias);
@@ -448,5 +452,125 @@ public class GgufModelRegistryTests
 
         withNull.Selected.AliasName.Should().Be(withoutParam.Selected.AliasName);
         withNull.Reason.Should().Be(withoutParam.Reason);
+    }
+
+    [Theory]
+    [InlineData("gguf:qwen3-fast")]
+    [InlineData("gguf:qwen3-default")]
+    [InlineData("gguf:qwen3-balanced")]
+    [InlineData("gguf:qwen3-quality")]
+    [InlineData("gguf:qwen3-large")]
+    public void Qwen3Models_HaveValidChatFormat(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.ChatFormat.Should().Be("chatml",
+            because: $"{alias} uses ChatML format");
+    }
+
+    [Theory]
+    [InlineData("gguf:qwen3-default")]
+    [InlineData("gguf:qwen3-quality")]
+    [InlineData("gguf:qwen3-large")]
+    public void Qwen3ThinkingModels_HaveThinkingEnabledByDefaultTag(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.KnownIssues.Should().Contain(GgufModelKnownIssues.ThinkingEnabledByDefault,
+            because: $"{alias} generates <think> blocks by default");
+    }
+
+    [Theory]
+    [InlineData("gguf:qwen3-fast")]
+    [InlineData("gguf:qwen3-balanced")]
+    public void Qwen3NonThinkingModels_HaveNoThinkingTag(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.KnownIssues.Should().NotContain(GgufModelKnownIssues.ThinkingEnabledByDefault,
+            because: $"{alias} does not generate think blocks by default");
+    }
+
+    [Fact]
+    public void Qwen3AutoPool_ContainsExactlyFourAliases()
+    {
+        var pool = GgufModelRegistry.GetAutoSelectionAliases();
+
+        pool.Should().HaveCount(4);
+        pool.Should().Contain("gguf:qwen3-fast");
+        pool.Should().Contain("gguf:qwen3-default");
+        pool.Should().Contain("gguf:qwen3-balanced");
+        pool.Should().Contain("gguf:qwen3-quality");
+        pool.Should().NotContain("gguf:qwen3-large",
+            because: "qwen3-large (23.35GB) exceeds the 24GB × 85% = 20.4GB budget threshold");
+    }
+
+    [Fact]
+    public void GetAutoSelection_ExcludeThinking_SelectsNonThinkingModel()
+    {
+        // 24GB card: budget = 20.4GB. Pool after excluding ThinkingEnabledByDefault:
+        // qwen3-fast (~2.25GB) and qwen3-balanced (~7.25GB) remain.
+        // qwen3-balanced is larger and fits → selected.
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 24L * 1024 * 1024 * 1024,
+        };
+
+        var result = GgufModelRegistry.GetAutoSelection(
+            gpu,
+            GgufModelRegistry.DefaultBudgetContextLength,
+            excludeKnownIssues: [GgufModelKnownIssues.ThinkingEnabledByDefault]);
+
+        result.Selected.AliasName.Should().Be("gguf:qwen3-balanced",
+            because: "qwen3-balanced is the largest non-thinking model that fits in 20.4GB");
+        result.Selected.KnownIssues.Should().NotContain(GgufModelKnownIssues.ThinkingEnabledByDefault);
+    }
+
+    [Theory]
+    [InlineData("gguf:qwen3-fast")]
+    [InlineData("gguf:qwen3-balanced")]
+    public void Qwen3FastAndBalanced_HaveNoKnownIssues(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.KnownIssues.Should().BeEmpty(
+            because: $"{alias} has no known compatibility issues");
+    }
+
+    [Theory]
+    [InlineData("gguf:qwen3-fast")]
+    [InlineData("gguf:qwen3-default")]
+    [InlineData("gguf:qwen3-balanced")]
+    [InlineData("gguf:qwen3-quality")]
+    [InlineData("gguf:qwen3-large")]
+    public void Qwen3Models_HaveArchitectureFields(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.NumLayers.Should().BeGreaterThan(0,
+            because: $"{alias} must declare NumLayers for KV cache budgeting");
+        model.HiddenSize.Should().BeGreaterThan(0,
+            because: $"{alias} must declare HiddenSize for KV cache budgeting");
+    }
+
+    [Theory]
+    [InlineData("gguf:fast")]
+    [InlineData("gguf:default")]
+    [InlineData("gguf:balanced")]
+    [InlineData("gguf:quality")]
+    [InlineData("gguf:large")]
+    public void Resolve_OldUnprefixedTierAliases_ReturnsNull(string alias)
+    {
+        var result = GgufModelRegistry.Resolve(alias);
+
+        result.Should().BeNull(
+            because: $"old unprefixed alias '{alias}' was removed in favour of gguf:gemma4-* and gguf:qwen3-*");
     }
 }

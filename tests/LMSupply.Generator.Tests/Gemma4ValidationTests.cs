@@ -23,14 +23,14 @@ public class Gemma4StaticValidationTests
     // All aliases in the registry whose models use the Gemma 4 chat format.
     // xlarge (Qwen3.5) is intentionally excluded — it uses chatml.
     private static readonly string[] Gemma4Aliases =
-        ["gguf:fast", "gguf:default", "gguf:balanced", "gguf:quality", "gguf:large"];
+        ["gguf:gemma4-fast", "gguf:gemma4-default", "gguf:gemma4-balanced", "gguf:gemma4-quality", "gguf:gemma4-large"];
 
     [Theory]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:default")]
-    [InlineData("gguf:balanced")]
-    [InlineData("gguf:quality")]
-    [InlineData("gguf:large")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-default")]
+    [InlineData("gguf:gemma4-balanced")]
+    [InlineData("gguf:gemma4-quality")]
+    [InlineData("gguf:gemma4-large")]
     public void GgufAlias_ChatFormat_IsGemma4(string alias)
     {
         var model = GgufModelRegistry.Resolve(alias);

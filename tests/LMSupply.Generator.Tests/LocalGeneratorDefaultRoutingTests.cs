@@ -72,9 +72,9 @@ public class LocalGeneratorDefaultRoutingTests
     }
 
     [Theory]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:default")]
-    [InlineData("gguf:balanced")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-default")]
+    [InlineData("gguf:gemma4-balanced")]
     [InlineData("gguf:phi-4-mini")]   // registered alias — must not split on ':'
     [InlineData("gguf:qwen2.5-7b")]   // registered alias with hyphenated suffix
     public async Task LoadAsync_GgufPrefixedAlias_IsNotShreddedByQualifierSplit(string alias)
@@ -122,7 +122,7 @@ public class LocalGeneratorDefaultRoutingTests
 
         ex.Message.Should().Contain("gguf:unknown-model");
         ex.Message.Should().Contain("not a registered GGUF alias");
-        ex.Message.Should().Contain("gguf:fast"); // should list known aliases
+        ex.Message.Should().Contain("gguf:gemma4-fast"); // should list known aliases
     }
 
     [Fact]

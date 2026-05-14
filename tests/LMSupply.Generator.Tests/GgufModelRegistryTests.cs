@@ -385,4 +385,68 @@ public class GgufModelRegistryTests
 
         result.Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData("gguf:fast")]
+    [InlineData("gguf:default")]
+    [InlineData("gguf:balanced")]
+    [InlineData("gguf:quality")]
+    [InlineData("gguf:large")]
+    public void Gemma4Models_HaveToolUseKnownIssue(string alias)
+    {
+        var model = GgufModelRegistry.Resolve(alias);
+
+        model.Should().NotBeNull();
+        model!.KnownIssues.Should().Contain(GgufModelKnownIssues.ToolUseUnreliableQ4,
+            because: $"{alias} is a Gemma 4 Q4_K_M model affected by llama.cpp #21375/#21882");
+        model.KnownIssues.Should().Contain(GgufModelKnownIssues.InstructionFollowingUnreliableQ4);
+    }
+
+    [Fact]
+    public void NonGemma4Models_HaveNoKnownIssues()
+    {
+        var model = GgufModelRegistry.Resolve("gguf:xlarge");
+
+        model.Should().NotBeNull();
+        model!.KnownIssues.Should().BeEmpty(
+            because: "gguf:xlarge (Qwen 3.5) has no known llama.cpp compatibility issues");
+    }
+
+    [Fact]
+    public void GetAutoSelection_ExcludeToolUseUnreliable_FiltersOutAllGemma4()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 24L * 1024 * 1024 * 1024,
+        };
+
+        var result = GgufModelRegistry.GetAutoSelection(
+            gpu,
+            GgufModelRegistry.DefaultBudgetContextLength,
+            excludeKnownIssues: [GgufModelKnownIssues.ToolUseUnreliableQ4]);
+
+        result.Selected.KnownIssues.Should().NotContain(GgufModelKnownIssues.ToolUseUnreliableQ4,
+            because: "excluded models should not be selected");
+        result.Selected.ChatFormat.Should().NotBe("gemma4",
+            because: "all Gemma 4 entries are excluded");
+    }
+
+    [Fact]
+    public void GetAutoSelection_NullExcludeList_BehavesLikeOriginalOverload()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 24L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 24L * 1024 * 1024 * 1024,
+        };
+
+        var withNull = GgufModelRegistry.GetAutoSelection(gpu, GgufModelRegistry.DefaultBudgetContextLength, null);
+        var withoutParam = GgufModelRegistry.GetAutoSelection(gpu, GgufModelRegistry.DefaultBudgetContextLength);
+
+        withNull.Selected.AliasName.Should().Be(withoutParam.Selected.AliasName);
+        withNull.Reason.Should().Be(withoutParam.Reason);
+    }
 }

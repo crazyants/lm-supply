@@ -100,10 +100,28 @@ public sealed record GgufModelInfo : IModelInfoBase, IModelMemoryInfo
     /// </summary>
     public int HiddenSize { get; init; }
 
+    /// <summary>
+    /// Known issues for this model. Tags from <see cref="GgufModelKnownIssues"/>.
+    /// Empty by default; set for models with known compatibility issues.
+    /// </summary>
+    public IReadOnlyList<string> KnownIssues { get; init; } = [];
+
     // IModelMemoryInfo explicit implementation
     long? IModelMemoryInfo.EstimatedSizeBytes => EstimatedSizeBytes;
     long IModelMemoryInfo.ParameterCount => ParameterCount;
     string? IModelMemoryInfo.QuantizationType => QuantizationType;
+}
+
+/// <summary>
+/// Well-known issue tags for GGUF models.
+/// </summary>
+public static class GgufModelKnownIssues
+{
+    /// <summary>Tool-use may produce empty or malformed results at Q4_K_M quantization.</summary>
+    public const string ToolUseUnreliableQ4 = "tool-use-unreliable-q4";
+
+    /// <summary>Instruction-following may be unreliable at Q4_K_M quantization.</summary>
+    public const string InstructionFollowingUnreliableQ4 = "instruction-following-unreliable-q4";
 }
 
 /// <summary>

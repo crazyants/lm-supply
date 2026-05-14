@@ -25,6 +25,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     private readonly GgufMetadata? _ggufMetadata;
     private readonly string _serverVersion;
     private SelectionDiagnostics? _diagnostics;
+    private readonly int _effectiveContextLength;
 
     public void SetDiagnostics(SelectionDiagnostics diagnostics) => _diagnostics = diagnostics;
     private bool _disposed;
@@ -36,6 +37,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         IChatFormatter chatFormatter,
         GeneratorOptions options,
         int maxContextLength,
+        int effectiveContextLength,
         GgufMetadata? ggufMetadata,
         string serverVersion)
     {
@@ -45,6 +47,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         _chatFormatter = chatFormatter;
         _options = options;
         MaxContextLength = maxContextLength;
+        _effectiveContextLength = effectiveContextLength;
         _ggufMetadata = ggufMetadata;
         _serverVersion = serverVersion;
 
@@ -311,6 +314,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             chatFormatter,
             options,
             SelectReportedContextLength(options, ggufMetadata, contextLength),
+            contextLength,
             ggufMetadata,
             serverVersion ?? "unknown");
 
@@ -548,8 +552,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         GgufMetadata = _ggufMetadata,
         BackendLog = _serverLease.Server.Info?.StartupLog,
         RuntimeVersion = _serverVersion,
-        Diagnostics = _diagnostics
+        Diagnostics = _diagnostics,
+        AdjustedContextLength = ResolveAdjustedContextLength(MaxContextLength, _effectiveContextLength),
+        KnownIssues = GgufModelRegistry.Resolve(ModelId)?.KnownIssues ?? [],
     };
+
+    internal static int? ResolveAdjustedContextLength(int maxContextLength, int effectiveContextLength)
+        => effectiveContextLength != maxContextLength ? effectiveContextLength : null;
 
     /// <inheritdoc />
     public async Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default)

@@ -99,6 +99,19 @@ public readonly record struct GeneratorModelInfo(
     public SelectionDiagnostics? Diagnostics { get; init; }
 
     /// <summary>
+    /// Gets the VRAM-capped context length actually sent to llama-server.
+    /// Non-null only when VRAM constraints reduced the context below <see cref="MaxContextLength"/>.
+    /// Null when the requested context was fully honoured or no adjustment occurred.
+    /// </summary>
+    public int? AdjustedContextLength { get; init; }
+
+    /// <summary>
+    /// Gets model-specific known issues from the registry (e.g., "tool-use-unreliable-q4").
+    /// Empty when no issues are registered or the model was loaded via an explicit path.
+    /// </summary>
+    public IReadOnlyList<string> KnownIssues { get; init; } = [];
+
+    /// <summary>
     /// Gets the model identifier (IModelInfoBase.Id).
     /// </summary>
     string IModelInfoBase.Id => ModelId;

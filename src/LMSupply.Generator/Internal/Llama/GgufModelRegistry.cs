@@ -34,6 +34,7 @@ public static class GgufModelRegistry
             HiddenSize = 2304,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ToolUseUnreliableQ4, GgufModelKnownIssues.InstructionFollowingUnreliableQ4],
         },
 
         // Default: Gemma 4 E4B — best balance of size, speed, and quality
@@ -51,6 +52,7 @@ public static class GgufModelRegistry
             HiddenSize = 2560,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ToolUseUnreliableQ4, GgufModelKnownIssues.InstructionFollowingUnreliableQ4],
         },
 
         // Balanced: Gemma 4 E4B Q8_0 — higher quality E4B for 10-12GB VRAM (RTX 3060 12GB, etc.)
@@ -69,6 +71,7 @@ public static class GgufModelRegistry
             HiddenSize = 2560,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ToolUseUnreliableQ4, GgufModelKnownIssues.InstructionFollowingUnreliableQ4],
         },
 
         // Quality: Gemma 4 26B MoE — 31B-class performance with 4B active params
@@ -86,6 +89,7 @@ public static class GgufModelRegistry
             HiddenSize = 4096,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ToolUseUnreliableQ4, GgufModelKnownIssues.InstructionFollowingUnreliableQ4],
         },
 
         // Large: Gemma 4 31B Dense — maximum quality single-GPU model
@@ -103,6 +107,7 @@ public static class GgufModelRegistry
             HiddenSize = 5376,
             License = LicenseTier.MIT,
             LicenseName = "Apache 2.0",
+            KnownIssues = [GgufModelKnownIssues.ToolUseUnreliableQ4, GgufModelKnownIssues.InstructionFollowingUnreliableQ4],
         },
 
         // XLarge: Server-grade MoE model (split GGUF — 3 shards in Q4_K_M/ subfolder)
@@ -237,11 +242,26 @@ public static class GgufModelRegistry
     /// Performs auto-selection with an explicit budget context length for KV cache estimation.
     /// </summary>
     public static ModelSelectionResult GetAutoSelection(GpuInfo gpu, int budgetContextLength)
+        => GetAutoSelection(gpu, budgetContextLength, null);
+
+    /// <summary>
+    /// Performs auto-selection, optionally excluding models with specific known issues.
+    /// Models whose <see cref="GgufModelInfo.KnownIssues"/> intersects <paramref name="excludeKnownIssues"/>
+    /// are removed before selection. Pass <c>null</c> to include all models (same as the two-param overload).
+    /// </summary>
+    public static ModelSelectionResult GetAutoSelection(
+        GpuInfo gpu,
+        int budgetContextLength,
+        IReadOnlyCollection<string>? excludeKnownIssues)
     {
         var safetyMargin = VramBudget.GetRecommendedSafetyMargin(gpu);
         var availableVram = VramBudget.GetAvailableBytes(gpu, safetyMargin);
 
-        var candidates = _models
+        var eligible = excludeKnownIssues is { Count: > 0 }
+            ? _models.Where(kv => !kv.Value.KnownIssues.Any(excludeKnownIssues.Contains))
+            : _models.AsEnumerable();
+
+        var candidates = eligible
             .Select(kv => EvaluateCandidate(WithAlias(kv.Value, kv.Key), availableVram, budgetContextLength))
             .OrderByDescending(c => c.TotalBytes)
             .ToList();

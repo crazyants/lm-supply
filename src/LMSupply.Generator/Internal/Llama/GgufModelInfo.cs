@@ -122,6 +122,10 @@ public static class GgufModelKnownIssues
 
     /// <summary>Instruction-following may be unreliable at Q4_K_M quantization.</summary>
     public const string InstructionFollowingUnreliableQ4 = "instruction-following-unreliable-q4";
+
+    /// <summary>Model generates &lt;think&gt;...&lt;/think&gt; blocks by default.
+    /// Set FilterReasoningTokens = true if think blocks should not appear in output.</summary>
+    public const string ThinkingEnabledByDefault = "thinking-enabled-by-default";
 }
 
 /// <summary>

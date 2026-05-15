@@ -2,9 +2,11 @@ using FluentAssertions;
 using LMSupply.Hardware;
 using LMSupply.Runtime;
 using LMSupply.Generator.Internal.Llama;
+using Xunit;
 
 namespace LMSupply.Generator.Tests;
 
+[Collection("VramBudget")]
 public class VramAwareSelectionIntegrationTests
 {
     [Fact]

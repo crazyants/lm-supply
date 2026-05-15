@@ -78,6 +78,8 @@ public static class GgufMetadataReader
         float? ropeFreqBase = null;
         string? quantizationType = null;
         int? fileType = null;
+        int? expertCount = null;
+        int? expertUsedCount = null;
 
         for (ulong i = 0; i < metadataKvCount; i++)
         {
@@ -121,6 +123,10 @@ public static class GgufMetadataReader
                         ropeFreqBase = ConvertToFloat(value);
                     else if (key.EndsWith(".vocab_size", StringComparison.Ordinal) || key == "tokenizer.ggml.tokens")
                         vocabSize ??= value is string[] arr ? arr.Length : ConvertToInt(value);
+                    else if (key.EndsWith(".expert_count", StringComparison.Ordinal))
+                        expertCount = ConvertToInt(value);
+                    else if (key.EndsWith(".expert_used_count", StringComparison.Ordinal))
+                        expertUsedCount = ConvertToInt(value);
                     break;
             }
         }
@@ -147,6 +153,8 @@ public static class GgufMetadataReader
             QuantizationType = quantizationType,
             FileType = fileType,
             TensorCount = (long)tensorCount,
+            ExpertCount = expertCount,
+            ExpertUsedCount = expertUsedCount,
             RawMetadata = rawMetadata
         };
     }

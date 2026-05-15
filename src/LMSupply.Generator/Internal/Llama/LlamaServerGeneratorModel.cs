@@ -185,7 +185,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         // Auto-cap context length based on remaining VRAM after model load
         if (backend != LlamaServerBackend.Cpu)
         {
-            var safeContext = EstimateSafeContextLength(modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1);
+            var safeContext = EstimateSafeContextLength(modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1, ggufMetadata);
             if (safeContext < contextLength)
             {
                 const double mb = 1024.0 * 1024.0;
@@ -991,8 +991,14 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     /// <summary>
     /// Estimates the maximum safe context length based on VRAM remaining after model weights.
     /// Returns the original requestedContext if it fits, otherwise a capped value.
+    /// For MoE models, applies an additional overhead margin to account for expert activation
+    /// buffers and compute scratch space that llama.cpp pre-allocates independently of KV cache.
     /// </summary>
-    internal static int EstimateSafeContextLength(string modelPath, int requestedContext, int gpuLayerCount)
+    internal static int EstimateSafeContextLength(
+        string modelPath,
+        int requestedContext,
+        int gpuLayerCount,
+        GgufMetadata? ggufMetadata = null)
     {
         var profile = Hardware.HardwareProfile.Current;
         // Use VramBudget so context cap honors LMSUPPLY_VRAM_BUDGET_MB override + safety margins.
@@ -1000,6 +1006,15 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         var availableVram = budgetVram > 0 ? budgetVram : (profile.GpuInfo.EffectiveAvailableBytes ?? 0);
         if (availableVram <= 0 || gpuLayerCount == 0)
             return requestedContext; // CPU-only, no VRAM constraint
+
+        // MoE models (ExpertCount > 1) require significant additional VRAM for expert activation
+        // buffers, routing computation, and compute scratch space. llama.cpp pre-allocates these
+        // independently of the KV cache, and they are not captured by the weight-size estimate.
+        // Empirical observation: RTX 3090 + Gemma 4 26B A4B Q4_K_M loses ~25% of effective VRAM
+        // to MoE overhead. Apply a conservative 0.80 multiplier to budget accordingly.
+        const double moeBudgetFactor = 0.80;
+        if (ggufMetadata?.ExpertCount > 1)
+            availableVram = (long)(availableVram * moeBudgetFactor);
 
         var modelFileSize = new FileInfo(modelPath).Length;
         var modelMemory = (long)(modelFileSize * 1.1);

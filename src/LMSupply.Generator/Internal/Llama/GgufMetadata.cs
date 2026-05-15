@@ -81,6 +81,18 @@ public sealed record GgufMetadata
     public long? EstimatedParameterCount { get; init; }
 
     /// <summary>
+    /// Total number of MoE experts. Null or 0 for dense (non-MoE) models.
+    /// Present in GGUF for architectures such as Mixtral, DeepSeek-V2, Gemma 4.
+    /// </summary>
+    public int? ExpertCount { get; init; }
+
+    /// <summary>
+    /// Number of MoE experts activated per token (top-K routing).
+    /// Null for dense models.
+    /// </summary>
+    public int? ExpertUsedCount { get; init; }
+
+    /// <summary>
     /// Raw metadata key-value pairs.
     /// </summary>
     public IReadOnlyDictionary<string, object?>? RawMetadata { get; init; }
@@ -196,6 +208,9 @@ public sealed record GgufMetadata
 
         if (!string.IsNullOrEmpty(QuantizationType))
             parts.Add($"Quantization: {QuantizationType}");
+
+        if (ExpertCount > 1)
+            parts.Add($"Experts: {ExpertCount}" + (ExpertUsedCount.HasValue ? $" (top-{ExpertUsedCount})" : ""));
 
         if (EstimatedParameterCount.HasValue || (LayerCount.HasValue && EmbeddingLength.HasValue))
         {

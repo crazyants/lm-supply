@@ -132,8 +132,8 @@ foreach (var result in results)
 ```csharp
 using LMSupply.Generator;
 
-// GGUF models (default) — native tool calling support via llama-server
-await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Hermes 3 8B
+// GGUF models — native tool calling support via llama-server
+await using var model = await LocalGenerator.LoadAsync("gguf:auto");  // Hardware-optimized (Qwen3 pool)
 
 await foreach (var token in model.GenerateAsync("Hello, my name is"))
 {
@@ -161,7 +161,7 @@ string response = await generator.GenerateCompleteAsync("What is machine learnin
 
 // Fallback chain — try candidates in order, load first that succeeds
 await using var robust = await LocalGenerator.LoadWithFallbackChainAsync(
-    ["gguf:phi-4-mini", "gguf:default"],
+    ["gguf:phi-4-mini", "gguf:qwen3-default"],
     onFailure: (id, ex) => Console.WriteLine($"Skipped {id}: {ex.Message}"));
 
 // Quality floor — prefer a specific model in 'auto' selection, fall back if unavailable
@@ -293,16 +293,35 @@ GGUF reranker models are auto-detected by `-GGUF` or `_gguf` in repo name.
 
 **GGUF aliases** (via llama-server):
 
-Gemma 4 중심 레지스트리 (Apache 2.0, 멀티모달, 네이티브 function calling). llama.cpp **b8672+** 필요 — `gguf:fast`/`default`/`balanced`/`quality`/`large` 로딩 시 최소 버전이 자동 검증됩니다.
+Gemma 4와 Qwen3 시리즈 중심 레지스트리. `gguf:auto`는 **qwen3 auto-pool** (qwen3-fast/default/balanced/quality)에서 VRAM에 맞는 가장 큰 모델을 자동 선택합니다. Gemma 4 aliases는 명시적으로 지정하거나 하드코딩된 워크로드에 사용하세요.
+
+**Gemma 4 aliases** (Apache 2.0, 멀티모달, 네이티브 function calling; llama.cpp **b8672+** 필요):
 
 | Alias | Model | Params | Quant | Size | VRAM Target |
 |-------|-------|--------|-------|------|-------------|
-| `gguf:auto` | Hardware-optimized | varies | varies | varies | Auto-select |
-| `gguf:fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | <4GB iGPU/mobile |
-| `gguf:default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | 4-8GB |
-| `gguf:balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | 8-16GB (RTX 3060 12GB 등) |
-| `gguf:quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | 16-20GB |
-| `gguf:large` | Gemma 4 31B Instruct | 31B | Q4_K_M | ~18.7 GB | 20-48GB |
+| `gguf:gemma4-fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | <4GB iGPU/mobile |
+| `gguf:gemma4-default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | 4-8GB |
+| `gguf:gemma4-balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | 8-16GB (RTX 3060 12GB 등) |
+| `gguf:gemma4-quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | 16-20GB |
+| `gguf:gemma4-large` | Gemma 4 31B Instruct | 31B | Q4_K_M | ~18.7 GB | 20-48GB |
+
+**Qwen3/3.5/3.6 aliases** (Apache 2.0, ChatML, thinking mode; `gguf:auto` pool):
+
+| Alias | Model | Params | Quant | Size | VRAM Target | Notes |
+|-------|-------|--------|-------|------|-------------|-------|
+| `gguf:auto` | Hardware-optimized (qwen3 pool) | varies | varies | varies | Auto-select | |
+| `gguf:qwen3-fast` | Qwen 3.5 2B Instruct | 2B | Q4_K_M | ~1.5 GB | <3GB | |
+| `gguf:qwen3-default` | Qwen 3.5 4B Instruct | 4B | Q4_K_M | ~3.0 GB | 4-6GB | thinking ON by default |
+| `gguf:qwen3-balanced` | Qwen3 8B Instruct | 8B | Q4_K_M | ~5.0 GB | 6-10GB | |
+| `gguf:qwen3-quality` | Qwen 3.6 35B A3B Instruct (IQ4_XS, MoE) | 35B (3B active) | IQ4_XS | ~17.7 GB | 20-24GB | thinking ON by default |
+| `gguf:qwen3-large` | Qwen 3.6 35B A3B Instruct (Q4_K_M, MoE) | 35B (3B active) | Q4_K_M | ~22.1 GB | 24GB+ | thinking ON; auto-pool excluded |
+
+**Other aliases:**
+
+| Alias | Model | Params | Quant | Size | VRAM Target |
+|-------|-------|--------|-------|------|-------------|
+| `gguf:phi-4-mini` | Phi-4 Mini Instruct | 3.8B | Q4_K_M | ~2.4 GB | <4GB |
+| `gguf:qwen2.5-7b` | Qwen 2.5 7B Instruct | 7.6B | Q4_K_M | ~4.7 GB | 6-8GB |
 | `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | 48GB+ server |
 
 ### Translator
@@ -365,12 +384,14 @@ LMSupply detects your hardware and selects models accordingly:
 
 ### GGUF Models (via `gguf:auto`)
 
-| Performance Tier | Hardware | GGUF Generator |
-|------------------|----------|----------------|
-| **Low** | CPU only or GPU <4GB | Ministral 3 3B |
-| **Medium** | GPU 4-8GB | Hermes 3 8B |
-| **High** | GPU 8-16GB | Mistral Nemo 12B |
-| **Ultra** | GPU 16GB+ | Qwen 3 32B |
+`gguf:auto` selects from the **Qwen3 auto-pool** (`qwen3-fast`, `qwen3-default`, `qwen3-balanced`, `qwen3-quality`) based on VRAM. Models with `thinking-enabled-by-default` generate `<think>...</think>` blocks — pass `FilterReasoningTokens = true` to suppress them.
+
+| Performance Tier | Free VRAM | Selected Model | Notes |
+|------------------|-----------|----------------|-------|
+| **Low** | CPU or <3GB | `gguf:qwen3-fast` (Qwen 3.5 2B) | FallbackToSmallest |
+| **Medium** | 4-6GB | `gguf:qwen3-default` (Qwen 3.5 4B) | thinking ON |
+| **High** | 6-10GB | `gguf:qwen3-balanced` (Qwen3 8B) | |
+| **Ultra** | 20-24GB | `gguf:qwen3-quality` (Qwen 3.6 35B MoE) | thinking ON |
 
 > **Platform-based routing (v0.28.0+):** `LoadAsync("default")` and `LoadAsync("auto")` both select the optimal backend+model for the current host: GGUF via llama.cpp on CPU / NVIDIA / Apple Silicon / Linux, and ONNX via DirectML on Windows AMD/Intel. Use `gguf:*` aliases or ONNX aliases for explicit control.
 
@@ -513,7 +534,7 @@ Use predefined aliases for quick access to popular models:
 await using var embedder = await LocalEmbedder.LoadAsync("default");      // bge-small-en-v1.5
 await using var embedder = await LocalEmbedder.LoadAsync("default");      // bge-m3 (multilingual SOTA, v0.34+)
 await using var generator = await LocalGenerator.LoadAsync("gguf:auto");    // Hardware-optimized
-await using var generator = await LocalGenerator.LoadAsync("gguf:quality"); // Mistral Nemo 12B
+await using var generator = await LocalGenerator.LoadAsync("gguf:qwen3-balanced"); // Qwen3 8B
 ```
 
 ### 2. HuggingFace Repository ID (Full control)

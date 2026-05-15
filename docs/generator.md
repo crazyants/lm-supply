@@ -77,8 +77,8 @@ await using var onnx = await LocalGenerator.LoadAsync("microsoft/Phi-4-mini-inst
 await using var onnxAlias = await LocalGenerator.LoadAsync("phi-4-mini");
 
 // Pin a specific GGUF model
-await using var gguf = await LocalGenerator.LoadAsync("gguf:default"); // Gemma 4 E4B
-await using var ggufXL = await LocalGenerator.LoadAsync("gguf:large"); // Gemma 4 31B
+await using var gguf = await LocalGenerator.LoadAsync("gguf:gemma4-default"); // Gemma 4 E4B
+await using var ggufXL = await LocalGenerator.LoadAsync("gguf:gemma4-large"); // Gemma 4 31B
 
 // Let the hardware decide (GGUF on most platforms, ONNX on DirectML+non-NVIDIA)
 await using var auto = await LocalGenerator.LoadAsync("auto");
@@ -306,7 +306,7 @@ GGUF models are loaded via [llama-server](https://github.com/ggml-org/llama.cpp)
 using LMSupply.Generator;
 
 // Load a GGUF model using the "gguf:" prefix
-await using var model = await LocalGenerator.LoadAsync("gguf:default");
+await using var model = await LocalGenerator.LoadAsync("gguf:auto");  // Hardware-optimized (Qwen3 pool)
 
 // Generate text
 await foreach (var token in model.GenerateAsync("Hello, my name is"))
@@ -317,17 +317,36 @@ await foreach (var token in model.GenerateAsync("Hello, my name is"))
 
 ### GGUF Model Aliases
 
-The default GGUF registry centers on **Gemma 4** (Apache 2.0, multimodal-capable, native function calling). Loading any Gemma 4 alias requires **llama.cpp b8672+** — the minimum version is automatically validated at load time.
+The registry has two primary tiers: **Gemma 4** (multimodal, Apache 2.0) for explicit use, and **Qwen3/3.5/3.6** as the `gguf:auto` selection pool.
+
+**Gemma 4 aliases** — requires llama.cpp **b8672+** (auto-validated at load time):
 
 | Alias | Model | Parameters | Quant | Weights | KV @ 4k | Total | Use Case |
 |-------|-------|------------|-------|---------|---------|-------|----------|
-| `gguf:auto` | Hardware-optimized | varies | varies | varies | varies | varies | Auto-select by VRAM |
-| `gguf:fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | ~1.0 GB | ~4.1 GB | 4-6GB VRAM, iGPU/mobile |
-| `gguf:default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | ~1.4 GB | ~6.7 GB | 8GB VRAM |
-| `gguf:balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | ~1.4 GB | ~8.9 GB | 12GB VRAM (higher quality E4B) |
-| `gguf:quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | ~2.9 GB | ~19.7 GB | 24GB VRAM |
-| `gguf:large` | Gemma 4 31B Instruct | 31B (Dense) | Q4_K_M | ~18.7 GB | ~5.1 GB | ~23.8 GB | 32GB+ VRAM (or KV quantization) |
-| `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | ~3.1 GB | ~79.6 GB | 96GB+ server |
+| `gguf:gemma4-fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | ~1.0 GB | ~4.1 GB | 4-6GB VRAM, iGPU/mobile |
+| `gguf:gemma4-default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | ~1.4 GB | ~6.7 GB | 8GB VRAM |
+| `gguf:gemma4-balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | ~1.4 GB | ~8.9 GB | 12GB VRAM (higher quality E4B) |
+| `gguf:gemma4-quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | ~2.9 GB | ~19.7 GB | 24GB VRAM |
+| `gguf:gemma4-large` | Gemma 4 31B Instruct | 31B (Dense) | Q4_K_M | ~18.7 GB | ~5.1 GB | ~23.8 GB | 32GB+ VRAM |
+
+**Qwen3/3.5/3.6 aliases** — Apache 2.0, ChatML. `gguf:auto` selects from this pool:
+
+| Alias | Model | Parameters | Quant | Weights | KV @ 4k | Total | Notes |
+|-------|-------|------------|-------|---------|---------|-------|-------|
+| `gguf:auto` | Hardware-optimized (qwen3 pool) | varies | varies | varies | varies | varies | Auto-select by VRAM |
+| `gguf:qwen3-fast` | Qwen 3.5 2B Instruct | 2B | Q4_K_M | ~1.5 GB | ~0.75 GB | ~2.25 GB | |
+| `gguf:qwen3-default` | Qwen 3.5 4B Instruct | 4B | Q4_K_M | ~3.0 GB | ~1.25 GB | ~4.25 GB | thinking ON by default |
+| `gguf:qwen3-balanced` | Qwen3 8B Instruct | 8B | Q4_K_M | ~5.0 GB | ~2.25 GB | ~7.25 GB | |
+| `gguf:qwen3-quality` | Qwen 3.6 35B A3B (IQ4_XS, MoE) | 35B (3B active) | IQ4_XS | ~17.7 GB | ~1.3 GB | ~19.0 GB | thinking ON; auto-pool |
+| `gguf:qwen3-large` | Qwen 3.6 35B A3B (Q4_K_M, MoE) | 35B (3B active) | Q4_K_M | ~22.1 GB | ~1.3 GB | ~23.4 GB | thinking ON; auto-pool excluded |
+
+**Other aliases:**
+
+| Alias | Model | Parameters | Quant | Size | Notes |
+|-------|-------|------------|-------|------|-------|
+| `gguf:phi-4-mini` | Phi-4 Mini Instruct | 3.8B | Q4_K_M | ~2.4 GB | Phi3 chat format; strong KO/EN |
+| `gguf:qwen2.5-7b` | Qwen 2.5 7B Instruct | 7.6B | Q4_K_M | ~4.7 GB | ChatML; reliable tool calling |
+| `gguf:xlarge` | Qwen 3.5 122B A10B (MoE, split) | 122B (10B active) | Q4_K_M | ~76.5 GB (3 shards) | 96GB+ server |
 
 > **KV cache footprint is included in auto-selection.** The `KV @ 4k` column shows the FP16 KV cache size at the default 4096 budget context length. llama-server reserves the full `--ctx-size` KV cache at load time, so a model that fits in weights but not in weights + KV will OOM at runtime. Use `LlamaOptions.TypeK = TypeV = KvCacheQuantizationType.Q8_0` (or `Q4_0`) to halve/quarter KV memory at the cost of slight quality loss.
 
@@ -344,18 +363,17 @@ The default GGUF registry centers on **Gemma 4** (Apache 2.0, multimodal-capable
 
 KV cache is estimated at the default budget context length (4096 tokens, FP16), see `GgufModelRegistry.DefaultBudgetContextLength`.
 
+Auto-selection pool: `qwen3-fast`, `qwen3-default`, `qwen3-balanced`, `qwen3-quality` (`qwen3-large` is excluded — exceeds 24 GB × 85% budget). Models with `ThinkingEnabledByDefault` generate `<think>...</think>` blocks — pass `FilterReasoningTokens = true` to suppress them.
+
 | Free VRAM | Budget | Selected Model | Reason |
 |-----------|--------|----------------|--------|
-| 0 / CPU only | 0 | `gguf:fast` (Gemma 4 E2B) | FallbackToSmallest — runtime CPU offload |
-| 4 GB Windows laptop | ~3.0 GB | `gguf:fast` | FallbackToSmallest — fast itself (~4.1 GB) exceeds 3 GB budget |
-| 6 GB | ~5.1 GB | `gguf:fast` | Fits — default (~6.7 GB) over budget |
-| 8 GB | ~6.8 GB | `gguf:default` | Fits — balanced (~8.9 GB) over budget |
-| 12 GB | ~10.2 GB | `gguf:balanced` | Fits — quality (~19.7 GB) over budget |
-| 24 GB | ~20.4 GB | `gguf:quality` | Fits — large (~23.8 GB) over budget at FP16 KV |
-| 32 GB | ~27.2 GB | `gguf:large` | Fits |
-| 96 GB+ | ~81.6 GB | `gguf:xlarge` | Fits |
+| 0 / CPU only | 0 | `gguf:qwen3-fast` (Qwen 3.5 2B) | FallbackToSmallest — runtime CPU offload |
+| 3 GB | ~2.55 GB | `gguf:qwen3-fast` | Fits (~2.25 GB total) |
+| 6 GB | ~5.1 GB | `gguf:qwen3-default` (Qwen 3.5 4B) | Fits (~4.25 GB); thinking ON |
+| 10 GB | ~8.5 GB | `gguf:qwen3-balanced` (Qwen3 8B) | Fits (~7.25 GB) |
+| 24 GB | ~20.4 GB | `gguf:qwen3-quality` (Qwen 3.6 35B MoE) | Fits (~19.0 GB); thinking ON |
 
-> **Low-VRAM laptop guidance.** On Windows laptops with ≤4 GB NVIDIA VRAM (RTX 4050/4060 Laptop, etc.), the auto path will still select `gguf:fast` and emit a `FallbackToSmallest` warning to `Trace`. Even E2B may exceed budget once Windows compositor + driver reserve their share. For these hosts, prefer the ONNX path explicitly: `LocalGenerator.LoadAsync("phi-4-mini")` (DirectML or CPU). The Trace line `[LocalGenerator.auto] WARNING: ...` indicates this fallback so downstream consumers can intercept it.
+> **Low-VRAM laptop guidance.** On Windows laptops with ≤4 GB NVIDIA VRAM (RTX 4050/4060 Laptop, etc.), the auto path will still select `gguf:qwen3-fast` and emit a `FallbackToSmallest` warning to `Trace`. Even the 2B model may exceed budget once Windows compositor + driver reserve their share. For these hosts, prefer the ONNX path explicitly: `LocalGenerator.LoadAsync("phi-4-mini")` (DirectML or CPU). The Trace line `[LocalGenerator.auto] WARNING: ...` indicates this fallback so downstream consumers can intercept it.
 
 ```csharp
 // Let LMSupply choose the optimal model for your hardware
@@ -398,7 +416,7 @@ var options = new GeneratorOptions
     MaxContextLength = 4096
 };
 
-await using var model = await LocalGenerator.LoadAsync("gguf:default", options);
+await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default", options);
 ```
 
 ### Advanced GGUF Options (LlamaOptions)
@@ -445,7 +463,7 @@ var options = new GeneratorOptions
     }
 };
 
-await using var model = await LocalGenerator.LoadAsync("gguf:quality", options);
+await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-quality", options);
 ```
 
 #### KV Cache Quantization
@@ -573,7 +591,7 @@ var options = new GeneratorOptions
 using LMSupply.Generator;
 using LMSupply.Generator.Models;
 
-await using var model = await LocalGenerator.LoadAsync("gguf:default");
+await using var model = await LocalGenerator.LoadAsync("gguf:auto");
 
 var messages = new[]
 {
@@ -620,12 +638,12 @@ GGUF models support native tool calling via the `--jinja` flag (enabled by defau
 
 ```csharp
 // Tool calling is automatically available with GGUF models
-await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Gemma 4 E4B (gemma4 formatter)
+await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default");  // Gemma 4 E4B (gemma4 formatter)
 
 // Tool definitions use OpenAI-compatible format via llama-server
 ```
 
-> **Gemma 4 W1 advisory (v0.34.3+):** When loading any `gguf:fast`/`default`/`balanced`/`quality`/`large` alias (all Gemma 4), a W1-level warning is emitted via `Trace.TraceWarning` at load time. Upstream llama.cpp PRs #21375 (chat-template/rope) and #21882 (instruction-following) are not yet in a stable release; tool-use with Korean instructional prompts and Q4_K_M quants may produce empty responses. Subscribe to `System.Diagnostics.Trace` listeners to receive this advisory. For production tool-calling workloads, Qwen2.5-7B-Instruct GGUF is a reliable alternative until the upstream PRs land.
+> **Gemma 4 W1 advisory (v0.34.3+):** When loading any `gguf:gemma4-*` alias, a W1-level warning is emitted via `Trace.TraceWarning` at load time. Upstream llama.cpp PRs #21375 (chat-template/rope) and #21882 (instruction-following) are not yet in a stable release; tool-use with Korean instructional prompts and Q4_K_M quants may produce empty responses. Subscribe to `System.Diagnostics.Trace` listeners to receive this advisory. For production tool-calling workloads, `gguf:qwen2.5-7b` is a reliable alternative until the upstream PRs land.
 
 > **Gemma 4 tool prompt injection:** `Gemma4ChatFormatter` automatically injects tool parameter hints as a system message, working around Gemma 4's tendency to emit empty tool arguments under llama-server's native Jinja template. The fragment content adapts to `GenerationOptions.EnableThinking`: when `false` (default), the full `Required parameters (MUST be provided): name (type)` block is injected; when `true`, only a compact per-tool required-params hint is injected (e.g. `search_knowledge: query (string)`) since the Jinja2 structured schema already covers full definitions, reducing system-prompt pressure on small models.
 
@@ -646,12 +664,39 @@ await foreach (var token in model.GenerateAsync(prompt, genOptions))
 }
 ```
 
+#### Sampling Presets
+
+`GenerationOptions` ships several static presets for common use cases:
+
+| Preset | Temperature | TopP | TopK | MinP | RepetitionPenalty | Use Case |
+|--------|-------------|------|------|------|-------------------|----------|
+| `Default` | 0.7 | 0.9 | 50 | 0.05 | 1.1 | General purpose |
+| `Creative` | 0.9 | 0.95 | 100 | 0.05 | 1.2 | Creative writing |
+| `Precise` | 0.1 | 0.5 | 10 | 0.05 | 1.0 | Deterministic/factual |
+| `Gemma4` | 1.0 | 0.95 | 64 | 0.05 | 1.0 | Gemma 4 models (Google recommended) |
+| `Qwen3` | 0.6 | 0.95 | 20 | 0.0 | 1.0 | Qwen3 thinking mode (official recommendation) |
+
+```csharp
+// Use official Qwen3 sampling parameters for thinking mode
+var options = GenerationOptions.Qwen3;
+await foreach (var token in model.GenerateChatAsync(messages, options))
+{
+    Console.Write(token);
+}
+
+// Use Google's recommended params for Gemma 4 tool calling
+await foreach (var token in model.GenerateChatAsync(messages, GenerationOptions.Gemma4))
+{
+    Console.Write(token);
+}
+```
+
 ### Gemma 4 Thinking Mode (v0.34+)
 
 Gemma 4 models support an **extended thinking** mode activated via `GenerationOptions.EnableThinking`. Google recommends this for E2B/E4B models when complex function calling is required:
 
 ```csharp
-await using var model = await LocalGenerator.LoadAsync("gguf:default");  // Gemma 4 E4B
+await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default");  // Gemma 4 E4B
 
 var messages = new[]
 {
@@ -724,7 +769,7 @@ The detector distinguishes Gemma 4 (e.g., `gemma-4-E4B-it-...gguf`) from earlier
 ### Model Information
 
 ```csharp
-await using var model = await LocalGenerator.LoadAsync("gguf:default");
+await using var model = await LocalGenerator.LoadAsync("gguf:auto");
 
 var info = model.GetModelInfo();
 
@@ -748,6 +793,29 @@ Console.WriteLine($"Provider: {info.ExecutionProvider}");  // "llama-server-Vulk
 | Inference speed | Fast | Fast |
 
 ## Known Issues
+
+### Qwen3 Thinking Mode Enabled by Default
+
+Several Qwen3/3.5/3.6 models (`gguf:qwen3-default`, `gguf:qwen3-quality`, `gguf:qwen3-large`) have thinking mode enabled by default, causing `<think>...</think>` blocks to appear in all responses. This is tagged with `GgufModelKnownIssues.ThinkingEnabledByDefault`.
+
+To suppress think blocks, set `FilterReasoningTokens = true`:
+
+```csharp
+await using var model = await LocalGenerator.LoadAsync("gguf:qwen3-default");
+
+var options = new GenerationOptions { FilterReasoningTokens = true };
+await foreach (var token in model.GenerateChatAsync(messages, options))
+{
+    Console.Write(token); // Think blocks are filtered out
+}
+```
+
+To check whether a model has this issue programmatically:
+
+```csharp
+var info = GgufModelRegistry.Resolve("gguf:qwen3-default");
+bool thinkingOn = info?.KnownIssues.Contains(GgufModelKnownIssues.ThinkingEnabledByDefault) == true;
+```
 
 ### ONNX GenAI Memory Leak Warnings
 

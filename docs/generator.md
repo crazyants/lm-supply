@@ -778,6 +778,14 @@ Console.WriteLine($"Path: {info.ModelPath}");
 Console.WriteLine($"Context: {info.MaxContextLength}");
 Console.WriteLine($"Format: {info.ChatFormat}");
 Console.WriteLine($"Provider: {info.ExecutionProvider}");  // "llama-server-Vulkan"
+
+// Partial GPU offload stats (null when all layers fit in VRAM)
+if (info.GpuLayers.HasValue)
+{
+    Console.WriteLine($"GPU layers: {info.GpuLayers}/{info.TotalLayers}");
+    Console.WriteLine($"VRAM: {info.EstimatedVramBytes / 1_073_741_824.0:F1} GB");
+    Console.WriteLine($"RAM:  {info.EstimatedRamBytes / 1_073_741_824.0:F1} GB");
+}
 ```
 
 ### GGUF vs ONNX

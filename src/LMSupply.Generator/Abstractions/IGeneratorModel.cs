@@ -106,6 +106,27 @@ public readonly record struct GeneratorModelInfo(
     public int? AdjustedContextLength { get; init; }
 
     /// <summary>
+    /// Number of transformer layers offloaded to GPU. Null when all layers fit in VRAM or the model
+    /// was loaded on CPU. Non-null only when partial offload occurred (GpuLayers &lt; TotalLayers).
+    /// </summary>
+    public int? GpuLayers { get; init; }
+
+    /// <summary>
+    /// Total transformer layer count used for offload ratio calculation. Non-null when GpuLayers is set.
+    /// </summary>
+    public int? TotalLayers { get; init; }
+
+    /// <summary>
+    /// Estimated VRAM usage in bytes for the partial-offload configuration. Non-null when GpuLayers is set.
+    /// </summary>
+    public long? EstimatedVramBytes { get; init; }
+
+    /// <summary>
+    /// Estimated RAM usage in bytes for layers not offloaded to GPU. Non-null when GpuLayers is set.
+    /// </summary>
+    public long? EstimatedRamBytes { get; init; }
+
+    /// <summary>
     /// Gets model-specific known issues from the registry (e.g., "tool-use-unreliable-q4").
     /// Empty when no issues are registered or the model was loaded via an explicit path.
     /// </summary>

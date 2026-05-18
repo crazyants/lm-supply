@@ -26,6 +26,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     private readonly string _serverVersion;
     private SelectionDiagnostics? _diagnostics;
     private readonly int _effectiveContextLength;
+    private readonly int? _gpuLayers;
+    private readonly int? _totalLayers;
+    private readonly long? _estimatedVramBytes;
+    private readonly long? _estimatedRamBytes;
 
     public void SetDiagnostics(SelectionDiagnostics diagnostics) => _diagnostics = diagnostics;
     private bool _disposed;
@@ -39,7 +43,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         int maxContextLength,
         int effectiveContextLength,
         GgufMetadata? ggufMetadata,
-        string serverVersion)
+        string serverVersion,
+        int? gpuLayers = null,
+        int? totalLayers = null,
+        long? estimatedVramBytes = null,
+        long? estimatedRamBytes = null)
     {
         ModelId = modelId;
         _modelPath = modelPath;
@@ -50,6 +58,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         _effectiveContextLength = effectiveContextLength;
         _ggufMetadata = ggufMetadata;
         _serverVersion = serverVersion;
+        _gpuLayers = gpuLayers;
+        _totalLayers = totalLayers;
+        _estimatedVramBytes = estimatedVramBytes;
+        _estimatedRamBytes = estimatedRamBytes;
 
         // Initialize concurrency limiter
         _concurrencyLimiter = new SemaphoreSlim(
@@ -131,6 +143,12 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         var llamaOpts = options.LlamaOptions ?? GetVramAwareLlamaOptions(modelPath, ggufMetadata);
         var contextLength = options.MaxContextLength ?? 4096;
 
+        // Captured when partial offload occurs — exposed via GetModelInfo() for diagnostics.
+        int? capturedGpuLayers = null;
+        int? capturedTotalLayers = null;
+        long? capturedVramBytes = null;
+        long? capturedRamBytes = null;
+
         // Auto-calculate GPU layer count based on actual VRAM budget when using default (-1 = all)
         if (llamaOpts.GpuLayerCount == -1 && backend != LlamaServerBackend.Cpu)
         {
@@ -147,6 +165,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
 
             if (!estimate.CanFitInVram && estimate.RecommendedGpuLayers < estimate.TotalLayers)
             {
+                capturedGpuLayers = estimate.RecommendedGpuLayers;
+                capturedTotalLayers = estimate.TotalLayers;
+                capturedVramBytes = estimate.EstimatedVramBytes;
+                capturedRamBytes = estimate.EstimatedRamBytes;
+
                 llamaOpts = new LlamaOptions
                 {
                     GpuLayerCount = estimate.RecommendedGpuLayers,
@@ -307,6 +330,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             Phase = DownloadPhase.Complete
         });
 
+        // OOM retry may have further reduced GPU layers — update captured value.
+        if (capturedGpuLayers.HasValue && currentGpuLayers != serverConfig.GpuLayers)
+            capturedGpuLayers = currentGpuLayers;
+
         var model = new LlamaServerGeneratorModel(
             modelId,
             modelPath,
@@ -316,7 +343,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             SelectReportedContextLength(options, ggufMetadata, contextLength),
             contextLength,
             ggufMetadata,
-            serverVersion ?? "unknown");
+            serverVersion ?? "unknown",
+            capturedGpuLayers,
+            capturedTotalLayers,
+            capturedVramBytes,
+            capturedRamBytes);
 
         // W1: Gemma 4 tool-use risk advisory (llama.cpp #21375 / #21882 not yet merged).
         // Emitted once at load time so operators see the warning before any inference request.
@@ -555,6 +586,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         Diagnostics = _diagnostics,
         AdjustedContextLength = ResolveAdjustedContextLength(MaxContextLength, _effectiveContextLength),
         KnownIssues = GgufModelRegistry.Resolve(ModelId)?.KnownIssues ?? [],
+        GpuLayers = _gpuLayers,
+        TotalLayers = _totalLayers,
+        EstimatedVramBytes = _estimatedVramBytes,
+        EstimatedRamBytes = _estimatedRamBytes,
     };
 
     internal static int? ResolveAdjustedContextLength(int maxContextLength, int effectiveContextLength)

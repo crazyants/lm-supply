@@ -30,7 +30,7 @@ public class GgufIntegrationTests
 
         // Act
         await using var model = await LocalGenerator.LoadAsync(
-            "gguf:fast", // Uses the smallest model (Llama-3.2-1B)
+            "gguf:qwen3-fast", // Uses the smallest/fastest Qwen3 model
             options);
 
         // Assert
@@ -46,7 +46,7 @@ public class GgufIntegrationTests
     public async Task GenerateAsync_WithGgufModel_GeneratesText()
     {
         // Arrange
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:qwen3-fast");
 
         // Act
         var result = new StringBuilder();
@@ -69,7 +69,7 @@ public class GgufIntegrationTests
     public async Task GenerateChatAsync_WithGgufModel_GeneratesResponse()
     {
         // Arrange
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:qwen3-fast");
 
         var messages = new[]
         {
@@ -119,7 +119,7 @@ public class GgufIntegrationTests
     public async Task WarmupAsync_WithGgufModel_CompletesSuccessfully()
     {
         // Arrange
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:qwen3-fast");
 
         // Act
         var warmupTask = model.WarmupAsync();
@@ -135,7 +135,7 @@ public class GgufIntegrationTests
     public async Task GetModelInfo_WithGgufModel_ReturnsCorrectInfo()
     {
         // Arrange
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:qwen3-fast");
 
         // Act
         var info = model.GetModelInfo();
@@ -159,8 +159,8 @@ public class GgufModelFormatTests
     /// Tests model format detection for GGUF files.
     /// </summary>
     [Theory]
-    [InlineData("gguf:default", true)]
-    [InlineData("gguf:fast", true)]
+    [InlineData("gguf:qwen3-default", true)]
+    [InlineData("gguf:qwen3-fast", true)]
     [InlineData("gguf:quality", true)]
     [InlineData("gguf:korean", true)]
     [InlineData("bartowski/Llama-3.2-3B-Instruct-GGUF", true)]

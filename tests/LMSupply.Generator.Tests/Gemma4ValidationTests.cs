@@ -253,8 +253,8 @@ public class Gemma4StaticValidationTests
 //   llama-server: b8994 (CUDA12, %LocalAppData%\LMSupply\cache\llama-server\)
 //   HF cache: E2B Q4_K_M (2963 MB), E4B Q4_K_M (5088 MB)
 //
-// gguf:fast (E2B, ~3 GB) fits fully in VRAM.
-// gguf:default (E4B, ~5 GB) requires partial CPU offload on 4 GB VRAM.
+// gguf:gemma4-fast (E2B, ~3 GB) fits fully in VRAM.
+// gguf:gemma4-default (E4B, ~5 GB) requires partial CPU offload on 4 GB VRAM.
 // ============================================================
 [Trait("Category", "Integration")]
 public class Gemma4LiveInferenceTests(ITestOutputHelper output)
@@ -284,12 +284,12 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
             }
             """));
 
-    // ---- gguf:fast (E2B Q4_K_M, ~3 GB) ------------------------------------------------
+    // ---- gguf:gemma4-fast (E2B Q4_K_M, ~3 GB) ------------------------------------------------
 
     [Fact(Timeout = 120_000)]
     public async Task GgufFast_Chat_ReturnsCoherentResponse()
     {
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-fast");
 
         var messages = new[]
         {
@@ -303,7 +303,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
             result.Append(token);
         }
 
-        output.WriteLine($"[gguf:fast chat] → {result}");
+        output.WriteLine($"[gguf:gemma4-fast chat] → {result}");
 
         result.ToString().Should().NotBeNullOrWhiteSpace(
             because: "E2B must produce a non-empty response to a simple arithmetic question");
@@ -314,7 +314,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
     [Fact(Timeout = 120_000)]
     public async Task GgufFast_ToolCall_InvokesGetWeather()
     {
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-fast");
 
         var messages = new[]
         {
@@ -326,7 +326,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
 
         var result = await model.GenerateChatWithToolsAsync(messages, options);
 
-        output.WriteLine($"[gguf:fast tool] finish={result.FinishReason} " +
+        output.WriteLine($"[gguf:gemma4-fast tool] finish={result.FinishReason} " +
                          $"hasTools={result.HasToolCalls} content={result.Content}");
 
         if (result.HasToolCalls)
@@ -351,7 +351,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
         // structured tool call. E2B at Q4_K_M is known to be less reliable;
         // ≥60% success is the acceptance threshold for this tier.
         // Adjust if empirically too tight or loose.
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-fast");
 
         var options = MakeGemma4Options(512);
         options.Tools = [WeatherTool];
@@ -373,19 +373,19 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
         }
 
         var rate = (double)successes / runs;
-        output.WriteLine($"[gguf:fast compliance] {successes}/{runs} = {rate:P0}");
+        output.WriteLine($"[gguf:gemma4-fast compliance] {successes}/{runs} = {rate:P0}");
 
         rate.Should().BeGreaterThanOrEqualTo(0.60,
             because: "E2B Q4_K_M must call tools successfully ≥60% of the time (ISSUE G1 baseline)");
     }
 
-    // ---- gguf:default (E4B Q4_K_M, ~5 GB, partial CPU offload on 4 GB VRAM) ----------
+    // ---- gguf:gemma4-default (E4B Q4_K_M, ~5 GB, partial CPU offload on 4 GB VRAM) ----------
 
     [Fact(Timeout = 300_000)]
     public async Task GgufDefault_Chat_ReturnsCoherentResponse()
     {
         // E4B requires CPU offload on 4 GB VRAM; inference is slower.
-        await using var model = await LocalGenerator.LoadAsync("gguf:default");
+        await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default");
 
         var messages = new[]
         {
@@ -399,7 +399,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
             result.Append(token);
         }
 
-        output.WriteLine($"[gguf:default chat] → {result}");
+        output.WriteLine($"[gguf:gemma4-default chat] → {result}");
 
         result.ToString().Should().NotBeNullOrWhiteSpace();
         result.ToString().ToLowerInvariant().Should().Contain("paris",
@@ -409,7 +409,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
     [Fact(Timeout = 300_000)]
     public async Task GgufDefault_ToolCall_InvokesGetWeather()
     {
-        await using var model = await LocalGenerator.LoadAsync("gguf:default");
+        await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default");
 
         var messages = new[]
         {
@@ -421,7 +421,7 @@ public class Gemma4LiveInferenceTests(ITestOutputHelper output)
 
         var result = await model.GenerateChatWithToolsAsync(messages, options);
 
-        output.WriteLine($"[gguf:default tool] finish={result.FinishReason} " +
+        output.WriteLine($"[gguf:gemma4-default tool] finish={result.FinishReason} " +
                          $"hasTools={result.HasToolCalls} content={result.Content}");
 
         result.HasToolCalls.Should().BeTrue(

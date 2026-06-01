@@ -277,6 +277,30 @@ await using var model = await LocalEmbedder.LoadAsync("default");
 await model.WarmupAsync();  // Pre-loads the model
 ```
 
+## Cancellation & Timeouts
+
+All `EmbedAsync` overloads honor the supplied `CancellationToken`. Because ONNX inference is a
+blocking native call, the model enforces two guarantees:
+
+1. **Control return (guaranteed).** When the token is cancelled, the `await` returns control to the
+   caller within bound and throws `OperationCanceledException` — even if a native call (for example
+   a cold DirectML initialization) is still blocked internally.
+2. **Native termination (best-effort).** The cancelled token also asks the running ONNX graph to
+   terminate cooperatively (`RunOptions.Terminate`). This is honored *between operators*, so it
+   frees the worker thread in most cases but cannot preempt a hang inside a single kernel.
+
+Encode the deadline on the token you pass — the library does not impose a default timeout:
+
+```csharp
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+// On a cold-init hang, control returns within ~10s instead of blocking forever.
+float[] embedding = await model.EmbedAsync("Hello, world!", cts.Token);
+```
+
+> Consumers no longer need to wrap `EmbedAsync` in their own `WaitAsync(timeout, ct)` guard — pass a
+> `CancellationTokenSource` with `CancelAfter`/a timeout and the call returns control on its own.
+
 ## Model Information
 
 ```csharp

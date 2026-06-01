@@ -62,9 +62,10 @@ internal sealed class EmbeddingModel : IEmbeddingModel
         // Tokenize
         var encoded = _tokenizer.EncodeSequence(text, _options.MaxSequenceLength);
 
-        // Run inference
-        var tokenEmbeddings = await Task.Run(
-            () => _engine.RunInference(encoded.InputIds, encoded.AttentionMask),
+        // Run inference. CancellableInference guarantees control returns to the caller if the
+        // token is cancelled, even when the native ONNX call (e.g. cold DirectML init) ignores it.
+        var tokenEmbeddings = await CancellableInference.RunAsync(
+            () => _engine.RunInference(encoded.InputIds, encoded.AttentionMask, cancellationToken),
             cancellationToken);
 
         // Pool to sentence embedding using pooled buffer
@@ -101,9 +102,10 @@ internal sealed class EmbeddingModel : IEmbeddingModel
         var allInputIds = encodedBatch.GetInputIdsJagged();
         var allAttentionMasks = encodedBatch.GetAttentionMasksJagged();
 
-        // Run batch inference with parallelization
-        var allTokenEmbeddings = await Task.Run(
-            () => _engine.RunBatchInferenceParallel(allInputIds, allAttentionMasks),
+        // Run batch inference with parallelization. CancellableInference guarantees control
+        // returns to the caller on cancellation even if the native ONNX call ignores the token.
+        var allTokenEmbeddings = await CancellableInference.RunAsync(
+            () => _engine.RunBatchInferenceParallel(allInputIds, allAttentionMasks, cancellationToken),
             cancellationToken);
 
         // Pool each to sentence embedding with parallel processing

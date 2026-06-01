@@ -169,12 +169,20 @@ internal sealed class OnnxInferenceEngine : IDisposable
     /// <summary>
     /// Runs inference for a single sequence.
     /// </summary>
-    public float[] RunInference(long[] inputIds, long[] attentionMask)
+    /// <param name="inputIds">Token ids for the sequence.</param>
+    /// <param name="attentionMask">Attention mask for the sequence.</param>
+    /// <param name="cancellationToken">
+    /// Cancellation token. When cancelled, the native ONNX run is asked to terminate
+    /// cooperatively via <see cref="RunOptions.Terminate"/> (best-effort — honored only between
+    /// operators, so an intra-kernel hang such as a cold DirectML init may not be preempted).
+    /// </param>
+    public float[] RunInference(long[] inputIds, long[] attentionMask, CancellationToken cancellationToken = default)
     {
-        return RunInferenceInternal(inputIds, attentionMask, allowRetry: true);
+        return RunInferenceInternal(inputIds, attentionMask, allowRetry: true, cancellationToken);
     }
 
-    private float[] RunInferenceInternal(long[] inputIds, long[] attentionMask, bool allowRetry)
+    private float[] RunInferenceInternal(
+        long[] inputIds, long[] attentionMask, bool allowRetry, CancellationToken cancellationToken)
     {
         int seqLength = inputIds.Length;
 
@@ -196,13 +204,23 @@ internal sealed class OnnxInferenceEngine : IDisposable
             inputs.Add(NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIdsTensor));
         }
 
-        // Serialize access to InferenceSession (not thread-safe for concurrent Run calls)
-        _sessionLock.Wait();
+        // Serialize access to InferenceSession (not thread-safe for concurrent Run calls).
+        // Honor cancellation while waiting for the lock; Wait throws before the try, so the
+        // finally/Release below is only reached when the lock was actually acquired.
+        _sessionLock.Wait(cancellationToken);
         try
         {
+            // Per-run options so a cancelled token asks the native run to terminate cooperatively.
+            // Terminate is checked between operators; it cannot preempt a hang inside a single
+            // kernel (e.g. cold DirectML init). Control-return on such hangs is guaranteed by the
+            // caller-side WaitAsync(ct) wrapper, not here.
+            using var runOptions = new RunOptions();
+            using var ctRegistration = cancellationToken.CanBeCanceled
+                ? cancellationToken.Register(static state => ((RunOptions)state!).Terminate = true, runOptions)
+                : default;
             try
             {
-                using var results = _session.Run(inputs);
+                using var results = _session.Run(inputs, [_outputName], runOptions);
                 var output = results[0].AsTensor<float>();
 
                 // Output shape: [1, seqLength, hiddenSize]
@@ -219,12 +237,19 @@ internal sealed class OnnxInferenceEngine : IDisposable
 
                 return outputArray;
             }
+            catch (OnnxRuntimeException) when (cancellationToken.IsCancellationRequested)
+            {
+                // RunOptions.Terminate surfaces as an OnnxRuntimeException; translate it to a
+                // cancellation so callers see OperationCanceledException, not a provider crash,
+                // and so the fallback path below is not mistakenly entered.
+                throw new OperationCanceledException(cancellationToken);
+            }
             catch (OnnxRuntimeException ex) when (allowRetry && _requestedProvider != ExecutionProvider.Cpu && TryFallback(ex))
             {
                 // After successful fallback, retry exactly once on the new session.
                 // Pass allowRetry: false to avoid runaway recursion if the next provider also fails
                 // on the same input (the outer call will see the propagated exception).
-                return RunInferenceInternal(inputIds, attentionMask, allowRetry: false);
+                return RunInferenceInternal(inputIds, attentionMask, allowRetry: false, cancellationToken);
             }
         }
         finally
@@ -323,14 +348,15 @@ internal sealed class OnnxInferenceEngine : IDisposable
     /// <summary>
     /// Runs batch inference for multiple sequences (sequential).
     /// </summary>
-    public float[][] RunBatchInference(long[][] inputIds, long[][] attentionMasks)
+    public float[][] RunBatchInference(
+        long[][] inputIds, long[][] attentionMasks, CancellationToken cancellationToken = default)
     {
         int batchSize = inputIds.Length;
         var results = new float[batchSize][];
 
         for (int i = 0; i < batchSize; i++)
         {
-            results[i] = RunInference(inputIds[i], attentionMasks[i]);
+            results[i] = RunInference(inputIds[i], attentionMasks[i], cancellationToken);
         }
 
         return results;
@@ -340,14 +366,15 @@ internal sealed class OnnxInferenceEngine : IDisposable
     /// Runs batch inference sequentially. InferenceSession is not thread-safe for concurrent
     /// Run() calls, so all batch items are processed serially under the session lock.
     /// </summary>
-    public float[][] RunBatchInferenceParallel(long[][] inputIds, long[][] attentionMasks)
+    public float[][] RunBatchInferenceParallel(
+        long[][] inputIds, long[][] attentionMasks, CancellationToken cancellationToken = default)
     {
         int batchSize = inputIds.Length;
         var results = new float[batchSize][];
 
         for (int i = 0; i < batchSize; i++)
         {
-            results[i] = RunInference(inputIds[i], attentionMasks[i]);
+            results[i] = RunInference(inputIds[i], attentionMasks[i], cancellationToken);
         }
 
         return results;

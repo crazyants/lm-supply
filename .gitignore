@@ -58,3 +58,6 @@ samples/Gemma3Test/
 console/host/wwwroot/
 .playwright-mcp/
 /*.png
+
+# IDE language server cache
+*.lscache

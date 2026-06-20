@@ -217,8 +217,8 @@ public static class LocalGenerator
         }
 
         var profile = HardwareProfile.Current;
-        var useOnnx = profile.RecommendedProvider == ExecutionProvider.DirectML &&
-                      profile.GpuInfo.Vendor != GpuVendor.Nvidia;
+        var useOnnx = Internal.GeneratorRoutingPolicy.ShouldUseOnnx(
+            profile.GpuInfo, profile.RecommendedProvider);
 
         string selectedModelId;
         SelectionDiagnostics diagnostics;

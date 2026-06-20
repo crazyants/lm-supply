@@ -17,7 +17,7 @@ using LMSupply.Generator;
 
 // Using the builder pattern
 var generator = await TextGeneratorBuilder.Create()
-    .WithDefaultModel()        // Platform-aware: Gemma 4 GGUF on NVIDIA/CPU/Mac/Linux, Phi-4 Mini ONNX on DirectML+non-NVIDIA
+    .WithDefaultModel()        // Platform-aware: GGUF on NVIDIA/CPU/Mac/Linux/integrated-GPU, Phi-4 Mini ONNX on discrete DirectML+non-NVIDIA
     .BuildAsync();
 
 // Generate text
@@ -67,7 +67,7 @@ await foreach (var token in generator.GenerateAsync("Write a short story about a
 | Apple Silicon | GGUF (llama.cpp Metal) | Qwen3 via `gguf:auto` |
 | CPU-only / integrated GPU (any OS) | GGUF (llama.cpp CPU) | Qwen3 via `gguf:auto` (RAM-aware) |
 | Linux + discrete GPU | GGUF (llama.cpp) | Qwen3 via `gguf:auto` |
-| Windows + AMD/Intel GPU | ONNX (DirectML) | Phi-4 Mini (FC-capable, MIT) |
+| Windows + **discrete** AMD/Intel GPU (Arc, Radeon) | ONNX (DirectML) | Phi-4 Mini (FC-capable, MIT) |
 
 `gguf:auto` selects the largest Qwen3 model (`qwen3-fast/default/balanced/quality` pool) that fits the
 VRAM budget, or — when VRAM is insufficient — the largest that fits the system RAM budget (CPU). On an

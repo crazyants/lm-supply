@@ -207,16 +207,8 @@ internal static class ModelFormatDetector
     private static bool ShouldPreferOnnx()
     {
         var profile = HardwareProfile.Current;
-
-        // ONNX advantage: Windows DirectML for non-NVIDIA GPUs
-        if (profile.RecommendedProvider == ExecutionProvider.DirectML &&
-            profile.GpuInfo.Vendor != GpuVendor.Nvidia)
-        {
-            return true;
-        }
-
-        // All other cases: GGUF (CPU, CUDA, Metal, Linux)
-        return false;
+        // Shared policy: ONNX/DirectML only for a discrete non-NVIDIA GPU; integrated GPUs use GGUF.
+        return GeneratorRoutingPolicy.ShouldUseOnnx(profile.GpuInfo, profile.RecommendedProvider);
     }
 
     /// <summary>

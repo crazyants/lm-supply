@@ -275,8 +275,8 @@ GGUF reranker models are auto-detected by `-GGUF` or `_gguf` in repo name.
 | Platform | Selected backend | Selected model |
 |----------|------------------|----------------|
 | Windows + NVIDIA | GGUF (llama.cpp CUDA) | Qwen3 via `gguf:auto` (VRAM-aware) |
-| Windows + AMD/Intel GPU | ONNX (DirectML) | Phi-4 Mini (MIT, FC-capable) |
-| Windows / Linux CPU-only / integrated GPU | GGUF (llama.cpp CPU) | Qwen3 via `gguf:auto` (RAM-aware) |
+| Windows + **discrete** AMD/Intel GPU (Arc, Radeon) | ONNX (DirectML) | Phi-4 Mini (MIT, FC-capable) |
+| Windows / Linux CPU-only / **integrated GPU** (Iris Xe, APU) | GGUF (llama.cpp CPU) | Qwen3 via `gguf:auto` (RAM-aware) |
 | Linux + discrete GPU | GGUF (llama.cpp; CUDA on NVIDIA, CPU/ROCm on AMD) | Qwen3 via `gguf:auto` |
 | macOS (Apple Silicon) | GGUF (llama.cpp Metal) | Qwen3 via `gguf:auto` |
 
@@ -393,7 +393,7 @@ LMSupply detects your hardware and selects models accordingly:
 | **High** | 6-10GB | `gguf:qwen3-balanced` (Qwen3 8B) | |
 | **Ultra** | 20-24GB | `gguf:qwen3-quality` (Qwen 3.6 35B MoE) | thinking ON |
 
-> **Platform-based routing (v0.28.0+):** `LoadAsync("default")` and `LoadAsync("auto")` both select the optimal backend+model for the current host: GGUF via llama.cpp on CPU / NVIDIA / Apple Silicon / Linux, and ONNX via DirectML on Windows AMD/Intel. Use `gguf:*` aliases or ONNX aliases for explicit control.
+> **Platform-based routing (v0.28.0+):** `LoadAsync("default")` and `LoadAsync("auto")` both select the optimal backend+model for the current host: GGUF via llama.cpp on CPU / NVIDIA / Apple Silicon / Linux / **integrated GPUs**, and ONNX via DirectML only on Windows with a **discrete** AMD/Intel GPU. Use `gguf:*` aliases or ONNX aliases for explicit control.
 
 **Key benefits:**
 - **Zero configuration** - Just use `"auto"`, no hardware research needed

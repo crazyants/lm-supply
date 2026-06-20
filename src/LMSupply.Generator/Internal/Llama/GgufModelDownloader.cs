@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LMSupply;
 using LMSupply.Core.Download;
 using LMSupply.Hardware;
 using LMSupply.Download;
@@ -98,17 +99,18 @@ public sealed class GgufModelDownloader : IDisposable
     /// </summary>
     public async Task<string> DownloadFromRegistryAsync(
         GgufModelInfo modelInfo,
+        ExecutionProvider provider = ExecutionProvider.Auto,
         string? preferredQuantization = null,
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        // Use registry default file unless different quantization is preferred
+        // Use registry default file unless a different quantization is explicitly preferred.
         var filename = modelInfo.DefaultFile;
 
         if (!string.IsNullOrEmpty(preferredQuantization) &&
             !modelInfo.DefaultFile.Contains(preferredQuantization, StringComparison.OrdinalIgnoreCase))
         {
-            // Try to find a file with preferred quantization
+            // Explicit quantization request: try to find that file.
             var alternateFile = await TryFindQuantizedFileAsync(
                 modelInfo.RepoId, preferredQuantization, cancellationToken);
 
@@ -117,8 +119,15 @@ public sealed class GgufModelDownloader : IDisposable
                 filename = alternateFile;
             }
         }
+        else if (string.IsNullOrEmpty(preferredQuantization) && modelInfo.ShardCount is not > 1)
+        {
+            // Auto path (no explicit quant, single-file model): pick a quantization that fits the
+            // backend-consistent memory budget — keep the registry default when it fits, otherwise
+            // downscale to a smaller quant so low-spec/integrated-GPU hosts load instead of OOMing.
+            filename = await SelectRegistryFileAsync(modelInfo, provider, cancellationToken);
+        }
 
-        // Handle split GGUF models (multiple shards)
+        // Handle split GGUF models (multiple shards) — downscaling not applicable to shards.
         if (modelInfo.ShardCount is > 1)
         {
             return await DownloadSplitModelAsync(
@@ -127,6 +136,60 @@ public sealed class GgufModelDownloader : IDisposable
         }
 
         return await DownloadAsync(modelInfo.RepoId, filename, preferredQuantization, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// Auto-selects the GGUF quantization file for a registry model under a backend-consistent memory
+    /// budget. Cache-first (offline-friendly); on repo-listing failure degrades to the registry default.
+    /// </summary>
+    private async Task<string> SelectRegistryFileAsync(
+        GgufModelInfo modelInfo,
+        ExecutionProvider provider,
+        CancellationToken cancellationToken)
+    {
+        var profile = HardwareProfile.Current;
+        var registryQuant = ExtractQuantization(modelInfo.DefaultFile);
+
+        // Prefer a cached file matching the registry quant — avoids a network call on re-runs.
+        var cached = TrySelectFromLocalCache(modelInfo.RepoId, registryQuant);
+        if (cached != null)
+            return cached;
+
+        IReadOnlyList<GgufFileGroup> groups;
+        try
+        {
+            groups = await ListGgufGroupsAsync(modelInfo.RepoId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                $"[GgufModelDownloader] Repo listing failed for {modelInfo.RepoId} ({ex.Message}); " +
+                $"using registry default '{modelInfo.DefaultFile}'.");
+            return modelInfo.DefaultFile;
+        }
+
+        var cpuBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(provider, profile.GpuInfo)
+            == global::LMSupply.Llama.Server.LlamaServerBackend.Cpu;
+        var budget = BuildSelectionBudget(
+            cpuBackend, profile.GpuInfo, profile.SystemMemoryBytes,
+            GgufModelRegistry.DefaultBudgetContextLength, out var vramOnly);
+
+        var decision = DecideRegistryFile(modelInfo, groups, budget, vramOnly);
+        switch (decision.Reason)
+        {
+            case RegistryFileReason.FallbackSmallest:
+                Trace.TraceWarning(
+                    $"[GgufModelDownloader] No quantization of '{modelInfo.AliasName}' fits the memory budget; " +
+                    $"using smallest '{decision.FileName}' (OOM risk). Free memory or choose a smaller model.");
+                break;
+            case RegistryFileReason.Downscaled:
+                Trace.TraceInformation(
+                    $"[GgufModelDownloader] Downscaled '{modelInfo.AliasName}' quantization to fit the memory budget: " +
+                    $"'{decision.FileName}' (registry default '{modelInfo.DefaultFile}' did not fit).");
+                break;
+        }
+
+        return decision.FileName;
     }
 
     /// <summary>
@@ -228,6 +291,95 @@ public sealed class GgufModelDownloader : IDisposable
         return GgufFileGroup.GroupFiles(rawFiles).ToList();
     }
 
+    /// <summary>Why a particular registry file/quantization was chosen by <see cref="DecideRegistryFile"/>.</summary>
+    internal enum RegistryFileReason
+    {
+        /// <summary>The registry's default quantization fits the budget — used unchanged (capable host).</summary>
+        DefaultFits,
+        /// <summary>Default did not fit; a smaller quantization that fits was chosen (low-end downscale).</summary>
+        Downscaled,
+        /// <summary>No quantization fits the budget; the smallest was returned as best-effort (OOM risk).</summary>
+        FallbackSmallest,
+        /// <summary>Repository file listing was unavailable; degraded to the registry default file.</summary>
+        GroupsUnavailable,
+    }
+
+    /// <summary>Result of <see cref="DecideRegistryFile"/>: the chosen file name and the reason.</summary>
+    internal readonly record struct RegistryFileDecision(string FileName, RegistryFileReason Reason);
+
+    /// <summary>
+    /// Builds the memory budget for quant file selection consistent with the resolved llama.cpp backend.
+    /// On a CPU backend (including integrated-GPU demotion) VRAM is zeroed so an unreliable iGPU VRAM
+    /// reading is never used and selection is RAM-driven; on a GPU backend the GPU VRAM is used and
+    /// <paramref name="vramOnly"/> is set so a variant is not chosen merely because system RAM is large.
+    /// </summary>
+    internal static AvailableMemory BuildSelectionBudget(
+        bool cpuBackend,
+        LMSupply.Runtime.GpuInfo gpu,
+        long systemRamBytes,
+        int contextLength,
+        out bool vramOnly)
+    {
+        if (cpuBackend)
+        {
+            vramOnly = false;
+            return new AvailableMemory(VramBytes: 0, RamBytes: systemRamBytes, contextLength);
+        }
+
+        vramOnly = true;
+        return new AvailableMemory(
+            VramBytes: gpu.EffectiveAvailableBytes ?? 0,
+            RamBytes: systemRamBytes,
+            contextLength);
+    }
+
+    /// <summary>
+    /// Pure, HW/network-free decision: picks which GGUF quantization file to download for a registry
+    /// model under a memory budget. Keeps the registry default quant when it fits (capable host),
+    /// otherwise downscales to the largest smaller quant that fits, otherwise returns the smallest.
+    /// <paramref name="vramOnly"/> selects the VRAM fit predicate (GPU backend) vs the RAM/total
+    /// predicate (CPU backend) — callers pass <c>false</c> when the resolved backend is CPU so a
+    /// large-but-irrelevant integrated-GPU VRAM reading is not used.
+    /// </summary>
+    internal static RegistryFileDecision DecideRegistryFile(
+        GgufModelInfo model,
+        IReadOnlyList<GgufFileGroup> availableGroups,
+        AvailableMemory budget,
+        bool vramOnly)
+    {
+        if (availableGroups.Count == 0)
+            return new RegistryFileDecision(model.DefaultFile, RegistryFileReason.GroupsUnavailable);
+
+        bool Fits(long sizeBytes) => vramOnly && budget.VramBytes > 0
+            ? budget.FitsInGpu(sizeBytes)
+            : budget.FitsInMemory(sizeBytes);
+
+        // Prefer the registry's intended quant if it fits — capable hosts stay on the default.
+        var registryQuant = ExtractQuantization(model.DefaultFile);
+        var defaultGroup =
+            availableGroups.FirstOrDefault(g =>
+                g.PrimaryFileName.Equals(model.DefaultFile, StringComparison.OrdinalIgnoreCase))
+            ?? (registryQuant is not null
+                ? availableGroups.FirstOrDefault(g =>
+                    GgufFileSelector.MatchesQuantization(g.PrimaryFileName, registryQuant))
+                : null);
+
+        if (defaultGroup is not null && Fits(defaultGroup.TotalSizeBytes))
+            return new RegistryFileDecision(defaultGroup.PrimaryFileName, RegistryFileReason.DefaultFits);
+
+        // Default doesn't fit → largest quant that fits (downscale to a smaller quant).
+        var largestFitting = availableGroups
+            .Where(g => Fits(g.TotalSizeBytes))
+            .OrderByDescending(g => g.TotalSizeBytes)
+            .FirstOrDefault();
+        if (largestFitting is not null)
+            return new RegistryFileDecision(largestFitting.PrimaryFileName, RegistryFileReason.Downscaled);
+
+        // Nothing fits → smallest as best-effort (caller warns about OOM risk).
+        var smallest = availableGroups.OrderBy(g => g.TotalSizeBytes).First();
+        return new RegistryFileDecision(smallest.PrimaryFileName, RegistryFileReason.FallbackSmallest);
+    }
+
     /// <summary>
     /// Selects the best GGUF file based on hardware memory constraints and quantization preference.
     /// </summary>
@@ -250,11 +402,16 @@ public sealed class GgufModelDownloader : IDisposable
                 repoId);
 
         var profile = HardwareProfile.Current;
-        var memory = GgufFileSelector.FromHardwareProfile(profile);
-        // GPU host: enforce VRAM budget so we don't pick a variant (e.g. bf16) that
-        // only fits because system RAM is large. Without this, raw HF repo IDs on a
-        // small-VRAM laptop silently downloaded multi-tens-of-GB variants.
-        var vramOnly = profile.GpuInfo.EffectiveAvailableBytes is > 0;
+        // Backend-consistent budget: when the resolved llama.cpp backend is CPU (incl. integrated-GPU
+        // demotion), VRAM is zeroed so an unreliable iGPU VRAM reading is not used (RAM-driven). On a
+        // GPU backend, the VRAM budget is enforced (vramOnly) so a variant is not picked merely because
+        // system RAM is large. Raw repo-ID path runs under Auto provider.
+        var cpuBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(
+                ExecutionProvider.Auto, profile.GpuInfo)
+            == global::LMSupply.Llama.Server.LlamaServerBackend.Cpu;
+        var memory = BuildSelectionBudget(
+            cpuBackend, profile.GpuInfo, profile.SystemMemoryBytes,
+            GgufModelRegistry.DefaultBudgetContextLength, out var vramOnly);
         var selected = GgufFileSelector.Select(groups, memory, preferredQuantization, vramOnly);
         return selected.PrimaryFileName;
     }

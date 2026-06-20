@@ -113,6 +113,7 @@ internal static class GeneratorModelLoader
             using var downloader = new GgufModelDownloader(cacheDir);
             modelPath = await downloader.DownloadFromRegistryAsync(
                 registryInfo,
+                provider: options.Provider,
                 preferredQuantization: null,
                 progress: progress,
                 cancellationToken: cancellationToken);

@@ -73,6 +73,10 @@ await foreach (var token in generator.GenerateAsync("Write a short story about a
 VRAM budget, or — when VRAM is insufficient — the largest that fits the system RAM budget (CPU). On an
 integrated GPU the llama.cpp backend is CPU (see [llama.md](llama.md#backend-selection)).
 
+After the family is chosen, the download step picks the **quantization that fits** the backend-consistent
+budget: a capable host keeps the registry default quant (e.g. `Q4_K_M`), a tight-memory host downscales
+(`Q4 → Q3 → Q2`) so it loads instead of OOMing; if nothing fits, the smallest is used with a warning.
+
 ### Explicit model selection
 
 ```csharp

@@ -27,6 +27,31 @@ public sealed record GpuInfo
     public long? FreeMemoryBytes { get; init; }
 
     /// <summary>
+    /// Gets the shared system memory in bytes the adapter can address, if available.
+    /// Populated from DXGI (<c>SharedSystemMemory</c>) on Windows. Large shared memory next to a
+    /// tiny <see cref="TotalMemoryBytes"/> is the signature of an integrated GPU (see <see cref="IsIntegrated"/>).
+    /// </summary>
+    public long? SharedMemoryBytes { get; init; }
+
+    /// <summary>
+    /// Dedicated-VRAM ceiling (bytes) below which a non-NVIDIA/non-Apple adapter that also exposes
+    /// shared system memory is treated as integrated. Discrete cards report multi-GB dedicated VRAM;
+    /// integrated GPUs carve a small (often ≤512 MB) dedicated region from shared system RAM.
+    /// </summary>
+    public const long IntegratedDedicatedCeilingBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>
+    /// Gets whether this adapter is an integrated GPU (shares system RAM rather than having
+    /// dedicated VRAM). Integrated GPUs report an unreliable dedicated-VRAM size, so VRAM-budget
+    /// decisions should not trust <see cref="TotalMemoryBytes"/> for them. NVIDIA and Apple are
+    /// never flagged here (discrete / unified-memory paths handle them).
+    /// </summary>
+    public bool IsIntegrated =>
+        Vendor is not GpuVendor.Nvidia and not GpuVendor.Apple
+        && SharedMemoryBytes is > 0
+        && (TotalMemoryBytes ?? 0) < IntegratedDedicatedCeilingBytes;
+
+    /// <summary>
     /// Gets the best estimate of available VRAM for model loading.
     /// Returns FreeMemoryBytes if detected, otherwise TotalMemoryBytes.
     /// </summary>

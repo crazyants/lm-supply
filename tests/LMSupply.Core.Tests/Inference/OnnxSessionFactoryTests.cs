@@ -224,6 +224,19 @@ public class OnnxSessionFactoryTests
     }
 
     [SkippableFact]
+    public void ConfigureExecutionProvider_Cpu_ReturnsFalse_NoGpuEpAppended()
+    {
+        // D6: ConfigureExecutionProvider now reports whether a GPU EP was appended, so callers can
+        // build accurate ActiveProviders instead of a loadability heuristic. CPU appends no GPU EP.
+        var (available, _) = OnnxSessionFactory.CheckOnnxRuntimeAvailability();
+        Skip.IfNot(available, "ONNX Runtime not available in this environment");
+
+        using var options = new Microsoft.ML.OnnxRuntime.SessionOptions();
+        OnnxSessionFactory.ConfigureExecutionProvider(options, ExecutionProvider.Cpu)
+            .Should().BeFalse("CPU configuration appends no GPU execution provider");
+    }
+
+    [SkippableFact]
     public async Task CreateWithInfoAsync_ExplicitGpuProvider_WhenSessionCreateThrows_FallsBackToCpu()
     {
         // Skip if ONNX Runtime native library is not available (CI without runtime installed).

@@ -289,6 +289,13 @@ public static class GgufModelRegistry
     public const int DefaultBudgetContextLength = 4096;
 
     /// <summary>
+    /// System RAM reserved for the OS and other processes when computing the CPU fit budget.
+    /// Mirrors the <c>ramOverhead</c> reservation in <see cref="MemoryEstimator.EstimateForGguf"/>
+    /// (4 GB) so RAM-aware model selection and the downstream offload estimate agree.
+    /// </summary>
+    public const long SystemRamReservedBytes = 4L * 1024 * 1024 * 1024;
+
+    /// <summary>
     /// Resolves an alias to model information.
     /// Supports both "gguf:alias" format and plain "alias" format.
     /// </summary>
@@ -326,7 +333,11 @@ public static class GgufModelRegistry
     /// Delegates to the VRAM-aware overload using the current GPU.
     /// </summary>
     public static GgufModelInfo GetAutoModel()
-        => GetAutoModel(HardwareProfile.Current.GpuInfo);
+        => GetAutoSelection(
+            HardwareProfile.Current.GpuInfo,
+            HardwareProfile.Current.SystemMemoryBytes,
+            DefaultBudgetContextLength,
+            excludeKnownIssues: null).Selected;
 
     /// <summary>
     /// Gets the optimal GGUF model based on actual available VRAM, including KV cache footprint.
@@ -364,9 +375,27 @@ public static class GgufModelRegistry
         GpuInfo gpu,
         int budgetContextLength,
         IReadOnlyCollection<string>? excludeKnownIssues)
+        // GPU-only overload: no RAM information, so RAM fallback is disabled (systemRamBytes = 0).
+        => GetAutoSelection(gpu, systemRamBytes: 0, budgetContextLength, excludeKnownIssues);
+
+    /// <summary>
+    /// Performs auto-selection considering both the VRAM budget and the system RAM budget.
+    /// Prefers the largest model that fits VRAM (full GPU); if none fits VRAM, picks the largest
+    /// that fits system RAM (CPU / partial offload) so a low-VRAM, high-RAM machine is not stuck
+    /// with the smallest model; otherwise falls back to the smallest. Pass <paramref name="systemRamBytes"/>
+    /// = 0 to disable the RAM path (pure VRAM selection).
+    /// </summary>
+    public static ModelSelectionResult GetAutoSelection(
+        GpuInfo gpu,
+        long systemRamBytes,
+        int budgetContextLength,
+        IReadOnlyCollection<string>? excludeKnownIssues)
     {
         var safetyMargin = VramBudget.GetRecommendedSafetyMargin(gpu);
         var availableVram = VramBudget.GetAvailableBytes(gpu, safetyMargin);
+        var availableRam = systemRamBytes > SystemRamReservedBytes
+            ? systemRamBytes - SystemRamReservedBytes
+            : 0L;
 
         var poolFiltered = _models.Where(kv => _autoSelectionAliases.Contains(kv.Key));
 
@@ -375,18 +404,27 @@ public static class GgufModelRegistry
             : poolFiltered;
 
         var candidates = eligible
-            .Select(kv => EvaluateCandidate(WithAlias(kv.Value, kv.Key), availableVram, budgetContextLength))
+            .Select(kv => EvaluateCandidate(WithAlias(kv.Value, kv.Key), availableVram, availableRam, budgetContextLength))
             .OrderByDescending(c => c.TotalBytes)
             .ToList();
 
-        var fitting = candidates.FirstOrDefault(c => c.Fits);
         GgufModelInfo selected;
         ModelSelectionReason reason;
 
-        if (fitting is not null)
+        var fittingVram = candidates.FirstOrDefault(c => c.Fits);
+        var fittingRam = candidates.FirstOrDefault(c => c.FitsInSystemRam);
+
+        if (fittingVram is not null)
         {
-            selected = fitting.Model;
+            selected = fittingVram.Model;
             reason = ModelSelectionReason.Fits;
+        }
+        else if (fittingRam is not null)
+        {
+            // Nothing fits VRAM, but RAM can hold it — run on CPU/partial offload instead of
+            // dropping to the smallest model on a machine with ample RAM.
+            selected = fittingRam.Model;
+            reason = ModelSelectionReason.FitsInSystemRam;
         }
         else
         {
@@ -401,6 +439,7 @@ public static class GgufModelRegistry
             Selected = selected,
             Reason = reason,
             AvailableVramBytes = availableVram,
+            AvailableSystemRamBytes = availableRam,
             SafetyMargin = safetyMargin,
             BudgetContextLength = budgetContextLength,
             Candidates = candidates,
@@ -408,7 +447,7 @@ public static class GgufModelRegistry
     }
 
     private static ModelSelectionCandidate EvaluateCandidate(
-        GgufModelInfo model, long availableVram, int budgetContextLength)
+        GgufModelInfo model, long availableVram, long availableRam, int budgetContextLength)
     {
         var weights = ModelMemoryEstimator.EstimateModelSizeBytes(
             model.ParameterCount,
@@ -428,6 +467,7 @@ public static class GgufModelRegistry
             WeightsBytes = weights,
             KvCacheBytes = kvCache,
             Fits = total <= availableVram,
+            FitsInSystemRam = availableRam > 0 && total <= availableRam,
         };
     }
 

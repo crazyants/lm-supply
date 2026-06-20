@@ -19,8 +19,8 @@ public class LlamaBackendSelectorTests
     private const long GB = 1024L * 1024 * 1024;
     private const long MB = 1024L * 1024;
 
-    private static GpuInfo Gpu(GpuVendor vendor, string? name = null, long? total = null, bool directMl = false)
-        => new() { Vendor = vendor, DeviceName = name, TotalMemoryBytes = total, DirectMLSupported = directMl };
+    private static GpuInfo Gpu(GpuVendor vendor, string? name = null, long? total = null, bool directMl = false, long? shared = null)
+        => new() { Vendor = vendor, DeviceName = name, TotalMemoryBytes = total, DirectMLSupported = directMl, SharedMemoryBytes = shared };
 
     // ─── Explicit providers map directly, independent of GPU and budget ───
 
@@ -63,6 +63,27 @@ public class LlamaBackendSelectorTests
     public void Auto_Nvidia_TinyVram_DemotesToCpu()
         => LlamaBackendSelector.MapProvider(ExecutionProvider.Auto, Gpu(GpuVendor.Nvidia, "GT 710", 1 * GB))
             .Should().Be(LlamaServerBackend.Cpu);
+
+    // ─── Auto: D2 — integrated GPU (shared memory) routed to CPU via IsIntegrated ───
+
+    [Fact]
+    public void Auto_IntegratedGpu_WithSharedMemory_DemotesToCpu()
+    {
+        // Iris Xe: tiny dedicated VRAM (128MB) + large shared system memory → IsIntegrated → CPU.
+        var gpu = Gpu(GpuVendor.Intel, "Intel(R) Iris(R) Xe Graphics",
+            total: 128 * MB, shared: 16 * GB);
+        gpu.IsIntegrated.Should().BeTrue();
+        LlamaBackendSelector.MapProvider(ExecutionProvider.Auto, gpu).Should().Be(LlamaServerBackend.Cpu);
+    }
+
+    [Fact]
+    public void Auto_IntelArc_DedicatedWithSharedMemory_NotIntegrated_KeepsVulkan()
+    {
+        // Arc A770: 12GB dedicated VRAM even though shared memory is also present → not integrated.
+        var gpu = Gpu(GpuVendor.Intel, "Intel(R) Arc(TM) A770", total: 12 * GB, shared: 16 * GB);
+        gpu.IsIntegrated.Should().BeFalse();
+        LlamaBackendSelector.MapProvider(ExecutionProvider.Auto, gpu).Should().Be(LlamaServerBackend.Vulkan);
+    }
 
     // ─── Auto: D4 — legacy Intel HD goes to CPU consistently (was Vulkan in embedder/reranker) ───
 

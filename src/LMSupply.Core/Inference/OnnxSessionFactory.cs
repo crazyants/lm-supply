@@ -129,15 +129,23 @@ public static class OnnxSessionFactory
             cancellationToken: cancellationToken);
 
         InferenceSession session;
+        bool gpuEpAppended;
         try
         {
             // Create session on a dedicated thread to avoid thread pool starvation.
             // InferenceSession construction blocks for several seconds on large models.
-            session = await Task.Factory.StartNew(
-                () => Create(modelPath, provider, configureOptions),
+            // Capture whether the requested GPU EP was actually appended (Try* may silently fail).
+            var created = await Task.Factory.StartNew(
+                () =>
+                {
+                    var s = Create(modelPath, provider, configureOptions, out var appended);
+                    return (s, appended);
+                },
                 cancellationToken,
                 TaskCreationOptions.LongRunning,
                 TaskScheduler.Default);
+            session = created.s;
+            gpuEpAppended = created.appended;
         }
         catch (OperationCanceledException)
         {
@@ -167,15 +175,10 @@ public static class OnnxSessionFactory
             };
         }
 
-        var activeProviders = GetActiveProviders(session);
+        // Build the active-provider list from what was actually appended (not a heuristic re-probe).
+        var activeProviders = ResolveActiveProviders(provider, gpuEpAppended);
 
-        // Log warning if GPU was requested but not active
-        var hasGpuProvider = activeProviders.Any(p =>
-            p.Contains("CUDA", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("DML", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("CoreML", StringComparison.OrdinalIgnoreCase));
-
-        if (isGpuRequested && !hasGpuProvider)
+        if (isGpuRequested && !activeProviders.Any(p => p != "CPUExecutionProvider"))
         {
             Trace.TraceWarning($"[OnnxSessionFactory] Warning: GPU provider {provider} was requested but only CPU is active. " +
                 $"Active providers: {string.Join(", ", activeProviders)}");
@@ -371,16 +374,6 @@ public static class OnnxSessionFactory
     }
 
     /// <summary>
-    /// Checks if CUDA runtime libraries (cuBLAS, cuDNN) are available on the system.
-    /// This is checked BEFORE attempting CUDA to avoid ONNX Runtime error messages.
-    /// </summary>
-    private static bool IsCudaRuntimeAvailable()
-    {
-        var (available, _) = CheckCudaRuntimeAvailability();
-        return available;
-    }
-
-    /// <summary>
     /// Checks CUDA runtime availability using CudaEnvironment for dynamic detection.
     /// This works before ONNX Runtime is loaded.
     /// </summary>
@@ -551,6 +544,19 @@ public static class OnnxSessionFactory
         string modelPath,
         ExecutionProvider provider = ExecutionProvider.Auto,
         Action<SessionOptions>? configureOptions = null)
+        => Create(modelPath, provider, configureOptions, out _);
+
+    /// <summary>
+    /// Same as <see cref="Create(string, ExecutionProvider, Action{SessionOptions}?)"/> but reports
+    /// whether a GPU execution provider was actually appended to the session options.
+    /// <paramref name="gpuEpAppended"/> is false for CPU/Auto-to-CPU and when a GPU EP append failed
+    /// silently — letting callers report accurate active providers instead of a loadability heuristic.
+    /// </summary>
+    public static InferenceSession Create(
+        string modelPath,
+        ExecutionProvider provider,
+        Action<SessionOptions>? configureOptions,
+        out bool gpuEpAppended)
     {
         // Pre-check: prevent fatal crash from NativeMethods..cctor() on missing native dependencies
         EnsureOnnxRuntimeAvailable(modelPath);
@@ -566,53 +572,74 @@ public static class OnnxSessionFactory
         configureOptions?.Invoke(options);
 
         // Configure execution provider
-        ConfigureExecutionProvider(options, provider);
+        gpuEpAppended = ConfigureExecutionProvider(options, provider);
 
         return new InferenceSession(modelPath, options);
     }
 
     /// <summary>
     /// Configures the execution provider for the session options.
+    /// Returns true when a GPU execution provider was successfully appended.
     /// </summary>
-    public static void ConfigureExecutionProvider(SessionOptions options, ExecutionProvider provider)
+    public static bool ConfigureExecutionProvider(SessionOptions options, ExecutionProvider provider)
     {
-        switch (provider)
+        return provider switch
         {
-            case ExecutionProvider.Auto:
-                TryAddBestAvailableProvider(options);
-                break;
-
-            case ExecutionProvider.Cuda:
-                TryAddCuda(options);
-                break;
-
-            case ExecutionProvider.DirectML:
-                TryAddDirectML(options);
-                break;
-
-            case ExecutionProvider.CoreML:
-                TryAddCoreML(options);
-                break;
-
-            case ExecutionProvider.Cpu:
-                // CPU is always available as fallback
-                break;
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown execution provider");
-        }
+            ExecutionProvider.Auto => TryAddBestAvailableProvider(options),
+            ExecutionProvider.Cuda => TryAddCuda(options),
+            ExecutionProvider.DirectML => TryAddDirectML(options),
+            ExecutionProvider.CoreML => TryAddCoreML(options),
+            ExecutionProvider.Cpu => false, // CPU is always available as fallback; no GPU EP appended
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown execution provider")
+        };
     }
 
     /// <summary>
-    /// Tries to add the best available GPU provider, falls back to CPU.
+    /// Tries to add the best available GPU provider. Returns true if a GPU EP was appended,
+    /// false when none was available (CPU fallback is automatic).
     /// </summary>
-    private static void TryAddBestAvailableProvider(SessionOptions options)
+    private static bool TryAddBestAvailableProvider(SessionOptions options)
     {
         // Try providers in order of preference
-        if (TryAddCuda(options)) return;
-        if (TryAddDirectML(options)) return;
-        if (TryAddCoreML(options)) return;
+        if (TryAddCuda(options)) return true;
+        if (TryAddDirectML(options)) return true;
+        if (TryAddCoreML(options)) return true;
         // CPU fallback is automatic
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves the active-provider list for an explicitly-requested provider from the actual append
+    /// result (as reported by <see cref="Create(string, ExecutionProvider, Action{SessionOptions}?, out bool)"/>
+    /// or <see cref="ConfigureExecutionProvider"/>). For CUDA, additionally verifies the provider DLL
+    /// was loaded into the process so an appended-but-not-loaded CUDA EP is not reported as active.
+    /// This replaces the former session-introspection heuristic, which reported false positives.
+    /// </summary>
+    public static IReadOnlyList<string> ResolveActiveProviders(ExecutionProvider provider, bool gpuEpAppended)
+    {
+        var providers = new List<string>();
+
+        if (gpuEpAppended)
+        {
+            switch (provider)
+            {
+                case ExecutionProvider.Cuda when IsCudaProviderLoaded():
+                    providers.Add("CUDAExecutionProvider");
+                    break;
+                case ExecutionProvider.Cuda:
+                    // Appended but the CUDA provider DLL is not in the process — not actually active.
+                    break;
+                case ExecutionProvider.DirectML:
+                    providers.Add("DmlExecutionProvider");
+                    break;
+                case ExecutionProvider.CoreML:
+                    providers.Add("CoreMLExecutionProvider");
+                    break;
+            }
+        }
+
+        providers.Add("CPUExecutionProvider");
+        return providers;
     }
 
     private static bool TryAddCuda(SessionOptions options)
@@ -695,110 +722,4 @@ public static class OnnxSessionFactory
             yield return ExecutionProvider.CoreML;
     }
 
-    /// <summary>
-    /// Gets the list of active execution providers from an inference session.
-    /// This can be used to verify which providers are actually being used.
-    /// </summary>
-    /// <param name="session">The inference session to check.</param>
-    /// <returns>List of active provider names.</returns>
-    public static IReadOnlyList<string> GetActiveProviders(InferenceSession session)
-    {
-        // Get the providers from session metadata
-        // The session stores this information internally
-        try
-        {
-            // Use reflection to access the internal provider list if available
-            // or return a default based on what was configured
-            var providers = new List<string>();
-
-            // Check session's registered execution providers
-            // ONNX Runtime stores this in the session's model metadata
-            var sessionOptions = typeof(InferenceSession)
-                .GetProperty("SessionOptions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
-                .GetValue(session);
-
-            // Fallback: Try to infer from available metadata
-            // In ONNX Runtime, we can check the session's provider preferences
-            var modelMeta = session.ModelMetadata;
-
-            // The most reliable way is to check what providers are actually executing nodes
-            // For now, we check based on what's registered in the session
-            // Note: This is a heuristic - ONNX Runtime doesn't expose a clean API for this
-
-            // Check common provider indicators from session internals
-            // CPU is always present as a fallback
-            if (RuntimeManager.Instance.Gpu?.Vendor == GpuVendor.Nvidia)
-            {
-                // If CUDA binaries were loaded, check if provider initialized
-                if (IsCudaProviderActive())
-                {
-                    providers.Add("CUDAExecutionProvider");
-                }
-            }
-            else if (RuntimeManager.Instance.Gpu?.Vendor == GpuVendor.Amd &&
-                     OperatingSystem.IsWindows())
-            {
-                // DirectML on Windows with AMD GPU
-                if (IsDirectMLProviderActive())
-                {
-                    providers.Add("DmlExecutionProvider");
-                }
-            }
-            else if (OperatingSystem.IsWindows() && IsDirectMLProviderActive())
-            {
-                // DirectML on Windows with other GPUs (Intel, etc.)
-                providers.Add("DmlExecutionProvider");
-            }
-
-            // CPU is always available as fallback
-            providers.Add("CPUExecutionProvider");
-
-            return providers;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[OnnxSessionFactory] Provider detection failed, assuming CPU: {ex.Message}");
-            return new[] { "CPUExecutionProvider" };
-        }
-    }
-
-    /// <summary>
-    /// Checks if CUDA provider is actually active and functional.
-    /// </summary>
-    private static bool IsCudaProviderActive()
-    {
-        try
-        {
-            // Try to create a minimal session with CUDA
-            using var testOptions = new SessionOptions();
-            testOptions.AppendExecutionProvider_CUDA();
-
-            // If we got here without exception, CUDA provider is available
-            // but we need to verify it's actually functional with a real model
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[OnnxSessionFactory] CUDA provider not active: {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Checks if DirectML provider is actually active and functional.
-    /// </summary>
-    private static bool IsDirectMLProviderActive()
-    {
-        try
-        {
-            using var testOptions = new SessionOptions();
-            testOptions.AppendExecutionProvider_DML();
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[OnnxSessionFactory] DirectML provider not active: {ex.Message}");
-            return false;
-        }
-    }
 }

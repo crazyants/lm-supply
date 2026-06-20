@@ -31,9 +31,15 @@ Console.WriteLine($"RAM: {Format(profile.SystemMemoryBytes)}, Provider: {profile
 GgufModelInfo? target;
 if (targetAlias is "default" or "auto")
 {
-    var selection = GgufModelRegistry.GetAutoSelection(profile.GpuInfo);
+    // RAM-aware selection (mirrors the real LocalGenerator.LoadAsync path), plus the auto backend
+    // the generator would pick — so the dry-run reflects actual load behavior on this hardware.
+    var selection = GgufModelRegistry.GetAutoSelection(
+        profile.GpuInfo, profile.SystemMemoryBytes,
+        GgufModelRegistry.DefaultBudgetContextLength, excludeKnownIssues: null);
     target = selection.Selected;
+    var backend = LMSupply.Llama.LlamaBackendSelector.MapProvider(ExecutionProvider.Auto, profile.GpuInfo);
     Console.WriteLine($"Auto-selected: alias={target.AliasName} repo={target.RepoId} file={target.DefaultFile} reason={selection.Reason}");
+    Console.WriteLine($"  budget: vram={Format(selection.AvailableVramBytes)} ram={Format(selection.AvailableSystemRamBytes)} -> backend={backend}");
 }
 else
 {

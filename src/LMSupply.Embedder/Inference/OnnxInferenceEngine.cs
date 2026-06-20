@@ -98,12 +98,9 @@ internal sealed class OnnxInferenceEngine : IDisposable
         if (!File.Exists(modelPath))
             throw new ModelNotFoundException("Model file not found", modelPath);
 
-        var session = OnnxSessionFactory.Create(modelPath, provider, ConfigureOptions);
-        var activeProviders = OnnxSessionFactory.GetActiveProviders(session);
-        var isGpuActive = activeProviders.Any(p =>
-            p.Contains("CUDA", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("DML", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("CoreML", StringComparison.OrdinalIgnoreCase));
+        var session = OnnxSessionFactory.Create(modelPath, provider, ConfigureOptions, out var gpuEpAppended);
+        var activeProviders = OnnxSessionFactory.ResolveActiveProviders(provider, gpuEpAppended);
+        var isGpuActive = activeProviders.Any(p => p != "CPUExecutionProvider");
 
         return CreateFromSession(session, IsGpuProvider(provider), isGpuActive, activeProviders, provider, modelPath);
     }

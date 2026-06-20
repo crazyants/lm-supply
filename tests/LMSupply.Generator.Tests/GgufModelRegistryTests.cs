@@ -330,6 +330,65 @@ public class GgufModelRegistryTests
         model.AliasName.Should().Be("gguf:qwen3-fast");
     }
 
+    // ─── D3: RAM-aware selection (CPU / low-VRAM, high-RAM machines) ───
+
+    [Fact]
+    public void GetAutoSelection_NoVramButAmpleRam_SelectsLargestRamFittingModel()
+    {
+        // Discovery case: integrated GPU (~0 usable VRAM) but 32GB system RAM.
+        // Should NOT fall back to smallest — RAM holds a much larger model on CPU.
+        var gpu = new GpuInfo { Vendor = GpuVendor.Intel, TotalMemoryBytes = 128L * 1024 * 1024 };
+        var result = GgufModelRegistry.GetAutoSelection(
+            gpu, systemRamBytes: 32L * 1024 * 1024 * 1024,
+            GgufModelRegistry.DefaultBudgetContextLength, excludeKnownIssues: null);
+
+        result.Reason.Should().Be(ModelSelectionReason.FitsInSystemRam);
+        // 32GB - 4GB reserved = 28GB RAM budget; the largest auto-pool model that fits wins.
+        result.Selected.AliasName.Should().Be("gguf:qwen3-quality");
+        result.AvailableSystemRamBytes.Should().Be(28L * 1024 * 1024 * 1024);
+    }
+
+    [Fact]
+    public void GetAutoSelection_VramFits_PrefersVramOverRam()
+    {
+        // A GPU with enough VRAM keeps the VRAM (full-GPU) path even when RAM is also ample.
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 8L * 1024 * 1024 * 1024,
+            FreeMemoryBytes = 7L * 1024 * 1024 * 1024
+        };
+        var result = GgufModelRegistry.GetAutoSelection(
+            gpu, systemRamBytes: 64L * 1024 * 1024 * 1024,
+            GgufModelRegistry.DefaultBudgetContextLength, excludeKnownIssues: null);
+
+        result.Reason.Should().Be(ModelSelectionReason.Fits);
+    }
+
+    [Fact]
+    public void GetAutoSelection_LowVramAndLowRam_FallsBackToSmallest()
+    {
+        // Neither VRAM nor RAM can hold the smallest model → genuine fallback.
+        var gpu = new GpuInfo { Vendor = GpuVendor.Unknown };
+        var result = GgufModelRegistry.GetAutoSelection(
+            gpu, systemRamBytes: 4L * 1024 * 1024 * 1024, // 4GB - 4GB reserved = 0 RAM budget
+            GgufModelRegistry.DefaultBudgetContextLength, excludeKnownIssues: null);
+
+        result.Reason.Should().Be(ModelSelectionReason.FallbackToSmallest);
+        result.Selected.AliasName.Should().Be("gguf:qwen3-fast");
+    }
+
+    [Fact]
+    public void GetAutoSelection_GpuOnlyOverload_IgnoresRam_StaysSmallest()
+    {
+        // The GPU-only overload has no RAM info → RAM fallback disabled → smallest (unchanged behavior).
+        var gpu = new GpuInfo { Vendor = GpuVendor.Unknown };
+        var result = GgufModelRegistry.GetAutoSelection(gpu);
+
+        result.Reason.Should().Be(ModelSelectionReason.FallbackToSmallest);
+        result.AvailableSystemRamBytes.Should().Be(0);
+    }
+
     [Fact]
     public void XLargeModel_HasSplitShardConfiguration()
     {

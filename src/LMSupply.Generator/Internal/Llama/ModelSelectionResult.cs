@@ -9,8 +9,15 @@ public enum ModelSelectionReason
     Fits,
 
     /// <summary>
-    /// No registered model fits within the budget. The smallest available model
-    /// was returned as a best-effort fallback; runtime may still OOM or partial-offload.
+    /// No model fits the VRAM budget, but the selected model fits within the system RAM
+    /// budget — it will run on CPU (or partially offloaded). Chosen so a machine with little
+    /// VRAM but ample RAM still gets the largest usable model instead of the smallest fallback.
+    /// </summary>
+    FitsInSystemRam,
+
+    /// <summary>
+    /// No registered model fits either the VRAM or the system RAM budget. The smallest available
+    /// model was returned as a best-effort fallback; runtime may still OOM or partial-offload.
     /// </summary>
     FallbackToSmallest,
 }
@@ -34,6 +41,12 @@ public sealed record ModelSelectionCandidate
 
     /// <summary>Whether this candidate fits within the VRAM budget.</summary>
     public required bool Fits { get; init; }
+
+    /// <summary>
+    /// Whether this candidate fits within the system RAM budget (CPU / partial-offload path).
+    /// False when no RAM budget was provided (RAM-unaware selection).
+    /// </summary>
+    public required bool FitsInSystemRam { get; init; }
 }
 
 /// <summary>
@@ -51,6 +64,12 @@ public sealed record ModelSelectionResult
 
     /// <summary>Available VRAM in bytes used as the fit budget.</summary>
     public required long AvailableVramBytes { get; init; }
+
+    /// <summary>
+    /// Available system RAM in bytes used as the secondary (CPU) fit budget, after reserving
+    /// <see cref="GgufModelRegistry.SystemRamReservedBytes"/>. Zero for RAM-unaware selection.
+    /// </summary>
+    public required long AvailableSystemRamBytes { get; init; }
 
     /// <summary>Safety margin applied to raw free VRAM to compute the budget.</summary>
     public required double SafetyMargin { get; init; }

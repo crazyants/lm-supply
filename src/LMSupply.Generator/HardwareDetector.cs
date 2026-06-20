@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using LMSupply.Runtime;
 
 namespace LMSupply.Generator;
@@ -13,39 +12,19 @@ public static class HardwareDetector
     /// </summary>
     public static HardwareRecommendation GetRecommendation()
     {
-        var gpuInfo = GpuDetector.DetectPrimaryGpu();
-        var systemMemory = GetSystemMemoryBytes();
-
-        return CreateRecommendation(gpuInfo, systemMemory);
+        // Use the cached HardwareProfile so GPU detection and the provider decision are made once
+        // and stay consistent with the rest of the system (single source of truth).
+        var profile = Hardware.HardwareProfile.Current;
+        return CreateRecommendation(profile.GpuInfo, profile.SystemMemoryBytes);
     }
 
     /// <summary>
     /// Gets the best available execution provider.
+    /// Delegates to <see cref="Hardware.HardwareProfile"/> — the single source of truth for the
+    /// VRAM-aware provider recommendation — instead of duplicating the decision here.
     /// </summary>
     public static ExecutionProvider GetBestProvider()
-    {
-        var gpuInfo = GpuDetector.DetectPrimaryGpu();
-
-        // CUDA has best performance for NVIDIA GPUs
-        if (gpuInfo.Vendor == GpuVendor.Nvidia && gpuInfo.TotalMemoryBytes >= 4L * 1024 * 1024 * 1024)
-        {
-            return ExecutionProvider.Cuda;
-        }
-
-        // DirectML for Windows with compatible GPU
-        if (gpuInfo.DirectMLSupported)
-        {
-            return ExecutionProvider.DirectML;
-        }
-
-        // CoreML for Apple Silicon
-        if (gpuInfo.CoreMLSupported)
-        {
-            return ExecutionProvider.CoreML;
-        }
-
-        return ExecutionProvider.Cpu;
-    }
+        => Hardware.HardwareProfile.Current.RecommendedProvider;
 
     /// <summary>
     /// Resolves Auto execution provider to the best available option.
@@ -124,19 +103,6 @@ public static class HardwareDetector
         }
 
         return models;
-    }
-
-    private static long GetSystemMemoryBytes()
-    {
-        try
-        {
-            return (long)GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceInformation($"[HardwareDetector] Memory detection failed, assuming 8GB: {ex.Message}");
-            return 8L * 1024 * 1024 * 1024;
-        }
     }
 }
 

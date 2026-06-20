@@ -5,6 +5,9 @@ namespace LMSupply.Core.Tests.Runtime;
 
 public class GpuInfoTests
 {
+    private const long GB = 1024L * 1024 * 1024;
+    private const long MB = 1024L * 1024;
+
     [Fact]
     public void DefaultValues_ShouldBeNull()
     {
@@ -12,12 +15,73 @@ public class GpuInfoTests
 
         gpu.DeviceName.Should().BeNull();
         gpu.TotalMemoryBytes.Should().BeNull();
+        gpu.SharedMemoryBytes.Should().BeNull();
         gpu.CudaComputeCapabilityMajor.Should().BeNull();
         gpu.CudaComputeCapabilityMinor.Should().BeNull();
         gpu.CudaDriverVersionMajor.Should().BeNull();
         gpu.CudaDriverVersionMinor.Should().BeNull();
         gpu.DirectMLSupported.Should().BeFalse();
         gpu.CoreMLSupported.Should().BeFalse();
+        gpu.IsIntegrated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsIntegrated_IntelIGpu_TinyDedicatedPlusShared_True()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Intel,
+            DeviceName = "Intel(R) Iris(R) Xe Graphics",
+            TotalMemoryBytes = 128 * MB,
+            SharedMemoryBytes = 16 * GB
+        };
+        gpu.IsIntegrated.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsIntegrated_IntelArc_LargeDedicated_False()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Intel,
+            DeviceName = "Intel(R) Arc(TM) A770",
+            TotalMemoryBytes = 12 * GB,
+            SharedMemoryBytes = 16 * GB
+        };
+        gpu.IsIntegrated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsIntegrated_Nvidia_NeverIntegrated_EvenWithSharedMemory()
+    {
+        // NVML path doesn't set SharedMemoryBytes, but even if DXGI did, NVIDIA is never integrated.
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Nvidia,
+            TotalMemoryBytes = 1 * GB,
+            SharedMemoryBytes = 16 * GB
+        };
+        gpu.IsIntegrated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsIntegrated_NoSharedMemory_False()
+    {
+        var gpu = new GpuInfo { Vendor = GpuVendor.Intel, TotalMemoryBytes = 128 * MB };
+        gpu.IsIntegrated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsIntegrated_AmdApu_TinyDedicatedPlusShared_True()
+    {
+        var gpu = new GpuInfo
+        {
+            Vendor = GpuVendor.Amd,
+            DeviceName = "AMD Radeon(TM) Graphics",
+            TotalMemoryBytes = 256 * MB,
+            SharedMemoryBytes = 16 * GB
+        };
+        gpu.IsIntegrated.Should().BeTrue();
     }
 
     [Fact]

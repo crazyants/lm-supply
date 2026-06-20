@@ -63,11 +63,15 @@ await foreach (var token in generator.GenerateAsync("Write a short story about a
 
 | Platform | Backend | Model |
 |----------|---------|-------|
-| NVIDIA GPU (any OS) | GGUF (llama.cpp CUDA) | Gemma 4 via `gguf:auto` (VRAM-aware) |
-| Apple Silicon | GGUF (llama.cpp Metal) | Gemma 4 via `gguf:auto` |
-| CPU-only (any OS) | GGUF (llama.cpp CPU) | Gemma 4 via `gguf:auto` |
-| Linux + any GPU | GGUF (llama.cpp) | Gemma 4 via `gguf:auto` |
+| NVIDIA GPU (any OS) | GGUF (llama.cpp CUDA) | Qwen3 via `gguf:auto` (VRAM-aware) |
+| Apple Silicon | GGUF (llama.cpp Metal) | Qwen3 via `gguf:auto` |
+| CPU-only / integrated GPU (any OS) | GGUF (llama.cpp CPU) | Qwen3 via `gguf:auto` (RAM-aware) |
+| Linux + discrete GPU | GGUF (llama.cpp) | Qwen3 via `gguf:auto` |
 | Windows + AMD/Intel GPU | ONNX (DirectML) | Phi-4 Mini (FC-capable, MIT) |
+
+`gguf:auto` selects the largest Qwen3 model (`qwen3-fast/default/balanced/quality` pool) that fits the
+VRAM budget, or — when VRAM is insufficient — the largest that fits the system RAM budget (CPU). On an
+integrated GPU the llama.cpp backend is CPU (see [llama.md](llama.md#backend-selection)).
 
 ### Explicit model selection
 

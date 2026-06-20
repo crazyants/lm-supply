@@ -626,7 +626,8 @@ internal static class DxgiDetector
                     {
                         Vendor = vendor,
                         DeviceName = desc.Value.Description,
-                        TotalMemoryBytes = (long)desc.Value.DedicatedVideoMemory
+                        TotalMemoryBytes = (long)desc.Value.DedicatedVideoMemory,
+                        SharedMemoryBytes = (long)desc.Value.SharedSystemMemory
                     });
                 }
             }
@@ -655,7 +656,8 @@ internal static class DxgiDetector
             {
                 Description = nativeDesc.Description,
                 VendorId = nativeDesc.VendorId,
-                DedicatedVideoMemory = nativeDesc.DedicatedVideoMemory
+                DedicatedVideoMemory = nativeDesc.DedicatedVideoMemory,
+                SharedSystemMemory = nativeDesc.SharedSystemMemory
             };
         }
         finally
@@ -713,5 +715,6 @@ internal static class DxgiDetector
         public string Description { get; init; }
         public uint VendorId { get; init; }
         public nuint DedicatedVideoMemory { get; init; }
+        public nuint SharedSystemMemory { get; init; }
     }
 }

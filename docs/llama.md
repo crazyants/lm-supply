@@ -52,15 +52,25 @@ llama-server operates in different modes depending on the use case:
 
 ## Backend Selection
 
-The runtime automatically detects your hardware and selects the best backend:
+Under `ExecutionProvider.Auto` the backend is chosen by `LlamaBackendSelector` (one shared
+implementation used by the generator, embedder, and reranker). Vendor decides the GPU backend:
 
 ```
-macOS ARM64:  Metal → CPU
-NVIDIA GPU:   CUDA 13 → CUDA 12 → Vulkan → CPU
-AMD GPU:      Hip → Vulkan → CPU
-Intel GPU:    Vulkan → CPU
-No GPU:       CPU
+macOS (Apple):       Metal
+NVIDIA GPU:          CUDA 12
+AMD GPU:             Hip (Linux) / Vulkan (Windows)
+Intel GPU:           Vulkan (modern: Iris/Arc/Xe/UHD)  |  CPU (legacy HD Graphics)
+Other DirectML GPU:  Vulkan
+No GPU:              CPU
 ```
+
+**VRAM-budget gate.** A dedicated-VRAM GPU backend is demoted to **CPU** when the VRAM budget is too
+small for any meaningful offload (`< LlamaBackendSelector.MinVramForGpuOffloadBytes`, 2 GB) — this
+avoids downloading/initializing a GPU binary that would offload zero layers. **Integrated GPUs**
+(Intel Iris Xe, AMD APUs — detected via `GpuInfo.IsIntegrated`) are routed to CPU regardless of their
+unreliable reported dedicated-VRAM size. Metal is exempt (Apple unified memory). An explicit GPU pin
+(`Cuda`/`DirectML`/`CoreML`) is honored and never demoted; set `LMSUPPLY_VRAM_BUDGET_MB` to force a
+budget and keep a GPU backend on an integrated/low-VRAM machine.
 
 ## Usage
 

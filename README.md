@@ -274,11 +274,11 @@ GGUF reranker models are auto-detected by `-GGUF` or `_gguf` in repo name.
 
 | Platform | Selected backend | Selected model |
 |----------|------------------|----------------|
-| Windows + NVIDIA | GGUF (llama.cpp CUDA) | Gemma 4 via `gguf:auto` (VRAM-aware) |
+| Windows + NVIDIA | GGUF (llama.cpp CUDA) | Qwen3 via `gguf:auto` (VRAM-aware) |
 | Windows + AMD/Intel GPU | ONNX (DirectML) | Phi-4 Mini (MIT, FC-capable) |
-| Windows / Linux CPU-only | GGUF (llama.cpp CPU) | Gemma 4 via `gguf:auto` (VRAM-aware) |
-| Linux + any GPU | GGUF (llama.cpp; CUDA on NVIDIA, CPU/ROCm on AMD) | Gemma 4 via `gguf:auto` |
-| macOS (Apple Silicon) | GGUF (llama.cpp Metal) | Gemma 4 via `gguf:auto` |
+| Windows / Linux CPU-only / integrated GPU | GGUF (llama.cpp CPU) | Qwen3 via `gguf:auto` (RAM-aware) |
+| Linux + discrete GPU | GGUF (llama.cpp; CUDA on NVIDIA, CPU/ROCm on AMD) | Qwen3 via `gguf:auto` |
+| macOS (Apple Silicon) | GGUF (llama.cpp Metal) | Qwen3 via `gguf:auto` |
 
 > `LoadAsync("default")` and `LoadAsync("auto")` both route through this matrix. For explicit selection, use `gguf:*` aliases, ONNX aliases, or a direct HuggingFace repo ID.
 
@@ -493,6 +493,10 @@ LMSUPPLY_VRAM_BUDGET_MB=8000
 ```
 
 When set to a positive integer, the override is applied **before any safety margin** and feeds into all VRAM-aware decisions: model auto-selection, GGUF quantization variant selection, llama-server GPU layer count, and context length capping. If the override results in 0 GPU layers (full CPU fallback), `LlamaOffloadTraceHelper` emits a `Trace.TraceWarning` with the VRAM figures and the override hint — attach `LMSupplyTraceListener` per the section above to surface it.
+
+### Model auto-selection (VRAM- and RAM-aware)
+
+`gguf:auto` picks the largest registered model that fits the available budget. Selection considers the GPU VRAM budget first; when no model fits VRAM it falls back to the **system RAM budget** (`total RAM − 4 GB reserved`) so a low-VRAM, high-RAM machine runs the largest model that fits RAM on CPU instead of dropping to the smallest. Only if neither budget fits does it fall back to the smallest model. The chosen path is reported by `ModelSelectionResult.Reason` (`Fits` → VRAM, `FitsInSystemRam` → CPU/RAM, `FallbackToSmallest`). Example: an integrated-GPU laptop with 32 GB RAM selects an ~8B+ model on CPU rather than a 2B fallback.
 
 ### Integrated-GPU / low-VRAM auto backend demotion
 

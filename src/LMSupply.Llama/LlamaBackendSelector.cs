@@ -71,6 +71,21 @@ public static class LlamaBackendSelector
         if (!IsDedicatedVramBackend(vendorBackend))
             return vendorBackend;
 
+        var hasBudgetOverride = VramBudget.TryGetEnvOverrideBytes(out _);
+
+        // Integrated-GPU gate (D2): an iGPU's dedicated-VRAM reading is unreliable (memory is carved
+        // from shared system RAM), so do not trust it to keep a GPU backend. Prefer CPU unless the
+        // user forces a budget via LMSUPPLY_VRAM_BUDGET_MB. This closes the gap where a BIOS that
+        // pre-allocates a large (e.g. 4GB) iGPU aperture would otherwise pass the VRAM gate below.
+        if (gpu.IsIntegrated && !hasBudgetOverride)
+        {
+            Trace.TraceInformation(
+                $"[LlamaBackendSelector] Auto: integrated GPU '{gpu.DeviceName}' -> CPU " +
+                $"(shared-memory adapter; dedicated-VRAM reading unreliable). " +
+                $"Set LMSUPPLY_VRAM_BUDGET_MB to force a GPU budget.");
+            return LlamaServerBackend.Cpu;
+        }
+
         // VRAM-budget gate (D1): a dedicated-VRAM backend whose budget is too small for any
         // meaningful offload is worse than CPU — it pays GPU init cost for zero accelerated layers.
         // VramBudget honors the LMSUPPLY_VRAM_BUDGET_MB override, so a user who knows their iGPU

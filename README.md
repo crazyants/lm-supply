@@ -494,6 +494,13 @@ LMSUPPLY_VRAM_BUDGET_MB=8000
 
 When set to a positive integer, the override is applied **before any safety margin** and feeds into all VRAM-aware decisions: model auto-selection, GGUF quantization variant selection, llama-server GPU layer count, and context length capping. If the override results in 0 GPU layers (full CPU fallback), `LlamaOffloadTraceHelper` emits a `Trace.TraceWarning` with the VRAM figures and the override hint — attach `LMSupplyTraceListener` per the section above to surface it.
 
+### Unusable-context CPU fallback (GGUF generator)
+
+On a low-VRAM box the llama-server context can be clamped down to the 512-token floor — too small to be usable, which downstream consumers reject (chat bricks). How the generator handles this depends on `GeneratorOptions.Provider`:
+
+- **`ExecutionProvider.Auto` (default)** — Auto promises a *working* provider, so when the GPU backend can only offer the floored context it **transparently falls back to CPU** (RAM-bound, no VRAM clamp), re-acquiring the CPU `llama-server` binary and keeping the full requested context. The switch emits a `Trace.TraceWarning` and is visible via `GetModelInfo()` (`IsGpuActive == false`). This matches the embedder's existing CUDA→DirectML→CPU fallback chain.
+- **Explicit GPU pin (`Cuda` / `DirectML` / `CoreML`)** — no silent provider swap: the load **fails fast** with an `InvalidOperationException` naming the floored context and VRAM cause, so the unusable configuration surfaces honestly instead of bricking later. Pin `ExecutionProvider.Cpu` or free VRAM to proceed.
+
 ---
 
 ## Thread Safety & Batch Processing

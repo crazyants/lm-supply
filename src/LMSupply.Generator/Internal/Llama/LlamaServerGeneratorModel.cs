@@ -205,11 +205,49 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             }
         }
 
-        // Auto-cap context length based on remaining VRAM after model load
+        // Auto-cap context length based on remaining VRAM after model load.
+        // When the GPU can only offer the unusable floor (n_ctx clamped to 512 below request),
+        // Auto recovers by falling back to CPU (RAM-bound, no VRAM clamp); an explicit GPU pin
+        // fails fast instead of silently loading an unusable 512-token context.
         if (backend != LlamaServerBackend.Cpu)
         {
             var safeContext = EstimateSafeContextLength(modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1, ggufMetadata);
-            if (safeContext < contextLength)
+            var action = DecideFlooredContextAction(options.Provider, backend, safeContext, contextLength);
+
+            if (action == FlooredContextAction.FailFast)
+            {
+                throw new InvalidOperationException(
+                    $"[LlamaServerGeneratorModel] GPU backend '{backend}' can only provide a {safeContext}-token context " +
+                    $"(requested {contextLength}) — VRAM is insufficient for a usable context. " +
+                    $"Pin ExecutionProvider.Cpu or free VRAM.");
+            }
+
+            if (action == FlooredContextAction.FallBackToCpu)
+            {
+                Trace.TraceWarning(
+                    $"[LlamaServerGeneratorModel] Auto provider: GPU backend '{backend}' yields only {safeContext}-token context " +
+                    $"(requested {contextLength}); falling back to CPU for a usable RAM-bound context.");
+
+                // Re-acquire the CPU server binary and switch the backend. CPU is RAM-bound, so the
+                // full requested context is kept (EstimateSafeContextLength returns it for GpuLayerCount=0).
+                var cpuResult = await updateService.GetServerPathAsync(LlamaServerBackend.Cpu, progress, cancellationToken);
+                if (cpuResult.Success)
+                {
+                    serverPath = cpuResult.ServerPath;
+                    backend = LlamaServerBackend.Cpu;
+                    serverVersion = cpuResult.NewVersion ?? cpuResult.PreviousVersion ?? serverVersion;
+                    llamaOpts = CloneLlamaOptionsForCpuFallback(llamaOpts);
+                }
+                else
+                {
+                    // CPU binary unavailable — degrade to the floored context rather than fail the load.
+                    Trace.TraceWarning(
+                        $"[LlamaServerGeneratorModel] CPU fallback unavailable ({cpuResult.Error}); " +
+                        $"using floored {safeContext}-token context.");
+                    contextLength = safeContext;
+                }
+            }
+            else if (safeContext < contextLength)
             {
                 const double mb = 1024.0 * 1024.0;
                 var gpu = Hardware.HardwareProfile.Current.GpuInfo;
@@ -1062,10 +1100,87 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             return requestedContext;
 
         var safeContext = (int)(remainingVram / kvBytesPerToken);
-        safeContext = Math.Max(512, safeContext); // minimum 512 tokens
+        safeContext = Math.Max(UnusableContextFloorTokens, safeContext); // minimum 512 tokens
 
         return Math.Min(requestedContext, safeContext);
     }
+
+    /// <summary>
+    /// The context-length floor (tokens) that <see cref="EstimateSafeContextLength"/> never goes below.
+    /// A safe-context estimate at or below this floor that is also below the requested size means the
+    /// GPU backend cannot offer a usable context (VRAM exhausted) — the brick threshold consumers reject.
+    /// </summary>
+    internal const int UnusableContextFloorTokens = 512;
+
+    /// <summary>What to do when a GPU context estimate is clamped to an unusable floor.</summary>
+    internal enum FlooredContextAction
+    {
+        /// <summary>Context is usable (or already CPU) — load as-is.</summary>
+        Proceed,
+        /// <summary>Provider was Auto: transparently fall back to CPU (RAM-bound, no VRAM clamp).</summary>
+        FallBackToCpu,
+        /// <summary>Provider was an explicit GPU pin: surface an error instead of silently loading 512.</summary>
+        FailFast
+    }
+
+    /// <summary>
+    /// Decides how to recover when the VRAM-aware context estimate is floored to an unusable value.
+    /// Pure function (no HW access) so the policy is unit-testable by passing a low <paramref name="safeContext"/>.
+    /// </summary>
+    /// <param name="requestedProvider">The provider the caller requested (<see cref="ExecutionProvider.Auto"/> by default).</param>
+    /// <param name="backend">The GPU backend that was actually selected.</param>
+    /// <param name="safeContext">Result of <see cref="EstimateSafeContextLength"/>.</param>
+    /// <param name="requestedContext">The context length the caller asked for.</param>
+    internal static FlooredContextAction DecideFlooredContextAction(
+        ExecutionProvider requestedProvider,
+        LlamaServerBackend backend,
+        int safeContext,
+        int requestedContext)
+    {
+        // Floored == GPU backend offered only the unusable floor, below what was requested.
+        var floored = backend != LlamaServerBackend.Cpu
+            && safeContext <= UnusableContextFloorTokens
+            && safeContext < requestedContext;
+        if (!floored)
+            return FlooredContextAction.Proceed;
+
+        // Auto promised a *working* provider — recover to CPU. An explicit GPU pin must fail honestly.
+        return requestedProvider == ExecutionProvider.Auto
+            ? FlooredContextAction.FallBackToCpu
+            : FlooredContextAction.FailFast;
+    }
+
+    /// <summary>
+    /// Copies <paramref name="src"/> with GPU offload disabled (CPU-only). Used when Auto falls back
+    /// to CPU after a floored GPU context — does not mutate the caller-supplied options object.
+    /// </summary>
+    private static LlamaOptions CloneLlamaOptionsForCpuFallback(LlamaOptions src) => new()
+    {
+        GpuLayerCount = 0,        // CPU only
+        GpuOffloadRatio = null,   // GpuOffloadRatio would otherwise override GpuLayerCount
+        BatchSize = src.BatchSize,
+        UBatchSize = src.UBatchSize,
+        RopeFrequencyBase = src.RopeFrequencyBase,
+        RopeFrequencyScale = src.RopeFrequencyScale,
+        FlashAttention = src.FlashAttention,
+        UseMemoryMap = src.UseMemoryMap,
+        UseMemoryLock = src.UseMemoryLock,
+        MainGpu = src.MainGpu,
+        Threads = src.Threads,
+        TypeK = src.TypeK,
+        TypeV = src.TypeV,
+        SpeculativeDecoding = src.SpeculativeDecoding,
+        DraftModelPath = src.DraftModelPath,
+        RopeScaling = src.RopeScaling,
+        YarnOriginalContext = src.YarnOriginalContext,
+        YarnExtensionFactor = src.YarnExtensionFactor,
+        YarnAttentionFactor = src.YarnAttentionFactor,
+        YarnBetaFast = src.YarnBetaFast,
+        YarnBetaSlow = src.YarnBetaSlow,
+        MultimodalProjector = src.MultimodalProjector,
+        LoraPath = src.LoraPath,
+        LoraScale = src.LoraScale,
+    };
 
     /// <summary>
     /// Creates a copy of a LlamaServerConfig with a different GpuLayers value.

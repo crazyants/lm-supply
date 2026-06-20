@@ -101,7 +101,8 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             Phase = DownloadPhase.Downloading
         });
 
-        var preferredBackend = MapProviderToBackend(options.Provider);
+        var preferredBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(
+            options.Provider, Hardware.HardwareProfile.Current.GpuInfo);
         var updateService = LlamaServerUpdateService.Instance;
         var updateResult = await updateService.GetServerPathAsync(
             preferredBackend,
@@ -1023,80 +1024,6 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         RopeScalingMode.LongRoPE => "longrope",
         _                        => null  // Default = passthrough
     };
-
-    private static LlamaServerBackend MapProviderToBackend(ExecutionProvider provider)
-    {
-        // Explicit provider selection
-        if (provider != ExecutionProvider.Auto)
-        {
-            return provider switch
-            {
-                ExecutionProvider.Cpu => LlamaServerBackend.Cpu,
-                ExecutionProvider.Cuda => LlamaServerBackend.Cuda12,
-                ExecutionProvider.DirectML => LlamaServerBackend.Vulkan,
-                ExecutionProvider.CoreML => LlamaServerBackend.Metal,
-                _ => LlamaServerBackend.Cpu
-            };
-        }
-
-        // Auto: Detect optimal backend based on actual GPU
-        var gpuInfo = Hardware.HardwareProfile.Current.GpuInfo;
-
-        return gpuInfo.Vendor switch
-        {
-            // NVIDIA: Prefer CUDA for best performance
-            Runtime.GpuVendor.Nvidia => LlamaServerBackend.Cuda12,
-
-            // AMD: Vulkan on Windows, ROCm (Hip) on Linux
-            Runtime.GpuVendor.Amd => OperatingSystem.IsLinux()
-                ? LlamaServerBackend.Hip
-                : LlamaServerBackend.Vulkan,
-
-            // Intel: Vulkan for modern iGPUs (Iris, Arc), CPU for legacy (HD Graphics)
-            // Note: Intel iGPUs use shared memory, so TotalMemoryBytes is not reliable
-            Runtime.GpuVendor.Intel => IsModernIntelGpu(gpuInfo.DeviceName)
-                ? LlamaServerBackend.Vulkan
-                : LlamaServerBackend.Cpu,
-
-            // Apple: Metal
-            Runtime.GpuVendor.Apple => LlamaServerBackend.Metal,
-
-            // Unknown but has DirectML support: use Vulkan
-            _ when gpuInfo.DirectMLSupported => LlamaServerBackend.Vulkan,
-
-            // Fallback to CPU
-            _ => LlamaServerBackend.Cpu
-        };
-    }
-
-    /// <summary>
-    /// Checks if the Intel GPU is modern enough to use Vulkan acceleration.
-    /// Modern: Iris, Arc, UHD 600+ series
-    /// Legacy: HD Graphics 4000 and older
-    /// </summary>
-    private static bool IsModernIntelGpu(string? deviceName)
-    {
-        if (string.IsNullOrEmpty(deviceName))
-            return false;
-
-        var name = deviceName.ToUpperInvariant();
-
-        // Modern Intel GPUs that work well with Vulkan
-        if (name.Contains("IRIS") || name.Contains("ARC"))
-            return true;
-
-        // UHD Graphics 600 series and newer (Gen 9.5+)
-        if (name.Contains("UHD"))
-            return true;
-
-        // Intel Xe Graphics
-        if (name.Contains(" XE"))
-            return true;
-
-        // Legacy HD Graphics - fall back to CPU
-        // HD Graphics 4000, 5000, 6000 are too old for good Vulkan performance
-        return false;
-    }
 
     /// <summary>
     /// Estimates the maximum safe context length based on VRAM remaining after model weights.

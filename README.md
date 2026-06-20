@@ -494,6 +494,10 @@ LMSUPPLY_VRAM_BUDGET_MB=8000
 
 When set to a positive integer, the override is applied **before any safety margin** and feeds into all VRAM-aware decisions: model auto-selection, GGUF quantization variant selection, llama-server GPU layer count, and context length capping. If the override results in 0 GPU layers (full CPU fallback), `LlamaOffloadTraceHelper` emits a `Trace.TraceWarning` with the VRAM figures and the override hint — attach `LMSupplyTraceListener` per the section above to surface it.
 
+### Integrated-GPU / low-VRAM auto backend demotion
+
+Under `ExecutionProvider.Auto` the llama-server backend is chosen by `LlamaBackendSelector` (shared by the generator, embedder, and reranker, so all three agree). Vendor decides the GPU backend (NVIDIA→CUDA, Apple→Metal, AMD→ROCm/Vulkan, modern Intel iGPU→Vulkan), but a **dedicated-VRAM backend is demoted to CPU when the VRAM budget is below `LlamaBackendSelector.MinVramForGpuOffloadBytes` (2 GB)** — at that point zero model layers would offload, so spinning up a GPU `llama-server` binary only pays initialization cost for no acceleration. This is the common case on integrated GPUs (e.g. Intel Iris Xe, where DXGI reports ~128 MB of dedicated VRAM for a shared-memory adapter): Auto now picks CPU directly instead of downloading/initializing Vulkan for a 0-layer offload. Metal is exempt (Apple Silicon uses unified memory). Set `LMSUPPLY_VRAM_BUDGET_MB` to override the budget and keep the GPU backend; an explicit GPU pin (`Cuda`/`DirectML`/`CoreML`) is never demoted.
+
 ### Unusable-context CPU fallback (GGUF generator)
 
 On a low-VRAM box the llama-server context can be clamped down to the 512-token floor — too small to be usable, which downstream consumers reject (chat bricks). How the generator handles this depends on `GeneratorOptions.Provider`:

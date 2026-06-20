@@ -48,7 +48,8 @@ internal sealed class LlamaServerEmbeddingModel : IEmbeddingModel
             Phase = DownloadPhase.Downloading
         });
 
-        var preferredBackend = MapProviderToBackend(options.Provider);
+        var preferredBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(
+            options.Provider, Hardware.HardwareProfile.Current.GpuInfo);
         var updateService = LlamaServerUpdateService.Instance;
         var updateResult = await updateService.GetServerPathAsync(
             preferredBackend,
@@ -257,35 +258,6 @@ internal sealed class LlamaServerEmbeddingModel : IEmbeddingModel
         DoLowerCase = _options.DoLowerCase,
         Description = $"GGUF embedding model via llama-server-{_serverLease.Backend}"
     };
-
-    private static LlamaServerBackend MapProviderToBackend(ExecutionProvider provider)
-    {
-        return provider switch
-        {
-            ExecutionProvider.Cpu => LlamaServerBackend.Cpu,
-            ExecutionProvider.Cuda => LlamaServerBackend.Cuda12,
-            ExecutionProvider.DirectML => LlamaServerBackend.Vulkan,
-            ExecutionProvider.CoreML => LlamaServerBackend.Metal,
-            ExecutionProvider.Auto => GetAutoBackend(),
-            _ => LlamaServerBackend.Cpu
-        };
-    }
-
-    private static LlamaServerBackend GetAutoBackend()
-    {
-        var gpuInfo = Hardware.HardwareProfile.Current.GpuInfo;
-
-        return gpuInfo.Vendor switch
-        {
-            Runtime.GpuVendor.Nvidia => LlamaServerBackend.Cuda12,
-            Runtime.GpuVendor.Amd => OperatingSystem.IsLinux()
-                ? LlamaServerBackend.Hip
-                : LlamaServerBackend.Vulkan,
-            Runtime.GpuVendor.Apple => LlamaServerBackend.Metal,
-            _ when gpuInfo.DirectMLSupported => LlamaServerBackend.Vulkan,
-            _ => LlamaServerBackend.Cpu
-        };
-    }
 
     /// <summary>
     /// Normalizes a vector to unit length (L2 normalization).

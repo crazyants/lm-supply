@@ -134,10 +134,27 @@ public sealed class HardwareProfile
     }
 
     /// <summary>
-    /// Gets total available system memory.
+    /// Environment variable that overrides detected system RAM with an absolute value in megabytes.
+    /// When set to a positive integer, that value is used for all RAM-aware decisions (CPU model
+    /// auto-selection and quantization downscale). Use it to match a cgroup/container memory limit
+    /// or to simulate a low-spec machine. Mirrors <see cref="VramBudget.BudgetOverrideEnvVar"/>.
+    /// </summary>
+    public const string SystemRamOverrideEnvVar = "LMSUPPLY_SYSTEM_RAM_MB";
+
+    /// <summary>
+    /// Gets total available system memory, honoring <see cref="SystemRamOverrideEnvVar"/>.
     /// </summary>
     private static long GetSystemMemoryBytes()
     {
+        var raw = Environment.GetEnvironmentVariable(SystemRamOverrideEnvVar);
+        if (!string.IsNullOrWhiteSpace(raw)
+            && long.TryParse(raw.Trim(), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var mb)
+            && mb > 0)
+        {
+            return mb * 1024L * 1024L;
+        }
+
         try
         {
             return (long)GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;

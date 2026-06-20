@@ -148,12 +148,21 @@ public sealed class GgufModelDownloader : IDisposable
         CancellationToken cancellationToken)
     {
         var profile = HardwareProfile.Current;
-        var registryQuant = ExtractQuantization(modelInfo.DefaultFile);
+        var cpuBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(provider, profile.GpuInfo)
+            == global::LMSupply.Llama.Server.LlamaServerBackend.Cpu;
+        var budget = BuildSelectionBudget(
+            cpuBackend, profile.GpuInfo, profile.SystemMemoryBytes,
+            GgufModelRegistry.DefaultBudgetContextLength, out var vramOnly);
 
-        // Prefer a cached file matching the registry quant — avoids a network call on re-runs.
-        var cached = TrySelectFromLocalCache(modelInfo.RepoId, registryQuant);
-        if (cached != null)
-            return cached;
+        // Offline-first, but budget-aware: only reuse a cached quant if it actually fits the budget.
+        // (A cached default that no longer fits must not short-circuit the downscale.)
+        var cachedGroups = ListCachedGroups(modelInfo.RepoId);
+        if (cachedGroups.Count > 0)
+        {
+            var cachedDecision = DecideRegistryFile(modelInfo, cachedGroups, budget, vramOnly);
+            if (cachedDecision.Reason is RegistryFileReason.DefaultFits or RegistryFileReason.Downscaled)
+                return cachedDecision.FileName;
+        }
 
         IReadOnlyList<GgufFileGroup> groups;
         try
@@ -167,12 +176,6 @@ public sealed class GgufModelDownloader : IDisposable
                 $"using registry default '{modelInfo.DefaultFile}'.");
             return modelInfo.DefaultFile;
         }
-
-        var cpuBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(provider, profile.GpuInfo)
-            == global::LMSupply.Llama.Server.LlamaServerBackend.Cpu;
-        var budget = BuildSelectionBudget(
-            cpuBackend, profile.GpuInfo, profile.SystemMemoryBytes,
-            GgufModelRegistry.DefaultBudgetContextLength, out var vramOnly);
 
         var decision = DecideRegistryFile(modelInfo, groups, budget, vramOnly);
         switch (decision.Reason)
@@ -414,6 +417,25 @@ public sealed class GgufModelDownloader : IDisposable
             GgufModelRegistry.DefaultBudgetContextLength, out var vramOnly);
         var selected = GgufFileSelector.Select(groups, memory, preferredQuantization, vramOnly);
         return selected.PrimaryFileName;
+    }
+
+    /// <summary>
+    /// Enumerates GGUF quantization variants already present in the local cache for a repo, grouped
+    /// (split-file aware) with their on-disk sizes. Returns an empty list when nothing is cached.
+    /// Used to reuse a cached quant that fits the budget without a network call.
+    /// </summary>
+    private List<GgufFileGroup> ListCachedGroups(string repoId)
+    {
+        var cacheDir = Path.GetDirectoryName(GetCachedPath(repoId, "placeholder.gguf"));
+        if (cacheDir == null || !Directory.Exists(cacheDir))
+            return [];
+
+        var rawFiles = Directory.EnumerateFiles(cacheDir, "*.gguf", SearchOption.TopDirectoryOnly)
+            .Select(p => new GgufRawFile(Path.GetFileName(p), new FileInfo(p).Length))
+            .Where(f => !IsMmprojFile(f.FileName))
+            .ToList();
+
+        return rawFiles.Count == 0 ? [] : GgufFileGroup.GroupFiles(rawFiles).ToList();
     }
 
     /// <summary>

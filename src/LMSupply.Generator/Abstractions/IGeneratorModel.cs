@@ -127,6 +127,32 @@ public readonly record struct GeneratorModelInfo(
     public long? EstimatedRamBytes { get; init; }
 
     /// <summary>
+    /// VRAM budget used for the context estimate — <c>VramBudget.GetAvailableBytes</c> result
+    /// (after the <c>LMSUPPLY_VRAM_BUDGET_MB</c> override + safety margin), in bytes.
+    /// Null on the CPU path. Distinguishes an accurately-small VRAM budget from an under-reported one.
+    /// </summary>
+    public long? VramBudgetBytes { get; init; }
+
+    /// <summary>
+    /// GPU-reported free VRAM at load time, in bytes. Null on the CPU path.
+    /// </summary>
+    public long? VramFreeBytes { get; init; }
+
+    /// <summary>
+    /// GPU-reported total VRAM at load time, in bytes. Null on the CPU path.
+    /// </summary>
+    public long? VramTotalBytes { get; init; }
+
+    /// <summary>
+    /// True when the VRAM-derived safe-context estimate fell below the 512-token usable floor
+    /// (VRAM insufficient for a usable context) — a discrete signal, distinct from a legitimately
+    /// small 512-token request. Consumers should prefer this over inferring brick state from a
+    /// magic-number 512 in the logs. Set even when Auto subsequently fell back to CPU (the GPU
+    /// estimate was floored, which is what triggered the fallback).
+    /// </summary>
+    public bool ContextFlooredByVram { get; init; }
+
+    /// <summary>
     /// Gets model-specific known issues from the registry (e.g., "tool-use-unreliable-q4").
     /// Empty when no issues are registered or the model was loaded via an explicit path.
     /// </summary>

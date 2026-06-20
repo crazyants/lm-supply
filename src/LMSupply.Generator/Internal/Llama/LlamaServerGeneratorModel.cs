@@ -30,6 +30,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     private readonly int? _totalLayers;
     private readonly long? _estimatedVramBytes;
     private readonly long? _estimatedRamBytes;
+    private readonly long? _vramBudgetBytes;
+    private readonly long? _vramFreeBytes;
+    private readonly long? _vramTotalBytes;
+    private readonly bool _contextFlooredByVram;
 
     public void SetDiagnostics(SelectionDiagnostics diagnostics) => _diagnostics = diagnostics;
     private bool _disposed;
@@ -47,7 +51,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         int? gpuLayers = null,
         int? totalLayers = null,
         long? estimatedVramBytes = null,
-        long? estimatedRamBytes = null)
+        long? estimatedRamBytes = null,
+        long? vramBudgetBytes = null,
+        long? vramFreeBytes = null,
+        long? vramTotalBytes = null,
+        bool contextFlooredByVram = false)
     {
         ModelId = modelId;
         _modelPath = modelPath;
@@ -62,6 +70,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         _totalLayers = totalLayers;
         _estimatedVramBytes = estimatedVramBytes;
         _estimatedRamBytes = estimatedRamBytes;
+        _vramBudgetBytes = vramBudgetBytes;
+        _vramFreeBytes = vramFreeBytes;
+        _vramTotalBytes = vramTotalBytes;
+        _contextFlooredByVram = contextFlooredByVram;
 
         // Initialize concurrency limiter
         _concurrencyLimiter = new SemaphoreSlim(
@@ -149,6 +161,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         long? capturedVramBytes = null;
         long? capturedRamBytes = null;
 
+        // VRAM-budget telemetry — exposed via GetModelInfo() so consumers can classify
+        // "accurately-small VRAM" vs "under-reported budget" without parsing log magic numbers.
+        long? capturedVramBudgetBytes = null;
+        long? capturedVramFreeBytes = null;
+        long? capturedVramTotalBytes = null;
+        bool capturedContextFloored = false;
+
         // Auto-calculate GPU layer count based on actual VRAM budget when using default (-1 = all)
         if (llamaOpts.GpuLayerCount == -1 && backend != LlamaServerBackend.Cpu)
         {
@@ -211,7 +230,17 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         // fails fast instead of silently loading an unusable 512-token context.
         if (backend != LlamaServerBackend.Cpu)
         {
-            var safeContext = EstimateSafeContextLength(modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1, ggufMetadata);
+            var (safeContext, contextFloored) = EstimateSafeContextLengthDetailed(
+                modelPath, contextLength, llamaOpts.GpuLayerCount ?? -1, ggufMetadata);
+
+            // Capture VRAM telemetry before any CPU fallback switches the backend below.
+            capturedContextFloored = contextFloored;
+            var gpuInfo = Hardware.HardwareProfile.Current.GpuInfo;
+            var vramBudget = VramBudget.GetAvailableBytes(gpuInfo);
+            capturedVramBudgetBytes = vramBudget > 0 ? vramBudget : null;
+            capturedVramTotalBytes = gpuInfo.TotalMemoryBytes;
+            capturedVramFreeBytes = gpuInfo.FreeMemoryBytes ?? gpuInfo.TotalMemoryBytes;
+
             var action = DecideFlooredContextAction(options.Provider, backend, safeContext, contextLength);
 
             if (action == FlooredContextAction.FailFast)
@@ -385,7 +414,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             capturedGpuLayers,
             capturedTotalLayers,
             capturedVramBytes,
-            capturedRamBytes);
+            capturedRamBytes,
+            capturedVramBudgetBytes,
+            capturedVramFreeBytes,
+            capturedVramTotalBytes,
+            capturedContextFloored);
 
         // W1: Gemma 4 tool-use risk advisory (llama.cpp #21375 / #21882 not yet merged).
         // Emitted once at load time so operators see the warning before any inference request.
@@ -628,6 +661,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         TotalLayers = _totalLayers,
         EstimatedVramBytes = _estimatedVramBytes,
         EstimatedRamBytes = _estimatedRamBytes,
+        VramBudgetBytes = _vramBudgetBytes,
+        VramFreeBytes = _vramFreeBytes,
+        VramTotalBytes = _vramTotalBytes,
+        ContextFlooredByVram = _contextFlooredByVram,
     };
 
     internal static int? ResolveAdjustedContextLength(int maxContextLength, int effectiveContextLength)
@@ -1072,13 +1109,27 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         int requestedContext,
         int gpuLayerCount,
         GgufMetadata? ggufMetadata = null)
+        => EstimateSafeContextLengthDetailed(modelPath, requestedContext, gpuLayerCount, ggufMetadata).Context;
+
+    /// <summary>
+    /// Same VRAM-aware context estimate as <see cref="EstimateSafeContextLength"/>, but also reports
+    /// whether the estimate was floored — i.e. the raw VRAM-derived value fell below
+    /// <see cref="UnusableContextFloorTokens"/> and was raised to that floor. <c>Floored == true</c>
+    /// means VRAM is insufficient for a usable context (the brick signal), distinct from a
+    /// legitimately small request. Returns <c>Floored == false</c> on the CPU path.
+    /// </summary>
+    internal static (int Context, bool Floored) EstimateSafeContextLengthDetailed(
+        string modelPath,
+        int requestedContext,
+        int gpuLayerCount,
+        GgufMetadata? ggufMetadata = null)
     {
         var profile = Hardware.HardwareProfile.Current;
         // Use VramBudget so context cap honors LMSUPPLY_VRAM_BUDGET_MB override + safety margins.
         var budgetVram = VramBudget.GetAvailableBytes(profile.GpuInfo);
         var availableVram = budgetVram > 0 ? budgetVram : (profile.GpuInfo.EffectiveAvailableBytes ?? 0);
         if (availableVram <= 0 || gpuLayerCount == 0)
-            return requestedContext; // CPU-only, no VRAM constraint
+            return (requestedContext, false); // CPU-only, no VRAM constraint
 
         // MoE models (ExpertCount > 1) require significant additional VRAM for expert activation
         // buffers, routing computation, and compute scratch space. llama.cpp pre-allocates these
@@ -1097,12 +1148,13 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         // KV cache per token ≈ 2(K+V) × layers × hiddenSize × 2(FP16 bytes)
         var kvBytesPerToken = Core.Download.AvailableMemory.EstimateKvCacheBytes(modelFileSize, 1);
         if (kvBytesPerToken <= 0)
-            return requestedContext;
+            return (requestedContext, false);
 
-        var safeContext = (int)(remainingVram / kvBytesPerToken);
-        safeContext = Math.Max(UnusableContextFloorTokens, safeContext); // minimum 512 tokens
+        var rawSafeContext = (int)(remainingVram / kvBytesPerToken);
+        var floored = rawSafeContext < UnusableContextFloorTokens;
+        var safeContext = Math.Max(UnusableContextFloorTokens, rawSafeContext); // minimum 512 tokens
 
-        return Math.Min(requestedContext, safeContext);
+        return (Math.Min(requestedContext, safeContext), floored);
     }
 
     /// <summary>

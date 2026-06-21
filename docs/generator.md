@@ -371,7 +371,7 @@ The registry has two primary tiers: **Gemma 4** (multimodal, Apache 2.0) for exp
 
 KV cache is estimated at the default budget context length (4096 tokens, FP16), see `GgufModelRegistry.DefaultBudgetContextLength`.
 
-Auto-selection pool: `qwen3-fast`, `qwen3-default`, `qwen3-balanced`, `qwen3-quality` (`qwen3-large` is excluded — exceeds 24 GB × 85% budget). Models with `ThinkingEnabledByDefault` generate `<think>...</think>` blocks — pass `FilterReasoningTokens = true` to suppress them.
+Auto-selection pool: `qwen3-fast`, `qwen3-default`, `qwen3-balanced`, `qwen3-quality` (`qwen3-large` is excluded — exceeds 24 GB × 85% budget). Models with `ThinkingEnabledByDefault` generate reasoning before answering. To stop the model from thinking at all, set `Thinking = ThinkingMode.Off` (forwards `enable_thinking=false` to the chat template — no reasoning tokens generated). To let it think but hide the `<think>...</think>` block from the returned text, set `FilterReasoningTokens = true` (reasoning is still generated). `ThinkingMode.Auto` (default) preserves each model's built-in behavior.
 
 | Free VRAM | Budget | Selected Model | Reason |
 |-----------|--------|----------------|--------|
@@ -653,7 +653,7 @@ await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default");  
 
 > **Gemma 4 W1 advisory (v0.34.3+):** When loading any `gguf:gemma4-*` alias, a W1-level warning is emitted via `Trace.TraceWarning` at load time. Upstream llama.cpp PRs #21375 (chat-template/rope) and #21882 (instruction-following) are not yet in a stable release; tool-use with Korean instructional prompts and Q4_K_M quants may produce empty responses. Subscribe to `System.Diagnostics.Trace` listeners to receive this advisory. For production tool-calling workloads, `gguf:qwen2.5-7b` is a reliable alternative until the upstream PRs land.
 
-> **Gemma 4 tool prompt injection:** `Gemma4ChatFormatter` automatically injects tool parameter hints as a system message, working around Gemma 4's tendency to emit empty tool arguments under llama-server's native Jinja template. The fragment content adapts to `GenerationOptions.EnableThinking`: when `false` (default), the full `Required parameters (MUST be provided): name (type)` block is injected; when `true`, only a compact per-tool required-params hint is injected (e.g. `search_knowledge: query (string)`) since the Jinja2 structured schema already covers full definitions, reducing system-prompt pressure on small models.
+> **Gemma 4 tool prompt injection:** `Gemma4ChatFormatter` automatically injects tool parameter hints as a system message, working around Gemma 4's tendency to emit empty tool arguments under llama-server's native Jinja template. The fragment content adapts to `GenerationOptions.Thinking`: when not `ThinkingMode.On` (default `Auto`), the full `Required parameters (MUST be provided): name (type)` block is injected; when `ThinkingMode.On`, only a compact per-tool required-params hint is injected (e.g. `search_knowledge: query (string)`) since the Jinja2 structured schema already covers full definitions, reducing system-prompt pressure on small models.
 
 ### Generation Options
 
@@ -701,7 +701,7 @@ await foreach (var token in model.GenerateChatAsync(messages, GenerationOptions.
 
 ### Gemma 4 Thinking Mode (v0.34+)
 
-Gemma 4 models support an **extended thinking** mode activated via `GenerationOptions.EnableThinking`. Google recommends this for E2B/E4B models when complex function calling is required:
+Gemma 4 models support an **extended thinking** mode activated via `GenerationOptions.Thinking`. Google recommends this for E2B/E4B models when complex function calling is required:
 
 ```csharp
 await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-default");  // Gemma 4 E4B
@@ -712,16 +712,16 @@ var messages = new[]
     ChatMessage.User("Solve this step by step: 17 × 23")
 };
 
-var options = new GenerationOptions { EnableThinking = true };
+var options = new GenerationOptions { Thinking = ThinkingMode.On };
 await foreach (var token in model.GenerateChatAsync(messages, options))
 {
     Console.Write(token);
 }
 ```
 
-When `EnableThinking = true`, LMSupply prepends `<|think|>` to the first system message before sending the request to llama-server. The server (b8994+) separates internal reasoning into a `reasoning_content` field; LMSupply transparently skips those tokens, so the caller only receives the final response.
+When `Thinking = ThinkingMode.On`, LMSupply prepends `<|think|>` to the first system message before sending the request to llama-server. The server (b8994+) separates internal reasoning into a `reasoning_content` field; LMSupply transparently skips those tokens, so the caller only receives the final response.
 
-**Thinking + tool calling:** When `EnableThinking = true` and tools are provided, the Gemma 4 tool prompt fragment (see note above) is automatically reduced to compact required-params hints. This avoids doubling the tool schema (Jinja2 structured schema + text fragment) in the system prompt, which would increase context pressure on small models.
+**Thinking + tool calling:** When `Thinking = ThinkingMode.On` and tools are provided, the Gemma 4 tool prompt fragment (see note above) is automatically reduced to compact required-params hints. This avoids doubling the tool schema (Jinja2 structured schema + text fragment) in the system prompt, which would increase context pressure on small models.
 
 > `Gemma4ChatFormatter.GetThinkingToken()` returns `"<|think|>"` — used by orchestration layers that inject the thinking activation token programmatically.
 

@@ -140,15 +140,15 @@ public sealed class GenerationOptions
     public bool ExtractReasoningTokens { get; set; }
 
     /// <summary>
-    /// Gets or sets whether to activate the model's thinking mode by injecting
-    /// the formatter-supplied thinking token (e.g. <c>&lt;|think|&gt;</c> for Gemma 4)
-    /// at the start of the first system message before sending to the server.
-    /// Recommended for Gemma 4 E2B/E4B when tool calling is required: small models
-    /// benefit from internal reasoning before deciding whether to invoke a tool.
-    /// Has no effect on formatters that do not implement <c>IChatFormatter.GetThinkingToken</c>.
-    /// Defaults to false.
+    /// Controls the model's reasoning ("thinking") behavior on the chat path.
+    /// <see cref="ThinkingMode.Auto"/> (default) keeps the model's built-in behavior — Qwen3 thinks,
+    /// Gemma 4 does not. <see cref="ThinkingMode.On"/> activates thinking (injects the formatter
+    /// thinking token for default-off models like Gemma 4 and requests <c>enable_thinking=true</c>);
+    /// <see cref="ThinkingMode.Off"/> suppresses it (requests <c>enable_thinking=false</c>) so a
+    /// thinking-default-on model (Qwen3) answers directly instead of spending tokens on a reasoning
+    /// block. Honored only on the chat path (the raw completion path has no chat template to drive).
     /// </summary>
-    public bool EnableThinking { get; set; }
+    public ThinkingMode Thinking { get; set; } = ThinkingMode.Auto;
 
     /// <summary>
     /// Tool definitions available for the model to call.

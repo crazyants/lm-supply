@@ -384,7 +384,15 @@ LMSupply detects your hardware and selects models accordingly:
 
 ### GGUF Models (via `gguf:auto`)
 
-`gguf:auto` selects from the **Qwen3 auto-pool** (`qwen3-fast`, `qwen3-default`, `qwen3-balanced`, `qwen3-quality`) based on VRAM. Models with `thinking-enabled-by-default` generate `<think>...</think>` blocks — pass `FilterReasoningTokens = true` to suppress them.
+`gguf:auto` selects from the **Qwen3 auto-pool** (`qwen3-fast`, `qwen3-default`, `qwen3-balanced`, `qwen3-quality`) based on VRAM. Models with `thinking-enabled-by-default` generate reasoning before the answer. Two independent controls:
+
+- **`Thinking = ThinkingMode.Off`** — tells the model not to think at all (forwards `enable_thinking=false` to the chat template), so it answers directly and spends no tokens on reasoning. Best for latency/cost. `ThinkingMode.Auto` (default) keeps the model's own default; `ThinkingMode.On` forces it on.
+- **`FilterReasoningTokens = true`** — lets the model think but strips the `<think>...</think>` block from the returned text (reasoning is still generated). Use when you want the reasoning to happen but not surface.
+
+```csharp
+// Direct answer, no reasoning tokens (chat path):
+var opts = new GenerationOptions { Thinking = ThinkingMode.Off };
+```
 
 | Performance Tier | Free VRAM | Selected Model | Notes |
 |------------------|-----------|----------------|-------|

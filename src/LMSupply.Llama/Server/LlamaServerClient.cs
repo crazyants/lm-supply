@@ -57,24 +57,7 @@ public sealed class LlamaServerClient : IDisposable
     {
         options ??= new ChatCompletionOptions();
 
-        var request = new ChatCompletionRequest
-        {
-            Messages = messages.ToList(),
-            MaxTokens = options.MaxTokens,
-            Temperature = options.Temperature,
-            TopP = options.TopP,
-            TopK = options.TopK > 0 ? options.TopK : null,
-            MinP = options.MinP > 0 ? options.MinP : null,
-            RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
-            FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
-            PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
-            Seed = options.Seed != -1 ? options.Seed : null,
-            Stream = true,
-            Stop = options.StopSequences?.ToList(),
-            Grammar = options.Grammar,
-            JsonSchema = options.JsonSchema,
-            Tools = options.Tools?.ToList()
-        };
+        var request = BuildChatRequest(messages, options, stream: true);
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -139,24 +122,7 @@ public sealed class LlamaServerClient : IDisposable
     {
         options ??= new ChatCompletionOptions();
 
-        var request = new ChatCompletionRequest
-        {
-            Messages = messages.ToList(),
-            MaxTokens = options.MaxTokens,
-            Temperature = options.Temperature,
-            TopP = options.TopP,
-            TopK = options.TopK > 0 ? options.TopK : null,
-            MinP = options.MinP > 0 ? options.MinP : null,
-            RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
-            FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
-            PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
-            Seed = options.Seed != -1 ? options.Seed : null,
-            Stream = true,
-            Stop = options.StopSequences?.ToList(),
-            Grammar = options.Grammar,
-            JsonSchema = options.JsonSchema,
-            Tools = options.Tools?.ToList()
-        };
+        var request = BuildChatRequest(messages, options, stream: true);
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -248,24 +214,7 @@ public sealed class LlamaServerClient : IDisposable
     {
         options ??= new ChatCompletionOptions();
 
-        var request = new ChatCompletionRequest
-        {
-            Messages = messages.ToList(),
-            MaxTokens = options.MaxTokens,
-            Temperature = options.Temperature,
-            TopP = options.TopP,
-            TopK = options.TopK > 0 ? options.TopK : null,
-            MinP = options.MinP > 0 ? options.MinP : null,
-            RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
-            FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
-            PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
-            Seed = options.Seed != -1 ? options.Seed : null,
-            Stream = false,
-            Stop = options.StopSequences?.ToList(),
-            Grammar = options.Grammar,
-            JsonSchema = options.JsonSchema,
-            Tools = options.Tools?.ToList()
-        };
+        var request = BuildChatRequest(messages, options, stream: false);
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -539,6 +488,40 @@ public sealed class LlamaServerClient : IDisposable
             _httpClient.Dispose();
         }
     }
+
+    /// <summary>
+    /// Builds the chat completion request body shared by all three chat paths (streaming,
+    /// structured-streaming, non-streaming with tools), so thinking control and every other option
+    /// map identically. Forwards <c>enable_thinking</c> via <c>chat_template_kwargs</c> when
+    /// <see cref="ChatCompletionOptions.EnableThinking"/> is set; omits it (model default) when null.
+    /// </summary>
+    internal static ChatCompletionRequest BuildChatRequest(
+        IEnumerable<ChatCompletionMessage> messages,
+        ChatCompletionOptions options,
+        bool stream)
+    {
+        return new ChatCompletionRequest
+        {
+            Messages = messages.ToList(),
+            MaxTokens = options.MaxTokens,
+            Temperature = options.Temperature,
+            TopP = options.TopP,
+            TopK = options.TopK > 0 ? options.TopK : null,
+            MinP = options.MinP > 0 ? options.MinP : null,
+            RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
+            FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
+            PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
+            Seed = options.Seed != -1 ? options.Seed : null,
+            Stream = stream,
+            Stop = options.StopSequences?.ToList(),
+            Grammar = options.Grammar,
+            JsonSchema = options.JsonSchema,
+            Tools = options.Tools?.ToList(),
+            ChatTemplateKwargs = options.EnableThinking is { } enableThinking
+                ? new Dictionary<string, object> { ["enable_thinking"] = enableThinking }
+                : null
+        };
+    }
 }
 
 #region Request/Response Models
@@ -598,6 +581,14 @@ public sealed class ChatCompletionOptions
     /// When provided, the model may respond with tool_calls.
     /// </summary>
     public IReadOnlyList<ToolDefinition>? Tools { get; init; }
+
+    /// <summary>
+    /// Thinking control forwarded to the GGUF chat template via <c>chat_template_kwargs.enable_thinking</c>.
+    /// Null = omit (model template default: Qwen3 thinks, Gemma does not). False = suppress reasoning
+    /// (direct answer); True = force reasoning on. Only applies to the chat path (/v1/chat/completions),
+    /// which is where the template runs — the raw /completion path has no template to control.
+    /// </summary>
+    public bool? EnableThinking { get; init; }
 }
 
 /// <summary>
@@ -663,6 +654,14 @@ internal sealed class ChatCompletionRequest
     /// Reduces first token latency for prompts with common prefixes.
     /// </summary>
     public bool CachePrompt { get; set; } = true;
+
+    /// <summary>
+    /// Extra kwargs forwarded to the GGUF chat template by llama-server. Used to pass
+    /// <c>enable_thinking</c> to thinking-aware templates (Qwen3) so a thinking-default-on model can
+    /// be told to emit a direct answer instead of a reasoning block. Null = omit (model template
+    /// default applies). Unknown to older llama-server builds, which ignore unrecognized fields.
+    /// </summary>
+    public Dictionary<string, object>? ChatTemplateKwargs { get; set; }
 }
 
 internal sealed class CompletionRequest

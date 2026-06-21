@@ -92,8 +92,8 @@ public interface IChatFormatter
     /// </summary>
     /// <remarks>
     /// Gemma 4 returns <c>"&lt;|think|&gt;"</c>. All other formatters return <c>null</c>.
-    /// <see cref="LMSupply.Generator.Models.GenerationOptions.EnableThinking"/> must also
-    /// be <c>true</c> for the token to be injected by the generator.
+    /// <see cref="LMSupply.Generator.Models.GenerationOptions.Thinking"/> must be
+    /// <see cref="LMSupply.Generator.Models.ThinkingMode.On"/> for the token to be injected by the generator.
     /// </remarks>
     string? GetThinkingToken() => null;
 }

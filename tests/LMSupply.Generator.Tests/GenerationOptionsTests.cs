@@ -87,17 +87,17 @@ public class GenerationOptionsTests
     }
 
     [Fact]
-    public void Default_EnableThinking_IsFalse()
+    public void Default_Thinking_IsAuto()
     {
-        GenerationOptions.Default.EnableThinking.Should().BeFalse(
-            because: "thinking mode must be opt-in — enabling by default would change behavior for all existing consumers");
+        GenerationOptions.Default.Thinking.Should().Be(ThinkingMode.Auto,
+            because: "the default must preserve each model's built-in thinking behavior, not force it on or off");
     }
 
     [Fact]
-    public void Gemma4Preset_EnableThinking_IsFalse()
+    public void Gemma4Preset_Thinking_IsAuto()
     {
-        GenerationOptions.Gemma4.EnableThinking.Should().BeFalse(
-            because: "Gemma4 preset controls sampler params only; thinking is an independent opt-in per call site");
+        GenerationOptions.Gemma4.Thinking.Should().Be(ThinkingMode.Auto,
+            because: "Gemma4 preset controls sampler params only; thinking is an independent per-call-site setting");
     }
 
     [Fact]

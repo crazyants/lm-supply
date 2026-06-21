@@ -418,14 +418,26 @@ public sealed class LlamaServerDownloader : IDisposable
     }
 
     /// <summary>
-    /// True if the CUDA runtime (cudart) is already present in <paramref name="versionDir"/>.
+    /// True only if the COMPLETE CUDA runtime (cudart + cublas + cublasLt) is present in
+    /// <paramref name="versionDir"/>. All three are required: a partial state (e.g. the small cudart
+    /// present but the 473 MB cublasLt truncated/missing after an interrupted or concurrent extract)
+    /// must NOT count as present, otherwise the cache is permanently poisoned — ggml-cuda fails to
+    /// load, the server silently runs on CPU, and a re-run never re-provisions. Requiring all three
+    /// makes a partial state self-heal on the next load. Accepts both Windows (cudart64_*.dll) and
+    /// Linux (libcudart.so*) naming so the check is OS-agnostic.
     /// </summary>
-    private static bool CudaRuntimePresent(string versionDir)
+    internal static bool CudaRuntimePresent(string versionDir)
     {
         if (!Directory.Exists(versionDir))
             return false;
-        return Directory.EnumerateFiles(versionDir, "cudart64_*.dll").Any()
-            || Directory.EnumerateFiles(versionDir, "libcudart.so*").Any();
+
+        bool HasFamily(string winGlob, string soGlob)
+            => Directory.EnumerateFiles(versionDir, winGlob).Any()
+            || Directory.EnumerateFiles(versionDir, soGlob).Any();
+
+        return HasFamily("cudart64_*.dll", "libcudart.so*")
+            && HasFamily("cublas64_*.dll", "libcublas.so*")
+            && HasFamily("cublasLt64_*.dll", "libcublasLt.so*");
     }
 
     /// <summary>

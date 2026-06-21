@@ -27,7 +27,7 @@ public static class LocalGenerator
     /// One of:
     /// <list type="bullet">
     ///   <item><c>"default"</c> / <c>"auto"</c> — hardware-aware selection (see remarks).</item>
-    ///   <item>A GGUF alias (<c>"gguf:default"</c>, <c>"gguf:fast"</c>, <c>"gguf:quality"</c>, etc.).</item>
+    ///   <item>A GGUF alias (<c>"gguf:gemma4-default"</c>, <c>"gguf:gemma4-fast"</c>, <c>"gguf:gemma4-quality"</c>, <c>"gguf:auto"</c>, etc.).</item>
     ///   <item>An ONNX alias (<c>"phi-4-mini"</c>, <c>"fast"</c>, <c>"quality"</c>, <c>"phi-3.5-mini"</c>).</item>
     ///   <item>A HuggingFace repo ID (e.g., <c>"microsoft/Phi-4-mini-instruct-onnx"</c>).</item>
     ///   <item>A local file path (GGUF) or directory (ONNX).</item>
@@ -233,7 +233,7 @@ public static class LocalGenerator
         else
         {
             var selection = Internal.Llama.GgufModelRegistry.GetAutoSelection(profile.GpuInfo);
-            // Pass the alias (e.g. "gguf:fast") rather than RepoId so the downstream
+            // Pass the alias (e.g. "gguf:gemma4-fast") rather than RepoId so the downstream
             // loader can re-resolve the registry entry and use its DefaultFile. Passing
             // RepoId would lose the DefaultFile and fall back to GgufFileSelector, which
             // can pick larger variants (e.g. bf16) that fit in VRAM+RAM but blow VRAM.

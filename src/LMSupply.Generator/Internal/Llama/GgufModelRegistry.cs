@@ -18,7 +18,7 @@ public static class GgufModelRegistry
 
         // Fast: Gemma 4 E2B — smallest Gemma 4, fits 4GB iGPU/mobile (~3.1GB VRAM).
         // Q4_K_M is the only tier that fits 4GB VRAM (Q8_0=4.8GB, Q5_K_M=3.2GB w/ no KV margin).
-        // Tool-call schema compliance at Q4_K_M is lower than on larger models — prefer gguf:default
+        // Tool-call schema compliance at Q4_K_M is lower than on larger models — prefer gguf:gemma4-default
         // or above for agentic workloads. Auto-selection picks E2B only when E4B doesn't fit.
         ["gguf:gemma4-fast"] = new GgufModelInfo
         {
@@ -299,7 +299,7 @@ public static class GgufModelRegistry
     /// Resolves an alias to model information.
     /// Supports both "gguf:alias" format and plain "alias" format.
     /// </summary>
-    /// <param name="aliasOrRepoId">The alias (e.g., "gguf:default", "default", "gguf:auto") or full repo ID.</param>
+    /// <param name="aliasOrRepoId">The alias (e.g., "gguf:gemma4-default", "gemma4-default", "gguf:auto") or full repo ID.</param>
     /// <returns>Model information if found, null otherwise. The <see cref="GgufModelInfo.AliasName"/> is populated for registered aliases.</returns>
     public static GgufModelInfo? Resolve(string aliasOrRepoId)
     {
@@ -485,7 +485,7 @@ public static class GgufModelRegistry
 
     /// <summary>
     /// Checks if a string is a known GGUF alias.
-    /// Only matches "gguf:"-prefixed aliases (e.g., "gguf:default", "gguf:fast", "gguf:auto").
+    /// Only matches "gguf:"-prefixed aliases (e.g., "gguf:gemma4-default", "gguf:gemma4-fast", "gguf:auto").
     /// Plain aliases like "default" or "fast" are reserved for ONNX models.
     /// </summary>
     public static bool IsAlias(string value)

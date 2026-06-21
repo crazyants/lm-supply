@@ -42,7 +42,7 @@ public interface IChatFormatter
     /// <returns>A model-friendly textual fragment, or <c>null</c> to skip injection.</returns>
     /// <remarks>
     /// Reference: ecosystem ISSUE Option D-1 (2026-04-30) —
-    /// Gemma 4 E4B at gguf:default emits empty tool args because the native
+    /// Gemma 4 E4B at gguf:gemma4-default emits empty tool args because the native
     /// chat template's raw JSON schema is too dense; a textual marker line
     /// (<c>Required parameters (MUST be provided): &lt;name&gt; (&lt;type&gt;)</c>)
     /// raises first-attempt success.
@@ -81,7 +81,7 @@ public interface IChatFormatter
     /// Filer cycle-701 surfaced that Gemma 4 emits its native
     /// <c>&lt;|tool_call&gt;call:NAME{ARGS_JSON}&lt;tool_call|&gt;</c> wrapper into the
     /// text channel; without this hook the wrapper tokens leak as plain text and
-    /// no tool ever invokes (chat-rag flow 0% success on gguf:default).
+    /// no tool ever invokes (chat-rag flow 0% success on gguf:gemma4-default).
     /// </remarks>
     IToolCallStreamParser? CreateToolCallStreamParser() => null;
 

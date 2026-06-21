@@ -29,7 +29,7 @@ internal static class ModelFormatDetector
             return ShouldPreferOnnx() ? ModelFormat.Onnx : ModelFormat.Gguf;
         }
 
-        // 1. Check if it's a GGUF registry alias (e.g., "gguf:default", "gguf:fast")
+        // 1. Check if it's a GGUF registry alias (e.g., "gguf:gemma4-default", "gguf:gemma4-fast")
         if (GgufModelRegistry.IsAlias(modelIdOrPath))
         {
             return ModelFormat.Gguf;

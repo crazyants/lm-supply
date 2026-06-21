@@ -43,7 +43,15 @@ public class Gemma4EmptyChatProbeTests
     {
         await using var model = await LocalGenerator.LoadAsync(FastModel);
 
-        var options = new GenerationOptions { MaxTokens = 30, Thinking = ThinkingMode.Off };
+        // Temperature=0 (greedy) makes the Contain("Alice") assertion deterministic; the
+        // NotBeNullOrEmpty guard is the actual regression check (the bug was an empty string).
+        var options = new GenerationOptions
+        {
+            MaxTokens = 30,
+            Thinking = ThinkingMode.Off,
+            Temperature = 0f,
+            DoSample = false,
+        };
         var result = await model.GenerateChatCompleteAsync(MultiTurn(), options);
 
         result.Should().NotBeNullOrEmpty(

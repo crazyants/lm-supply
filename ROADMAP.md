@@ -6,7 +6,33 @@
 
 ---
 
-## ✅ Version 0.28.x (Current)
+## ✅ Version 0.34.x (Current)
+
+**Theme**: Environment-aware Model Selection & Thinking Control
+
+### Highlights
+
+- **Qwen3 registry & auto-pool** (0.34.13–25): Qwen3/3.5/3.6 tiers; `gguf:auto` restricted to the `qwen3-*` pool; quantization-aware low-end selection.
+- **VRAM-budget gate** (0.34.23): low-VRAM / integrated GPU demotes the Auto GPU backend to CPU (no GPU layers would fit) instead of paying GPU init for zero offload.
+- **RAM-aware selection + integrated-GPU detection** (0.34.24); **integrated GPU → GGUF routing** (0.34.27, not ONNX/DirectML).
+- **VRAM-budget telemetry** on `GeneratorModelInfo` (0.34.22); `LMSUPPLY_SYSTEM_RAM_MB` / `LMSUPPLY_VRAM_BUDGET_MB` overrides + budget-aware cache reuse (0.34.26).
+- **Auto provider CPU fallback on floored context** (0.34.21).
+- **Unified `LlamaBackendSelector`** — generator/embedder/reranker pick the same backend for the same hardware.
+- **ThinkingMode control** (0.34.28): `GenerationOptions.Thinking` ∈ `{Auto, On, Off}` replaces `EnableThinking`. `Off` forwards `enable_thinking=false` via `chat_template_kwargs` so a thinking-default-on model (Qwen3) answers directly; `Auto` (default) preserves each model's built-in behavior.
+
+### Verification (2026-06-21, RTX 4060 dogfooding)
+
+- NVML discrete-GPU detection (multi-GPU: RTX 4060 + Intel UHD → correct NVIDIA primary, 8GB not WMI-capped 4GB).
+- env-override selection matrix (low-RAM / low-VRAM → demote + size-down) on the real `GetAutoSelection`/`LlamaBackendSelector` path.
+- CUDA + forced-CPU-fallback E2E (load + generate) verified.
+
+### Breaking changes (v0.34.28)
+
+- `GenerationOptions.EnableThinking` (bool) removed → `GenerationOptions.Thinking` (`ThinkingMode` enum). Default `Auto` preserves prior behavior (Qwen3 thinks, Gemma does not).
+
+---
+
+## ✅ Version 0.28.x
 
 **Theme**: Platform-aware Default Alias & ONNX Path Hardening
 
@@ -58,9 +84,14 @@ Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
 
 ## 🔮 Next Cycles (Planning)
 
-**Theme**: Vision Pipeline Completion
+### Handoff — open work (2026-06-21)
 
-### Planned
+- [ ] **gemma4-E2B empty chat response** at small token budget (MaxTokens≈30) — diagnose via probe (Text vs ReasoningDelta, sweep 30/256/1024) then fix (chat: `Thinking.Off`; completion: token bump / `FilterReasoningTokens`). Issue: `claudedocs/issues/…gemma4-e2b-empty-chat-response-small-token-budget.md`.
+- [ ] **Integration test suite runtime green** — after the gemma4 empty-response fix (currently aliases resolve but `MaxTokens=30` yields empty; `Category=Integration`, CI-excluded).
+- [ ] **Filer field validation (dogfooding closes)**: `Thinking.Off` resolves ISSUE-223 thinking-burn (closes the EnableThinking issue); VRAM-budget telemetry (a)/(b) classification; low-VRAM ctx-clamp unbrick; single-delta streaming locus (filer-host live runtime).
+- [ ] **GgufModelRegistry XML doc** — stale `gguf:default` examples in `<see>`/`<param>` (alias not registered); refresh to current aliases.
+
+### Theme: Vision Pipeline Completion
 
 - [ ] Wire `ContentParts` through `LlamaServerClient` (OpenAI vision JSON serialization)
 - [ ] mmproj file auto-discovery and loading for Gemma 4 multimodal
@@ -77,4 +108,5 @@ Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
 | 0.9.2 | ONNX Runtime Management | Released |
 | 0.10.0 | Local Performance Max & DX | Released |
 | 0.26.x | Gemma 4 & Multimodal Foundations | Released |
-| 0.28.x | Platform-aware Default Alias & ONNX Path Hardening | **Current** |
+| 0.28.x | Platform-aware Default Alias & ONNX Path Hardening | Released |
+| 0.34.x | Environment-aware Model Selection & Thinking Control | **Current** |

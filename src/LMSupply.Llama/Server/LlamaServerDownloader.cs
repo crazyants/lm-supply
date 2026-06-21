@@ -377,6 +377,143 @@ public sealed class LlamaServerDownloader : IDisposable
         return new Regex($@"llama-b\d+-bin-{os}-{backendPattern}-{archStr}\.(zip|tar\.gz)$", RegexOptions.IgnoreCase);
     }
 
+    /// <summary>
+    /// Builds a regex matching the CUDA-runtime companion asset (cudart/cublas/cublasLt) that
+    /// llama.cpp ships SEPARATELY for a CUDA backend, e.g. "cudart-llama-bin-win-cuda-12.4-x64.zip".
+    /// The main "llama-b&lt;n&gt;-bin-...-cuda-..." archive does NOT contain the runtime, so without
+    /// this companion the cuda binary silently falls back to CPU. Matches any cuda minor for the
+    /// backend major. Returns null for non-CUDA backends (no companion needed) and for macOS
+    /// (no CUDA).
+    /// </summary>
+    internal static Regex? GetCudartAssetPattern(
+        LlamaServerPlatform platform, LlamaServerArchitecture arch, LlamaServerBackend backend)
+    {
+        var major = backend switch
+        {
+            LlamaServerBackend.Cuda12 => "12",
+            LlamaServerBackend.Cuda13 => "13",
+            _ => null
+        };
+        if (major == null)
+            return null;
+
+        var os = platform switch
+        {
+            LlamaServerPlatform.Windows => "win",
+            LlamaServerPlatform.Linux => "ubuntu",
+            _ => null // macOS has no CUDA build
+        };
+        if (os == null)
+            return null;
+
+        var archStr = arch switch
+        {
+            LlamaServerArchitecture.Arm64 => "arm64",
+            _ => "x64"
+        };
+
+        return new Regex(
+            $@"^cudart-llama-bin-{os}-cuda-{major}\.\d+-{archStr}\.(zip|tar\.gz)$",
+            RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// True if the CUDA runtime (cudart) is already present in <paramref name="versionDir"/>.
+    /// </summary>
+    private static bool CudaRuntimePresent(string versionDir)
+    {
+        if (!Directory.Exists(versionDir))
+            return false;
+        return Directory.EnumerateFiles(versionDir, "cudart64_*.dll").Any()
+            || Directory.EnumerateFiles(versionDir, "libcudart.so*").Any();
+    }
+
+    /// <summary>
+    /// Ensures the CUDA runtime (cudart/cublas/cublasLt) is present next to a CUDA llama-server
+    /// binary. llama.cpp ships the runtime in a separate release asset; without it ggml-cuda fails
+    /// to load and the server silently runs on CPU. Idempotent (no-op when already present or for
+    /// non-CUDA backends) and best-effort: any failure is logged and swallowed so model loading is
+    /// not blocked — the runtime silent-fallback guard in <see cref="LlamaServerProcess"/> will then
+    /// surface a warning at startup. Covers already-cached binaries (the common case where a prior
+    /// version downloaded the cuda binary before this companion logic existed).
+    /// </summary>
+    public async Task EnsureCudaRuntimeAsync(
+        string versionDir,
+        LlamaServerBackend backend,
+        string version,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var platform = GetCurrentPlatform();
+        var arch = GetCurrentArchitecture();
+        var pattern = GetCudartAssetPattern(platform, arch, backend);
+        if (pattern == null)
+            return; // not a CUDA backend (or macOS): no companion runtime needed
+
+        if (CudaRuntimePresent(versionDir))
+            return;
+
+        try
+        {
+            // Find the cudart companion asset in the same release.
+            var releaseUrl = $"{ReleasesUrl}/tags/{version}";
+            using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(cancellationToken),
+                cancellationToken: cancellationToken);
+
+            string? cudartName = null;
+            string? cudartUrl = null;
+            foreach (var asset in doc.RootElement.GetProperty("assets").EnumerateArray())
+            {
+                var name = asset.GetProperty("name").GetString();
+                if (name != null && pattern.IsMatch(name))
+                {
+                    cudartName = name;
+                    cudartUrl = asset.GetProperty("browser_download_url").GetString();
+                    break;
+                }
+            }
+
+            if (cudartName == null || cudartUrl == null)
+            {
+                Trace.TraceWarning(
+                    $"[LlamaServerDownloader] CUDA runtime companion not found for {backend} " +
+                    $"version {version}. The cuda binary may run on CPU. Expected an asset like " +
+                    "cudart-llama-bin-...-cuda-XX.Y-...");
+                return;
+            }
+
+            Directory.CreateDirectory(versionDir);
+            var archivePath = Path.Combine(versionDir, cudartName);
+
+            progress?.Report(new DownloadProgress { FileName = cudartName, Phase = DownloadPhase.Downloading });
+
+            using (var dl = await _httpClient.GetAsync(cudartUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+            {
+                dl.EnsureSuccessStatusCode();
+                await using var src = await dl.Content.ReadAsStreamAsync(cancellationToken);
+                await using var dst = File.Create(archivePath);
+                await src.CopyToAsync(dst, cancellationToken);
+            }
+
+            await ExtractArchiveAsync(archivePath, versionDir, platform, cancellationToken);
+            File.Delete(archivePath);
+
+            Trace.TraceInformation(
+                $"[LlamaServerDownloader] Installed CUDA runtime {cudartName} for {backend} into {versionDir}.");
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: never block model loading on companion provisioning.
+            Trace.TraceWarning(
+                $"[LlamaServerDownloader] Failed to provision CUDA runtime for {backend} " +
+                $"version {version}: {ex.Message}. The cuda binary may run on CPU.");
+        }
+    }
+
     public void Dispose()
     {
         if (_ownsHttpClient)

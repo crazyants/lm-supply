@@ -72,6 +72,31 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        var result = await GetServerPathCoreAsync(backend, progress, cancellationToken);
+
+        // For a CUDA backend, ensure the cudart runtime is present next to the binary (it ships as a
+        // separate llama.cpp asset). Self-gating (no-op for non-CUDA) and best-effort. Runs on both
+        // cache-hit and fresh-download results, so binaries cached before this logic existed are
+        // backfilled. See LlamaServerDownloader.EnsureCudaRuntimeAsync.
+        if (result.Success && !string.IsNullOrEmpty(result.ServerPath))
+        {
+            var versionDir = Path.GetDirectoryName(result.ServerPath);
+            var version = result.NewVersion ?? result.PreviousVersion;
+            if (!string.IsNullOrEmpty(versionDir) && !string.IsNullOrEmpty(version))
+            {
+                await _downloader.EnsureCudaRuntimeAsync(
+                    versionDir, result.Backend, version, progress, cancellationToken);
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<LlamaServerUpdateResult> GetServerPathCoreAsync(
+        LlamaServerBackend backend,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
         var platform = GetCurrentPlatform();
         var backendStr = backend.ToString().ToLowerInvariant();
 

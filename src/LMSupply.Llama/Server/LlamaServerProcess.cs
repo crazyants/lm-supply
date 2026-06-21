@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using ChildProcessGuard;
 
 namespace LMSupply.Llama.Server;
@@ -438,6 +439,8 @@ public sealed class LlamaServerProcess : IAsyncDisposable
                 $"Error: {error}");
         }
 
+        var startupLog = stderrBuilder.ToString();
+
         Info = new LlamaServerInfo
         {
             ProcessId = _process.Id,
@@ -445,8 +448,22 @@ public sealed class LlamaServerProcess : IAsyncDisposable
             ModelPath = _config.ModelPath,
             Backend = _backend,
             StartTime = startTime,
-            StartupLog = stderrBuilder.ToString()
+            StartupLog = startupLog
         };
+
+        // Silent-fallback guard: a GPU backend whose runtime cannot load (e.g. cudart/cublas missing
+        // alongside the cuda binary, or a driver/runtime mismatch) starts and serves normally but
+        // llama.cpp enumerates only a CPU device and runs on CPU with no error. Surface it as a
+        // warning so the consumer is not silently downgraded to CPU performance.
+        if (IsGpuBackend(_backend) && !StartupLogShowsGpuDevice(startupLog))
+        {
+            Trace.TraceWarning(
+                $"[LlamaServerProcess] {_backend} backend was selected but llama-server initialized " +
+                "CPU-only (no GPU device enumerated). The GPU runtime likely failed to load " +
+                "(e.g. CUDA runtime cudart/cublas missing alongside the server binary, or a " +
+                "driver/runtime mismatch). Inference will run on CPU. Install the GPU runtime or " +
+                "ensure the runtime libraries are present next to the llama-server binary.");
+        }
     }
 
     private string BuildArguments()
@@ -730,6 +747,36 @@ public sealed class LlamaServerProcess : IAsyncDisposable
         listener.Stop();
         return port;
     }
+
+    // device_info bullet line for an accelerated (non-CPU) compute device, e.g.
+    // "  - CUDA0   : NVIDIA GeForce RTX 4060 ..." or "  - Vulkan0 : ...". A CPU-only line
+    // ("  - CPU : ...") does not match. The leading "- " anchors to the device list so model
+    // names or system_info text containing a backend keyword are not mistaken for a device.
+    private static readonly Regex GpuDeviceLineRegex = new(
+        @"-\s*(?:CUDA|Vulkan|Metal|ROCm|HIP|SYCL|CANN|OpenCL)\d*\s*:",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns true if the llama-server startup log shows an accelerated (non-CPU) compute device
+    /// was enumerated. A GPU llama-server binary that cannot load its runtime (e.g. missing
+    /// cudart/cublas) starts and serves normally but enumerates only a CPU device — llama.cpp
+    /// silently runs on CPU. This predicate lets callers detect that silent fallback and warn
+    /// instead of failing silently. Conservative: a null/empty log returns false (no GPU evidence).
+    /// </summary>
+    internal static bool StartupLogShowsGpuDevice(string? startupLog)
+        => !string.IsNullOrWhiteSpace(startupLog) && GpuDeviceLineRegex.IsMatch(startupLog);
+
+    /// <summary>True for llama-server backends that offload to a GPU (i.e. should engage a device).</summary>
+    internal static bool IsGpuBackend(LlamaServerBackend backend) => backend switch
+    {
+        LlamaServerBackend.Cuda12 => true,
+        LlamaServerBackend.Cuda13 => true,
+        LlamaServerBackend.Vulkan => true,
+        LlamaServerBackend.Hip => true,
+        LlamaServerBackend.Sycl => true,
+        LlamaServerBackend.Metal => true,
+        _ => false
+    };
 
     public async ValueTask DisposeAsync()
     {

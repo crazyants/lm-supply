@@ -7,7 +7,7 @@ namespace LMSupply.Integration.Tests.Functional;
 /// <summary>
 /// Comprehensive functional tests for the Generator domain.
 /// Tests L (loading), I (inference), Q (quality), E (edge cases) axes.
-/// Uses GGUF "gguf:fast" for faster tests (smaller model via llama-server).
+/// Uses GGUF "gguf:gemma4-fast" for faster tests (smaller model via llama-server).
 /// Requires GPU + network access. Run locally only.
 /// </summary>
 [Trait("Category", "Functional")]
@@ -15,7 +15,7 @@ namespace LMSupply.Integration.Tests.Functional;
 [Trait("Domain", "Generator")]
 public class GeneratorFunctionalTests
 {
-    private const string FastModel = "gguf:fast";
+    private const string FastModel = "gguf:gemma4-fast";
     private static readonly GenerationOptions ShortOutput = new() { MaxTokens = 30 };
 
     // ── L axis: Model Loading ───────────────────────────────────────

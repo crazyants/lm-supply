@@ -97,7 +97,7 @@ public class FastModelFunctionalTests : IAsyncLifetime
     {
         var sw = Stopwatch.StartNew();
 
-        await using var model = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var model = await LocalGenerator.LoadAsync("gguf:gemma4-fast");
         var loadTime = sw.ElapsedMilliseconds;
 
         // Warmup

@@ -58,9 +58,9 @@ public class DownloadStartTests
     #region Generator (GGUF)
 
     [Theory]
-    [InlineData("gguf:fast")]
-    [InlineData("gguf:default")]
-    [InlineData("gguf:quality")]
+    [InlineData("gguf:gemma4-fast")]
+    [InlineData("gguf:gemma4-default")]
+    [InlineData("gguf:gemma4-quality")]
     public async Task Generator_Gguf_DownloadStarts_ForAlias(string alias)
     {
         await VerifyDownloadStartsAsync(

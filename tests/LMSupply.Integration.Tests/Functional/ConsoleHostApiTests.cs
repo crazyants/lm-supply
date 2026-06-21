@@ -1012,7 +1012,7 @@ public class ConsoleHostApiTests : IClassFixture<WebApplicationFactory<Program>>
     [Trait("Axis", "API-Error")]
     public async Task POST_ChatCompletions_MissingMessages_Returns400()
     {
-        var content = JsonContent.Create(new { model = "gguf:fast" });
+        var content = JsonContent.Create(new { model = "gguf:gemma4-fast" });
         var response = await _client.PostAsync("/v1/chat/completions", content);
 
         // Missing required 'messages' field should return 400

@@ -286,7 +286,7 @@ public class CrossDomainScenarioTests
     public async Task Scenario_GenerateAndEmbed_OutputHasSemanticMeaning()
     {
         // 1. Generate text about a topic
-        await using var generator = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var generator = await LocalGenerator.LoadAsync("gguf:gemma4-fast");
         var generated = await generator.GenerateCompleteAsync(
             "Machine learning is",
             new Generator.Models.GenerationOptions { MaxTokens = 30 });
@@ -359,7 +359,7 @@ public class CrossDomainScenarioTests
         translatedEmb.Length.Should().BeGreaterThan(0);
 
         // 3. Generate a summary using the translated text
-        await using var generator = await LocalGenerator.LoadAsync("gguf:fast");
+        await using var generator = await LocalGenerator.LoadAsync("gguf:gemma4-fast");
         var summary = await generator.GenerateCompleteAsync(
             $"Summarize in one sentence: {translation.TranslatedText}",
             new Generator.Models.GenerationOptions { MaxTokens = 50 });

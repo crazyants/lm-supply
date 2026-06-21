@@ -89,7 +89,7 @@ Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
 - [ ] **gemma4-E2B empty chat response** at small token budget (MaxTokens≈30) — diagnose via probe (Text vs ReasoningDelta, sweep 30/256/1024) then fix (chat: `Thinking.Off`; completion: token bump / `FilterReasoningTokens`). Issue: `claudedocs/issues/…gemma4-e2b-empty-chat-response-small-token-budget.md`.
 - [ ] **Integration test suite runtime green** — after the gemma4 empty-response fix (currently aliases resolve but `MaxTokens=30` yields empty; `Category=Integration`, CI-excluded).
 - [ ] **Filer field validation (dogfooding closes)**: `Thinking.Off` resolves ISSUE-223 thinking-burn (closes the EnableThinking issue); VRAM-budget telemetry (a)/(b) classification; low-VRAM ctx-clamp unbrick; single-delta streaming locus (filer-host live runtime).
-- [ ] **GgufModelRegistry XML doc** — stale `gguf:default` examples in `<see>`/`<param>` (alias not registered); refresh to current aliases.
+- [x] **GgufModelRegistry XML doc** — stale `gguf:default`/`fast`/`quality` examples refreshed to registered `gguf:gemma4-*` aliases across 5 files (`691bb90`, 2026-06-21).
 
 ### Theme: Vision Pipeline Completion
 

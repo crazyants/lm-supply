@@ -86,8 +86,9 @@ Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
 
 ### Handoff — open work (2026-06-21)
 
-- [ ] **gemma4-E2B empty chat response** at small token budget (MaxTokens≈30) — diagnose via probe (Text vs ReasoningDelta, sweep 30/256/1024) then fix (chat: `Thinking.Off`; completion: token bump / `FilterReasoningTokens`). Issue: `claudedocs/issues/…gemma4-e2b-empty-chat-response-small-token-budget.md`.
-- [ ] **Integration test suite runtime green** — after the gemma4 empty-response fix (currently aliases resolve but `MaxTokens=30` yields empty; `Category=Integration`, CI-excluded).
+- [x] **gemma4-E2B empty chat response** at small token budget — CLOSED (2026-06-21, RTX 4060 probe). Root cause: reasoning consumes the 30-token budget (text=0, finish=length at Auto); `Thinking.Off` recovers, Auto@256 answers. Fix: doc + test only (no version bump) — `E_MultiTurnChat_Works`→`Thinking.Off`, new `Gemma4EmptyChatProbeTests` regression guards, `ThinkingMode`/`GenerationOptions.Thinking` doc accuracy. Issue → `closed/`.
+- [x] **Integration test suite runtime green** — affected chat tests pass (`E_MultiTurnChat_Works` + siblings in isolation). Note: concurrent runs may flake with `HttpRequestException` (multiple llama-server instances contend on one 8GB GPU) — environmental, not a code regression.
+- [ ] **gemma4 registry thinking metadata** (follow-up, needs E4B/26B verification) — gemma4-E2B behaves thinking-default-on, but `ThinkingEnabledByDefault` is advisory-only (never consumed for behavior) and only E2B is verified; adding the flag to gemma4 entries forces a family pack + version bump for zero runtime change. Defer until E4B/26B reasoning behavior is confirmed.
 - [ ] **Filer field validation (dogfooding closes)**: `Thinking.Off` resolves ISSUE-223 thinking-burn (closes the EnableThinking issue); VRAM-budget telemetry (a)/(b) classification; low-VRAM ctx-clamp unbrick; single-delta streaming locus (filer-host live runtime).
 - [x] **GgufModelRegistry XML doc** — stale `gguf:default`/`fast`/`quality` examples refreshed to registered `gguf:gemma4-*` aliases across 5 files (`691bb90`, 2026-06-21).
 

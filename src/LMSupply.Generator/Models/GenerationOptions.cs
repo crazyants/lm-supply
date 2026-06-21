@@ -141,12 +141,16 @@ public sealed class GenerationOptions
 
     /// <summary>
     /// Controls the model's reasoning ("thinking") behavior on the chat path.
-    /// <see cref="ThinkingMode.Auto"/> (default) keeps the model's built-in behavior — Qwen3 thinks,
-    /// Gemma 4 does not. <see cref="ThinkingMode.On"/> activates thinking (injects the formatter
-    /// thinking token for default-off models like Gemma 4 and requests <c>enable_thinking=true</c>);
-    /// <see cref="ThinkingMode.Off"/> suppresses it (requests <c>enable_thinking=false</c>) so a
-    /// thinking-default-on model (Qwen3) answers directly instead of spending tokens on a reasoning
-    /// block. Honored only on the chat path (the raw completion path has no chat template to drive).
+    /// <see cref="ThinkingMode.Auto"/> (default) keeps each model's built-in default, which varies by
+    /// model and llama.cpp build (Qwen3 thinks by default; some Gemma 4 GGUF builds emit reasoning too).
+    /// <see cref="ThinkingMode.On"/> activates thinking (injects the formatter thinking token and requests
+    /// <c>enable_thinking=true</c>); <see cref="ThinkingMode.Off"/> suppresses it (requests
+    /// <c>enable_thinking=false</c>) so the model answers directly instead of spending tokens on a
+    /// reasoning block. Honored only on the chat path (the raw completion path has no chat template to drive).
+    /// Note for small token budgets: a thinking model can exhaust <see cref="MaxTokens"/> on reasoning
+    /// before emitting any answer (empty content, finish=length). Use <see cref="ThinkingMode.Off"/> to
+    /// get a direct answer in a tight budget — <see cref="FilterReasoningTokens"/> only strips reasoning
+    /// from output, it does not stop reasoning from consuming the budget.
     /// </summary>
     public ThinkingMode Thinking { get; set; } = ThinkingMode.Auto;
 

@@ -262,7 +262,12 @@ public class GeneratorFunctionalTests
             ChatMessage.User("What is my name?"),
         ];
 
-        var result = await model.GenerateChatCompleteAsync(messages, ShortOutput);
+        // gemma4-E2B emits reasoning_content by default (Thinking.Auto), which exhausts a 30-token
+        // budget before any answer text (empty content, finish=length). This test verifies multi-turn
+        // context retention, not thinking behavior, so request a direct answer with Thinking.Off.
+        // See: gemma4-e2b-empty-chat-response-small-token-budget probe (Gemma4EmptyChatProbeTests).
+        var options = new GenerationOptions { MaxTokens = 30, Thinking = ThinkingMode.Off };
+        var result = await model.GenerateChatCompleteAsync(messages, options);
         result.Should().NotBeNullOrEmpty("multi-turn chat should produce response");
     }
 

@@ -18,8 +18,13 @@ LMSupplyTraceListener.Attach((msg, sev) =>
     Console.WriteLine($"  [{tag}] {msg}");
 });
 
-var targetAlias = args.Length > 0 ? args[0] : "default";
-Console.WriteLine($"# Target alias: {targetAlias}\n");
+// --dry-run: run only Phase 1 (hardware detection + selection), no download/load/generate.
+// Lets an env-override matrix (LMSUPPLY_SYSTEM_RAM_MB / LMSUPPLY_VRAM_BUDGET_MB) exercise the
+// real GetAutoSelection / LlamaBackendSelector path without pulling a model per scenario.
+var dryRun = args.Contains("--dry-run");
+var positional = args.Where(a => !a.StartsWith("--", StringComparison.Ordinal)).ToArray();
+var targetAlias = positional.Length > 0 ? positional[0] : "default";
+Console.WriteLine($"# Target alias: {targetAlias}{(dryRun ? " (dry-run)" : "")}\n");
 
 // ───── Phase 1: dry-run selection (no downloads) ─────
 Console.WriteLine("=== Phase 1: Selection dry-run ===");
@@ -52,6 +57,12 @@ else
     Console.WriteLine($"Resolved: alias={target.AliasName} repo={target.RepoId} file={target.DefaultFile}");
 }
 Console.WriteLine();
+
+if (dryRun)
+{
+    Console.WriteLine("(dry-run: skipping Phase 2-4 download/load/generate)");
+    return 0;
+}
 
 // ───── Phase 2: actual LoadAsync + download ─────
 Console.WriteLine($"=== Phase 2: LocalGenerator.LoadAsync(\"{targetAlias}\") ===");
@@ -114,7 +125,11 @@ await using (model)
 
     // ───── Phase 4: text generation ─────
     Console.WriteLine("=== Phase 4: GenerateAsync ===");
-    var genOpts = new GenerationOptions { MaxTokens = 64, Temperature = 0.2f };
+    // Generous token budget so the smoke test sees real content. NOTE: Qwen3 is thinking-default-on
+    // and EnableThinking=false does NOT suppress it (the flag only injects thinking for default-off
+    // formatters like Gemma4 — see ISSUE-...-enablethinking-false-cannot-suppress-default-on-thinking),
+    // so a <think> block may still appear. SUCCESS only asserts non-empty output, which is enough here.
+    var genOpts = new GenerationOptions { MaxTokens = 128, Temperature = 0.2f };
     var prompt = "Say hello in three short sentences.";
     Console.WriteLine($"prompt: {prompt}");
     sw.Restart();

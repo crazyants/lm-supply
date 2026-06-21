@@ -13,10 +13,22 @@ namespace LMSupply.Generator.Tests.Internal.Llama;
 [Collection("TraceListeners")]
 public class LlamaOffloadTraceHelperTests
 {
+    /// <summary>
+    /// Captures only this helper's own emissions, identified by their unique signatures, so a
+    /// concurrent test emitting to the process-global <see cref="Trace.Listeners"/> cannot pollute
+    /// the assertions. This keeps <c>Information.Should().BeEmpty()</c> meaningful: a stray
+    /// "Auto partial offload" wrongly emitted by the 0-layer path is still caught, but unrelated
+    /// cross-test noise (ctx-adjust, VramAware, etc.) is not. Regression guard:
+    /// <see cref="CapturingTraceListener_IgnoresUnrelatedCrossTestEmissions"/>.
+    /// </summary>
+    private static bool IsOffloadMessage(string message)
+        => message.Contains("CPU-only fallback", StringComparison.Ordinal)
+           || message.Contains("Auto partial offload", StringComparison.Ordinal);
+
     [Fact]
     public void TraceOffloadDecision_ZeroLayers_EmitsWarning()
     {
-        var listener = new CapturingTraceListener();
+        var listener = new CapturingTraceListener(IsOffloadMessage);
         Trace.Listeners.Add(listener);
         try
         {
@@ -53,7 +65,7 @@ public class LlamaOffloadTraceHelperTests
     [Fact]
     public void TraceOffloadDecision_PartialOffload_EmitsInformation()
     {
-        var listener = new CapturingTraceListener();
+        var listener = new CapturingTraceListener(IsOffloadMessage);
         Trace.Listeners.Add(listener);
         try
         {
@@ -87,7 +99,7 @@ public class LlamaOffloadTraceHelperTests
     [Fact]
     public void TraceOffloadDecision_ZeroLayers_MessageIsAsciiOnly()
     {
-        var listener = new CapturingTraceListener();
+        var listener = new CapturingTraceListener(IsOffloadMessage);
         Trace.Listeners.Add(listener);
         try
         {
@@ -115,14 +127,48 @@ public class LlamaOffloadTraceHelperTests
         }
     }
 
-    private sealed class CapturingTraceListener : TraceListener
+    /// <summary>
+    /// Regression guard for the cross-test Trace pollution flake: a signature-filtered listener must
+    /// ignore unrelated emissions from other tests sharing the process-global Trace.Listeners, so the
+    /// helper's own assertions stay deterministic even under parallel execution. This is the surgical
+    /// isolation the assembly-level DisableTestParallelization (blunt) backstops — verifying it here
+    /// means the helper tests no longer depend on serialization to pass.
+    /// </summary>
+    [Fact]
+    public void CapturingTraceListener_IgnoresUnrelatedCrossTestEmissions()
     {
+        var listener = new CapturingTraceListener(IsOffloadMessage);
+        Trace.Listeners.Add(listener);
+        try
+        {
+            // Simulate the pollution: other tests emitting to the global listener concurrently.
+            Trace.TraceInformation("[LlamaServerGeneratorModel] Auto-cap context length 16384 -> 10469 (ctx-adjust)");
+            Trace.TraceInformation("[VramAware] some unrelated info");
+            Trace.TraceWarning("[SomethingElse] unrelated warning");
+
+            listener.Information.Should().BeEmpty(
+                "signature filter must drop cross-test Information (ctx-adjust, VramAware) that previously polluted BeEmpty");
+            listener.Warnings.Should().BeEmpty(
+                "signature filter must drop cross-test Warnings unrelated to the offload helper");
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+    }
+
+    private sealed class CapturingTraceListener(Predicate<string> accept) : TraceListener
+    {
+        private readonly Predicate<string> _accept = accept;
+
         public List<string> Warnings { get; } = [];
         public List<string> Information { get; } = [];
 
         public override void TraceEvent(TraceEventCache? cache, string source, TraceEventType eventType, int id, string? message)
         {
-            if (message == null) return;
+            // Only capture messages this listener owns; ignore concurrent cross-test emissions to the
+            // process-global Trace.Listeners. This isolates the assertions from scheduling races.
+            if (message == null || !_accept(message)) return;
             switch (eventType)
             {
                 case TraceEventType.Warning:

@@ -20,6 +20,16 @@ public sealed class LlamaServerDownloader : IDisposable
     private readonly bool _ownsHttpClient;
 
     /// <summary>
+    /// Process-wide gate that serializes CUDA-runtime provisioning. A single static gate is the
+    /// canonical lazy-once-init lock: the lock-free fast path means it is only contended during the
+    /// one-time provisioning window, and concurrent callers for the same versionDir (e.g. Filer
+    /// loading embedder + generator via Task.WhenAll) must converge to a single download/extract.
+    /// Per-key (one semaphore per versionDir) would only add parallelism for the rare cuda12-AND-cuda13
+    /// first-provision-at-once case — gold-plating until observed.
+    /// </summary>
+    private static readonly SemaphoreSlim s_cudartGate = new(1, 1);
+
+    /// <summary>
     /// Creates a new downloader instance.
     /// </summary>
     /// <param name="cacheDirectory">Directory to store downloaded binaries.</param>
@@ -456,74 +466,131 @@ public sealed class LlamaServerDownloader : IDisposable
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var platform = GetCurrentPlatform();
-        var arch = GetCurrentArchitecture();
-        var pattern = GetCudartAssetPattern(platform, arch, backend);
+        var pattern = GetCudartAssetPattern(GetCurrentPlatform(), GetCurrentArchitecture(), backend);
         if (pattern == null)
             return; // not a CUDA backend (or macOS): no companion runtime needed
 
-        if (CudaRuntimePresent(versionDir))
-            return;
-
         try
         {
-            // Find the cudart companion asset in the same release.
-            var releaseUrl = $"{ReleasesUrl}/tags/{version}";
-            using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            using var doc = await JsonDocument.ParseAsync(
-                await response.Content.ReadAsStreamAsync(cancellationToken),
-                cancellationToken: cancellationToken);
-
-            string? cudartName = null;
-            string? cudartUrl = null;
-            foreach (var asset in doc.RootElement.GetProperty("assets").EnumerateArray())
-            {
-                var name = asset.GetProperty("name").GetString();
-                if (name != null && pattern.IsMatch(name))
-                {
-                    cudartName = name;
-                    cudartUrl = asset.GetProperty("browser_download_url").GetString();
-                    break;
-                }
-            }
-
-            if (cudartName == null || cudartUrl == null)
-            {
-                Trace.TraceWarning(
-                    $"[LlamaServerDownloader] CUDA runtime companion not found for {backend} " +
-                    $"version {version}. The cuda binary may run on CPU. Expected an asset like " +
-                    "cudart-llama-bin-...-cuda-XX.Y-...");
-                return;
-            }
-
-            Directory.CreateDirectory(versionDir);
-            var archivePath = Path.Combine(versionDir, cudartName);
-
-            progress?.Report(new DownloadProgress { FileName = cudartName, Phase = DownloadPhase.Downloading });
-
-            using (var dl = await _httpClient.GetAsync(cudartUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
-            {
-                dl.EnsureSuccessStatusCode();
-                await using var src = await dl.Content.ReadAsStreamAsync(cancellationToken);
-                await using var dst = File.Create(archivePath);
-                await src.CopyToAsync(dst, cancellationToken);
-            }
-
-            await ExtractArchiveAsync(archivePath, versionDir, platform, cancellationToken);
-            File.Delete(archivePath);
-
-            Trace.TraceInformation(
-                $"[LlamaServerDownloader] Installed CUDA runtime {cudartName} for {backend} into {versionDir}.");
+            // Serialize provisioning so concurrent callers for the same versionDir (e.g. Filer loading
+            // embedder + generator via Task.WhenAll) converge to a single download/extract. The gate is
+            // held across the (multi-minute) download on purpose: that is what lets a waiting caller
+            // find the runtime already present at the re-check and download nothing.
+            await RunGatedOnceAsync(
+                s_cudartGate,
+                alreadyDone: () => CudaRuntimePresent(versionDir),
+                work: () => ProvisionCudaRuntimeCoreAsync(
+                    versionDir, backend, version, pattern, progress, cancellationToken),
+                cancellationToken);
         }
         catch (Exception ex)
         {
-            // Best-effort: never block model loading on companion provisioning.
+            // Best-effort: never block model loading on companion provisioning. This also swallows
+            // OperationCanceledException; RunGatedOnceAsync's acquired guard ensures the gate is never
+            // corrupted by a release of a semaphore that WaitAsync did not take.
             Trace.TraceWarning(
                 $"[LlamaServerDownloader] Failed to provision CUDA runtime for {backend} " +
                 $"version {version}: {ex.Message}. The cuda binary may run on CPU.");
         }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> at most once across concurrent callers gated by
+    /// <paramref name="gate"/>. Callers take a lock-free fast path when <paramref name="alreadyDone"/>
+    /// is already true; otherwise they serialize on the gate and RE-CHECK after acquiring, so a caller
+    /// that waited while another completed the work does nothing. The <c>acquired</c> guard ensures a
+    /// wait cancelled before acquisition never releases a semaphore it did not take. Exceptions
+    /// (including cancellation) propagate; callers that want best-effort semantics wrap the call.
+    /// </summary>
+    internal static async Task RunGatedOnceAsync(
+        SemaphoreSlim gate,
+        Func<bool> alreadyDone,
+        Func<Task> work,
+        CancellationToken cancellationToken)
+    {
+        if (alreadyDone())
+            return;
+
+        var acquired = false;
+        try
+        {
+            await gate.WaitAsync(cancellationToken);
+            acquired = true;
+
+            if (alreadyDone())
+                return;
+
+            await work();
+        }
+        finally
+        {
+            if (acquired)
+                gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Downloads and extracts the cudart companion asset for one provisioning pass. Assumes the caller
+    /// has already verified this is a CUDA backend (<paramref name="pattern"/> non-null) and that the
+    /// runtime is not yet present. Throws on failure; <see cref="EnsureCudaRuntimeAsync"/> swallows it.
+    /// </summary>
+    private async Task ProvisionCudaRuntimeCoreAsync(
+        string versionDir,
+        LlamaServerBackend backend,
+        string version,
+        Regex pattern,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        // Find the cudart companion asset in the same release.
+        var releaseUrl = $"{ReleasesUrl}/tags/{version}";
+        using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+
+        string? cudartName = null;
+        string? cudartUrl = null;
+        foreach (var asset in doc.RootElement.GetProperty("assets").EnumerateArray())
+        {
+            var name = asset.GetProperty("name").GetString();
+            if (name != null && pattern.IsMatch(name))
+            {
+                cudartName = name;
+                cudartUrl = asset.GetProperty("browser_download_url").GetString();
+                break;
+            }
+        }
+
+        if (cudartName == null || cudartUrl == null)
+        {
+            Trace.TraceWarning(
+                $"[LlamaServerDownloader] CUDA runtime companion not found for {backend} " +
+                $"version {version}. The cuda binary may run on CPU. Expected an asset like " +
+                "cudart-llama-bin-...-cuda-XX.Y-...");
+            return;
+        }
+
+        Directory.CreateDirectory(versionDir);
+        var archivePath = Path.Combine(versionDir, cudartName);
+
+        progress?.Report(new DownloadProgress { FileName = cudartName, Phase = DownloadPhase.Downloading });
+
+        using (var dl = await _httpClient.GetAsync(cudartUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        {
+            dl.EnsureSuccessStatusCode();
+            await using var src = await dl.Content.ReadAsStreamAsync(cancellationToken);
+            await using var dst = File.Create(archivePath);
+            await src.CopyToAsync(dst, cancellationToken);
+        }
+
+        await ExtractArchiveAsync(archivePath, versionDir, GetCurrentPlatform(), cancellationToken);
+        File.Delete(archivePath);
+
+        Trace.TraceInformation(
+            $"[LlamaServerDownloader] Installed CUDA runtime {cudartName} for {backend} into {versionDir}.");
     }
 
     public void Dispose()

@@ -253,6 +253,11 @@ public sealed class LlamaServerClient : IDisposable
             RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
             FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
             PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
+            DryMultiplier = options.DryMultiplier,
+            DryBase = options.DryBase,
+            DryAllowedLength = options.DryAllowedLength,
+            DryPenaltyLastN = options.DryPenaltyLastN,
+            RepeatLastN = options.RepeatLastN,
             Seed = options.Seed != -1 ? options.Seed : null,
             Stream = true,
             Stop = options.StopSequences?.ToList(),
@@ -511,6 +516,11 @@ public sealed class LlamaServerClient : IDisposable
             RepeatPenalty = options.RepeatPenalty != 1.0f ? options.RepeatPenalty : null,
             FrequencyPenalty = options.FrequencyPenalty != 0 ? options.FrequencyPenalty : null,
             PresencePenalty = options.PresencePenalty != 0 ? options.PresencePenalty : null,
+            DryMultiplier = options.DryMultiplier,
+            DryBase = options.DryBase,
+            DryAllowedLength = options.DryAllowedLength,
+            DryPenaltyLastN = options.DryPenaltyLastN,
+            RepeatLastN = options.RepeatLastN,
             Seed = options.Seed != -1 ? options.Seed : null,
             Stream = stream,
             Stop = options.StopSequences?.ToList(),
@@ -562,6 +572,14 @@ public sealed class ChatCompletionOptions
     public float RepeatPenalty { get; init; } = 1.1f;
     public float FrequencyPenalty { get; init; }
     public float PresencePenalty { get; init; }
+
+    // Advanced anti-repetition (standard llama-server samplers; null = server default, omitted from request)
+    public float? DryMultiplier { get; init; }
+    public float? DryBase { get; init; }
+    public int? DryAllowedLength { get; init; }
+    public int? DryPenaltyLastN { get; init; }
+    public int? RepeatLastN { get; init; }
+
     public int Seed { get; init; } = -1;
     public IReadOnlyList<string>? StopSequences { get; init; }
 
@@ -604,6 +622,14 @@ public sealed class CompletionOptions
     public float RepeatPenalty { get; init; } = 1.1f;
     public float FrequencyPenalty { get; init; }
     public float PresencePenalty { get; init; }
+
+    // Advanced anti-repetition (standard llama-server samplers; null = server default, omitted from request)
+    public float? DryMultiplier { get; init; }
+    public float? DryBase { get; init; }
+    public int? DryAllowedLength { get; init; }
+    public int? DryPenaltyLastN { get; init; }
+    public int? RepeatLastN { get; init; }
+
     public int Seed { get; init; } = -1;
     public IReadOnlyList<string>? StopSequences { get; init; }
 
@@ -630,6 +656,15 @@ internal sealed class ChatCompletionRequest
     public float? RepeatPenalty { get; set; }
     public float? FrequencyPenalty { get; set; }
     public float? PresencePenalty { get; set; }
+
+    // Advanced anti-repetition (snake_case: dry_multiplier, dry_base, dry_allowed_length,
+    // dry_penalty_last_n, repeat_last_n). Null -> omitted (WhenWritingNull) -> server default.
+    public float? DryMultiplier { get; set; }
+    public float? DryBase { get; set; }
+    public int? DryAllowedLength { get; set; }
+    public int? DryPenaltyLastN { get; set; }
+    public int? RepeatLastN { get; set; }
+
     public int? Seed { get; set; }
     public bool Stream { get; set; }
     public List<string>? Stop { get; set; }
@@ -675,6 +710,15 @@ internal sealed class CompletionRequest
     public float? RepeatPenalty { get; set; }
     public float? FrequencyPenalty { get; set; }
     public float? PresencePenalty { get; set; }
+
+    // Advanced anti-repetition (snake_case: dry_multiplier, dry_base, dry_allowed_length,
+    // dry_penalty_last_n, repeat_last_n). Null -> omitted (WhenWritingNull) -> server default.
+    public float? DryMultiplier { get; set; }
+    public float? DryBase { get; set; }
+    public int? DryAllowedLength { get; set; }
+    public int? DryPenaltyLastN { get; set; }
+    public int? RepeatLastN { get; set; }
+
     public int? Seed { get; set; }
     public bool Stream { get; set; }
     public List<string>? Stop { get; set; }

@@ -111,4 +111,120 @@ public class GenerationOptionsTests
         opts.MinP.Should().BeApproximately(0.0f, 0.0001f);
         opts.RepetitionPenalty.Should().BeApproximately(1.0f, 0.0001f);
     }
+
+    // --- Length safety contract (Issue 3: ResolveMaxOutputTokens) ---
+    // The shared hard cap both backends must enforce. A non-positive limit means "unset",
+    // never "infinite", so generation can never be unbounded.
+
+    [Fact]
+    public void ResolveMaxOutputTokens_Default_ReturnsMaxTokens()
+    {
+        GenerationOptions.Default.ResolveMaxOutputTokens()
+            .Should().Be(GenerationOptions.DefaultMaxTokens, because: "with no MaxNewTokens, MaxTokens (512) is the cap");
+    }
+
+    [Fact]
+    public void ResolveMaxOutputTokens_MaxNewTokensSet_TakesPrecedenceOverMaxTokens()
+    {
+        var opts = new GenerationOptions { MaxTokens = 2048, MaxNewTokens = 100 };
+
+        opts.ResolveMaxOutputTokens().Should().Be(100, because: "MaxNewTokens is the explicit output-only cap");
+    }
+
+    [Fact]
+    public void ResolveMaxOutputTokens_MaxTokensOnly_ReturnsMaxTokens()
+    {
+        new GenerationOptions { MaxTokens = 2048 }.ResolveMaxOutputTokens().Should().Be(2048);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-512)]
+    public void ResolveMaxOutputTokens_NonPositiveMaxTokens_NormalizesToDefault(int maxTokens)
+    {
+        // Non-positive MaxTokens must NOT mean unbounded generation — it normalizes to the default cap.
+        new GenerationOptions { MaxTokens = maxTokens }.ResolveMaxOutputTokens()
+            .Should().Be(GenerationOptions.DefaultMaxTokens);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ResolveMaxOutputTokens_NonPositiveMaxNewTokens_NormalizesToDefault(int maxNewTokens)
+    {
+        // An explicitly non-positive MaxNewTokens is invalid input, normalized rather than treated as infinite.
+        new GenerationOptions { MaxTokens = 2048, MaxNewTokens = maxNewTokens }.ResolveMaxOutputTokens()
+            .Should().Be(GenerationOptions.DefaultMaxTokens);
+    }
+
+    // --- Advanced anti-repetition samplers (Issue 2) ---
+    // All default to null ("backend default"), so existing callers are unaffected until they opt in.
+
+    [Fact]
+    public void Default_AntiRepetitionSamplers_AreNull()
+    {
+        var opts = GenerationOptions.Default;
+
+        opts.DryMultiplier.Should().BeNull();
+        opts.DryBase.Should().BeNull();
+        opts.DryAllowedLength.Should().BeNull();
+        opts.DryPenaltyLastN.Should().BeNull();
+        opts.RepeatLastN.Should().BeNull();
+        opts.NoRepeatNgramSize.Should().BeNull();
+    }
+
+    [Fact]
+    public void AntiRepetitionSamplers_AreAssignable()
+    {
+        var opts = new GenerationOptions
+        {
+            DryMultiplier = 0.8f,
+            DryBase = 1.75f,
+            DryAllowedLength = 2,
+            DryPenaltyLastN = -1,
+            RepeatLastN = 64,
+            NoRepeatNgramSize = 3
+        };
+
+        opts.DryMultiplier.Should().BeApproximately(0.8f, 0.0001f);
+        opts.DryBase.Should().BeApproximately(1.75f, 0.0001f);
+        opts.DryAllowedLength.Should().Be(2);
+        opts.DryPenaltyLastN.Should().Be(-1);
+        opts.RepeatLastN.Should().Be(64);
+        opts.NoRepeatNgramSize.Should().Be(3);
+    }
+
+    // --- AdaptiveSamplingPolicy (Issue 1): low-end-safe repetition penalty floor ---
+
+    [Fact]
+    public void AdaptiveSampling_LowEnd_RaisesDisabledPenaltyToFloor()
+    {
+        // The preset trap: a 1.0 (disabled) penalty on a low-end/quantized model is raised to the safe floor.
+        AdaptiveSamplingPolicy.ResolveRepetitionPenalty(1.0f, isLowEnd: true)
+            .Should().BeApproximately(AdaptiveSamplingPolicy.LowEndMinRepetitionPenalty, 0.0001f);
+    }
+
+    [Fact]
+    public void AdaptiveSampling_LowEnd_DoesNotLowerStrongerPenalty()
+    {
+        // Never weakens a caller's stronger defense.
+        AdaptiveSamplingPolicy.ResolveRepetitionPenalty(1.3f, isLowEnd: true)
+            .Should().BeApproximately(1.3f, 0.0001f);
+    }
+
+    [Fact]
+    public void AdaptiveSampling_NotLowEnd_LeavesValueUnchanged()
+    {
+        // High-end / full-precision: presets keep their vendor-recommended values verbatim.
+        AdaptiveSamplingPolicy.ResolveRepetitionPenalty(1.0f, isLowEnd: false)
+            .Should().BeApproximately(1.0f, 0.0001f);
+    }
+
+    [Fact]
+    public void AdaptiveSampling_LowEnd_AtFloor_IsIdempotent()
+    {
+        AdaptiveSamplingPolicy.ResolveRepetitionPenalty(AdaptiveSamplingPolicy.LowEndMinRepetitionPenalty, isLowEnd: true)
+            .Should().BeApproximately(AdaptiveSamplingPolicy.LowEndMinRepetitionPenalty, 0.0001f);
+    }
 }

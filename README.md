@@ -394,6 +394,8 @@ LMSupply detects your hardware and selects models accordingly:
 var opts = new GenerationOptions { Thinking = ThinkingMode.Off };
 ```
 
+Low-end/quantized models (the `FallbackToSmallest` tier below) are prone to *degenerate run-on*. `GenerationOptions` exposes standard anti-repetition samplers (`DryMultiplier`, `RepeatLastN`, `NoRepeatNgramSize`) and `AdaptiveSamplingPolicy` restores a safe repetition-penalty floor for presets that ship it disabled (`Qwen3`/`Gemma4` use `RepetitionPenalty=1.0`). `MaxTokens` is a hard output cap enforced on both backends. See [docs/generator.md](docs/generator.md#anti-repetition-and-run-on-defense).
+
 | Performance Tier | Free VRAM | Selected Model | Notes |
 |------------------|-----------|----------------|-------|
 | **Low** | CPU or <3GB | `gguf:qwen3-fast` (Qwen 3.5 2B) | FallbackToSmallest |

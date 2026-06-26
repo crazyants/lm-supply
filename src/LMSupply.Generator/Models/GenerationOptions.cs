@@ -6,11 +6,17 @@ namespace LMSupply.Generator.Models;
 public sealed class GenerationOptions
 {
     /// <summary>
+    /// Default hard cap on generated tokens, applied when no positive limit is supplied.
+    /// Guarantees generation can never be unbounded even if a caller passes a non-positive value.
+    /// </summary>
+    public const int DefaultMaxTokens = 512;
+
+    /// <summary>
     /// Gets or sets the maximum number of tokens to generate.
     /// Enforced both server-side (llama-server) and client-side as a safety net.
     /// Defaults to 512.
     /// </summary>
-    public int MaxTokens { get; set; } = 512;
+    public int MaxTokens { get; set; } = DefaultMaxTokens;
 
     /// <summary>
     /// Gets or sets the temperature for sampling.
@@ -83,6 +89,54 @@ public sealed class GenerationOptions
     /// Range: 0.0 to 2.0. Defaults to 0.0 (disabled).
     /// </summary>
     public float PresencePenalty { get; set; }
+
+    #region Advanced anti-repetition (standard samplers; null = backend default)
+
+    /// <summary>
+    /// DRY (Don't Repeat Yourself) sampler multiplier. 0.0 disables DRY; typical enabled value ~0.8.
+    /// DRY penalizes repeated token sequences and is the most effective standard defense against
+    /// degenerate run-on / repetition loops, especially on low-end and quantized models where a scalar
+    /// <see cref="RepetitionPenalty"/> alone is insufficient. Null = use the backend default.
+    /// </summary>
+    /// <remarks>Backend support: llama-server only (sent as <c>dry_multiplier</c>). Ignored by the ONNX backend.</remarks>
+    public float? DryMultiplier { get; set; }
+
+    /// <summary>
+    /// DRY sampler base — controls how steeply the penalty grows with repeated-sequence length.
+    /// llama-server default is 1.75. Only meaningful when <see cref="DryMultiplier"/> &gt; 0. Null = backend default.
+    /// </summary>
+    /// <remarks>Backend support: llama-server only (sent as <c>dry_base</c>).</remarks>
+    public float? DryBase { get; set; }
+
+    /// <summary>
+    /// DRY sampler allowed length — sequences up to this length are not penalized. llama-server default is 2.
+    /// Only meaningful when <see cref="DryMultiplier"/> &gt; 0. Null = backend default.
+    /// </summary>
+    /// <remarks>Backend support: llama-server only (sent as <c>dry_allowed_length</c>).</remarks>
+    public int? DryAllowedLength { get; set; }
+
+    /// <summary>
+    /// DRY sampler look-back window in tokens. llama-server default is -1 (context size); 0 disables.
+    /// Only meaningful when <see cref="DryMultiplier"/> &gt; 0. Null = backend default.
+    /// </summary>
+    /// <remarks>Backend support: llama-server only (sent as <c>dry_penalty_last_n</c>).</remarks>
+    public int? DryPenaltyLastN { get; set; }
+
+    /// <summary>
+    /// Number of most-recent tokens that <see cref="RepetitionPenalty"/> considers (the penalty window).
+    /// llama-server default is 64; 0 disables, -1 = context size. Null = backend default.
+    /// </summary>
+    /// <remarks>Backend support: llama-server only (sent as <c>repeat_last_n</c>).</remarks>
+    public int? RepeatLastN { get; set; }
+
+    /// <summary>
+    /// Blocks any n-gram of this size from being generated more than once (hard repetition cut).
+    /// 0 disables. A standard HuggingFace/ONNX defense against verbatim phrase loops. Null = backend default.
+    /// </summary>
+    /// <remarks>Backend support: ONNX backend only (set as <c>no_repeat_ngram_size</c>). Not supported by llama-server, which omits it.</remarks>
+    public int? NoRepeatNgramSize { get; set; }
+
+    #endregion
 
     /// <summary>
     /// Gets or sets the stop sequences that will terminate generation.
@@ -186,6 +240,24 @@ public sealed class GenerationOptions
     #endregion
 
     /// <summary>
+    /// Resolves the effective hard cap on output (generated) tokens that every backend must enforce.
+    /// Prefers <see cref="MaxNewTokens"/> when set, otherwise falls back to <see cref="MaxTokens"/>.
+    /// A non-positive resolved value is normalized to <see cref="DefaultMaxTokens"/> so generation
+    /// is never unbounded — a non-positive limit is treated as "unset", not "infinite".
+    /// </summary>
+    /// <remarks>
+    /// This is the single decision point shared by the llama-server and ONNX backends, ensuring the
+    /// <see cref="MaxTokens"/> safety-net contract holds identically across both. The previous ONNX
+    /// path ignored <see cref="MaxTokens"/> entirely (fell back to <c>int.MaxValue</c>), allowing a
+    /// low-end model to run on to the full context window — this method closes that gap.
+    /// </remarks>
+    public int ResolveMaxOutputTokens()
+    {
+        var effective = MaxNewTokens ?? MaxTokens;
+        return effective > 0 ? effective : DefaultMaxTokens;
+    }
+
+    /// <summary>
     /// Creates a default instance of GenerationOptions.
     /// </summary>
     public static GenerationOptions Default => new();
@@ -204,6 +276,10 @@ public sealed class GenerationOptions
     /// <summary>
     /// Creates options optimized for deterministic/precise outputs.
     /// </summary>
+    /// <remarks>
+    /// Ships <see cref="RepetitionPenalty"/> = 1.0 (defense off), which is fine for full-precision models
+    /// but risky on low-end/quantized ones. See <see cref="AdaptiveSamplingPolicy"/> to restore a safe floor.
+    /// </remarks>
     public static GenerationOptions Precise => new()
     {
         Temperature = 0.1f,
@@ -216,6 +292,8 @@ public sealed class GenerationOptions
     /// Creates options tuned for Gemma 4 models per Google's published recommendations.
     /// temperature=1.0, top_p=0.95, top_k=64 — required for stable tool-call generation
     /// on E4B and larger. Use instead of <see cref="Default"/> when loading a Gemma 4 model.
+    /// Ships <see cref="RepetitionPenalty"/> = 1.0 (defense off) per Google's recommendation; on a
+    /// low-end/quantized Gemma 4 this raises run-on risk — see <see cref="AdaptiveSamplingPolicy"/>.
     /// </summary>
     public static GenerationOptions Gemma4 => new()
     {
@@ -228,6 +306,8 @@ public sealed class GenerationOptions
     /// <summary>
     /// Sampling parameters per official Qwen3 recommendation for thinking mode.
     /// Temperature = 0.6, TopP = 0.95, TopK = 20, MinP = 0.0, RepetitionPenalty = 1.0.
+    /// Note: RepetitionPenalty = 1.0 disables the defense; on a low-end/quantized Qwen3 this raises
+    /// run-on risk — see <see cref="AdaptiveSamplingPolicy"/> to restore a safe floor.
     /// </summary>
     public static GenerationOptions Qwen3 => new()
     {

@@ -160,7 +160,10 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel, IDiagnosticsSink
             }
 
             var generatedTokenCount = 0;
-            var maxNewTokens = options.MaxNewTokens ?? int.MaxValue;
+            // Honor the MaxTokens safety-net contract on the ONNX path too: previously this fell back
+            // to int.MaxValue when MaxNewTokens was unset, ignoring MaxTokens and letting low-end models
+            // run on to the full context window. ResolveMaxOutputTokens mirrors the llama-server path.
+            var maxNewTokens = options.ResolveMaxOutputTokens();
 
             // Accumulate generated text for multi-token stop sequence detection
             var accumulatedText = new StringBuilder();
@@ -517,6 +520,11 @@ internal sealed class OnnxGeneratorModel : IGeneratorModel, IDiagnosticsSink
         generatorParams.SetSearchOption("top_p", options.TopP);
         generatorParams.SetSearchOption("top_k", options.TopK);
         generatorParams.SetSearchOption("repetition_penalty", options.RepetitionPenalty);
+        // no_repeat_ngram_size is an ONNX Runtime GenAI search option (not supported by llama-server).
+        // Applied only when set so default behavior is unchanged. Hard-blocks any n-gram of this size
+        // from recurring — a standard verbatim-loop defense.
+        if (options.NoRepeatNgramSize is { } noRepeatNgram && noRepeatNgram > 0)
+            generatorParams.SetSearchOption("no_repeat_ngram_size", noRepeatNgram);
         generatorParams.SetSearchOption("do_sample", options.DoSample);
 
         // Beam search configuration

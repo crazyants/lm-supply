@@ -478,7 +478,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         {
             var completionOptions = new CompletionOptions
             {
-                MaxTokens = options.MaxNewTokens ?? options.MaxTokens,
+                MaxTokens = options.ResolveMaxOutputTokens(),
                 Temperature = options.Temperature,
                 TopP = options.TopP,
                 TopK = options.TopK,
@@ -557,7 +557,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             var chatOptions = CreateChatOptions(options);
 
             // Client-side token limit as safety net
-            var maxTokens = options.MaxNewTokens ?? options.MaxTokens;
+            var maxTokens = options.ResolveMaxOutputTokens();
             var tokenCount = 0;
 
             // Initialize reasoning token filter if needed
@@ -708,7 +708,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             var chatOptions = CreateChatOptions(options);
 
             // Client-side token limit as safety net
-            var maxTokens = options.MaxNewTokens ?? options.MaxTokens;
+            var maxTokens = options.ResolveMaxOutputTokens();
             var tokenCount = 0;
 
             // Initialize reasoning token filter if needed
@@ -904,7 +904,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     {
         return new ChatCompletionOptions
         {
-            MaxTokens = options.MaxNewTokens ?? options.MaxTokens,
+            MaxTokens = options.ResolveMaxOutputTokens(),
             Temperature = options.Temperature,
             TopP = options.TopP,
             TopK = options.TopK,
@@ -912,6 +912,11 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
             RepeatPenalty = options.RepetitionPenalty,
             FrequencyPenalty = options.FrequencyPenalty,
             PresencePenalty = options.PresencePenalty,
+            DryMultiplier = options.DryMultiplier,
+            DryBase = options.DryBase,
+            DryAllowedLength = options.DryAllowedLength,
+            DryPenaltyLastN = options.DryPenaltyLastN,
+            RepeatLastN = options.RepeatLastN,
             Seed = options.Seed,
             StopSequences = MergeStopSequences(options.StopSequences),
             Grammar = options.Grammar,
@@ -1401,7 +1406,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         if (MaxContextLength <= 0)
             return messages.ToList();
 
-        var outputReserved = options.MaxNewTokens ?? options.MaxTokens;
+        var outputReserved = options.ResolveMaxOutputTokens();
         var inputBudget = MaxContextLength - outputReserved;
         if (inputBudget <= 0)
             return messages.ToList();

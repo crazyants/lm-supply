@@ -139,7 +139,7 @@ var generator = await TextGeneratorBuilder.Create()
 ### Generation Options
 
 ```csharp
-var options = new GeneratorOptions
+var options = new GenerationOptions
 {
     MaxTokens = 512,              // Maximum tokens to generate
     Temperature = 0.7f,           // Randomness (0.0 = deterministic)
@@ -152,8 +152,8 @@ var options = new GeneratorOptions
 string response = await generator.GenerateCompleteAsync(prompt, options);
 
 // Or use presets
-string creative = await generator.GenerateCompleteAsync(prompt, GeneratorOptions.Creative);
-string precise = await generator.GenerateCompleteAsync(prompt, GeneratorOptions.Precise);
+string creative = await generator.GenerateCompleteAsync(prompt, GenerationOptions.Creative);
+string precise = await generator.GenerateCompleteAsync(prompt, GenerationOptions.Precise);
 ```
 
 ### Memory Management
@@ -698,6 +698,58 @@ await foreach (var token in model.GenerateChatAsync(messages, GenerationOptions.
     Console.Write(token);
 }
 ```
+
+> **Low-end caveat:** `Precise`, `Gemma4`, and `Qwen3` ship `RepetitionPenalty = 1.0`, which **disables**
+> the primary repetition defense. That matches each vendor's full-precision recommendation, but on a
+> low-end or heavily quantized model it raises the risk of degenerate run-on (the model ignores EOS and
+> emits text up to the length cap). See **Anti-repetition and run-on defense** below to restore a safe floor.
+
+#### Anti-repetition and run-on defense
+
+Low-end and quantized models are prone to *degenerate run-on* — emitting plausible-but-aimless text to
+the token limit instead of stopping. Beyond `RepetitionPenalty`/`FrequencyPenalty`/`PresencePenalty`,
+`GenerationOptions` exposes the standard samplers that target this directly. All default to `null`
+(= backend default), so leaving them unset changes nothing.
+
+| Option | Wire key | Backend | Purpose |
+|--------|----------|---------|---------|
+| `DryMultiplier` | `dry_multiplier` | llama-server | DRY sampler strength (0 = off; ~0.8 enabled). Most effective run-on defense. |
+| `DryBase` | `dry_base` | llama-server | DRY penalty growth base (default 1.75). |
+| `DryAllowedLength` | `dry_allowed_length` | llama-server | Sequences up to this length are not penalized (default 2). |
+| `DryPenaltyLastN` | `dry_penalty_last_n` | llama-server | DRY look-back window (-1 = context size). |
+| `RepeatLastN` | `repeat_last_n` | llama-server | Window `RepetitionPenalty` considers (default 64). |
+| `NoRepeatNgramSize` | `no_repeat_ngram_size` | ONNX only | Hard-blocks any n-gram of this size from recurring. |
+
+> **Backend support differs.** DRY and `repeat_last_n` apply to the llama-server (GGUF) backend only;
+> `no_repeat_ngram_size` applies to the ONNX backend only (llama-server does not support it). Options
+> not supported by the active backend are omitted from the request rather than rejected.
+
+```csharp
+// Strong run-on defense on the GGUF/llama-server path
+var options = new GenerationOptions
+{
+    DryMultiplier = 0.8f,   // enable DRY
+    RepeatLastN = 256       // widen the repetition-penalty window
+};
+```
+
+**Adaptive low-end safeguard.** `AdaptiveSamplingPolicy` is the single source of truth for the low-end-safe
+anti-repetition floor. It is pure — it never changes behavior on its own; apply it where the user
+expressed no explicit preference:
+
+```csharp
+// Raise a preset's disabled penalty (1.0) to the safe floor (1.1) only on a low-end/quantized model.
+var opts = GenerationOptions.Qwen3;
+opts.RepetitionPenalty = AdaptiveSamplingPolicy.ResolveRepetitionPenalty(opts.RepetitionPenalty, isLowEnd: true);
+// isLowEnd=false leaves the value unchanged; it only ever raises, never lowers.
+```
+
+#### Output length safety
+
+`MaxTokens` (default 512) is a hard cap on generated tokens enforced by **both** backends. `MaxNewTokens`,
+when set, takes precedence as the output-only cap. A non-positive value is treated as *unset* (normalized
+to the default), never as "unlimited" — generation can never be unbounded. The shared resolution is
+`GenerationOptions.ResolveMaxOutputTokens()`.
 
 ### Gemma 4 Thinking Mode (v0.34+)
 

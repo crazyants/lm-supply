@@ -574,23 +574,62 @@ public sealed class LlamaServerDownloader : IDisposable
         }
 
         Directory.CreateDirectory(versionDir);
-        var archivePath = Path.Combine(versionDir, cudartName);
 
-        progress?.Report(new DownloadProgress { FileName = cudartName, Phase = DownloadPhase.Downloading });
-
-        using (var dl = await _httpClient.GetAsync(cudartUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        // Provision atomically w.r.t. the versionDir: download + extract into an isolated staging
+        // directory (kept INSIDE versionDir so it is on the same volume, making the final move an
+        // atomic rename), then move only a fully extracted runtime into place. A failed or interrupted
+        // extract therefore never leaves a partial state in the versionDir — the CudaRuntimePresent
+        // completeness check stays meaningful and a truncated cublasLt is never load-attempted by ggml.
+        // The staging directory is always removed (success or failure). A unique name keeps concurrent
+        // cross-process provisioners (which the in-process gate cannot serialize) from colliding.
+        var stagingDir = Path.Combine(versionDir, ".cudart-staging-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stagingDir);
+        try
         {
-            dl.EnsureSuccessStatusCode();
-            await using var src = await dl.Content.ReadAsStreamAsync(cancellationToken);
-            await using var dst = File.Create(archivePath);
-            await src.CopyToAsync(dst, cancellationToken);
-        }
+            var archivePath = Path.Combine(stagingDir, cudartName);
 
-        await ExtractArchiveAsync(archivePath, versionDir, GetCurrentPlatform(), cancellationToken);
-        File.Delete(archivePath);
+            progress?.Report(new DownloadProgress { FileName = cudartName, Phase = DownloadPhase.Downloading });
+
+            using (var dl = await _httpClient.GetAsync(cudartUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+            {
+                dl.EnsureSuccessStatusCode();
+                await using var src = await dl.Content.ReadAsStreamAsync(cancellationToken);
+                await using var dst = File.Create(archivePath);
+                await src.CopyToAsync(dst, cancellationToken);
+            }
+
+            var extractDir = Path.Combine(stagingDir, "extracted");
+            Directory.CreateDirectory(extractDir);
+            await ExtractArchiveAsync(archivePath, extractDir, GetCurrentPlatform(), cancellationToken);
+
+            // Move the extracted runtime into the versionDir. cublasLt (the largest file and the last
+            // family CudaRuntimePresent requires) is moved LAST so the completeness check only flips
+            // true once every family is in place — a crash mid-move leaves the versionDir incomplete
+            // (present=false) and the next load re-provisions rather than running on a partial runtime.
+            // The cudart companion archive is flat (runtime DLLs at the root), so flattening via
+            // Path.GetFileName is safe; AllDirectories is a defensive net for any incidental subdir.
+            foreach (var file in Directory.GetFiles(extractDir, "*", SearchOption.AllDirectories)
+                         .OrderBy(CudartMoveOrder))
+            {
+                File.Move(file, Path.Combine(versionDir, Path.GetFileName(file)), overwrite: true);
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(stagingDir, recursive: true); }
+            catch { /* best-effort staging cleanup; the runtime is already in place */ }
+        }
 
         Trace.TraceInformation(
             $"[LlamaServerDownloader] Installed CUDA runtime {cudartName} for {backend} into {versionDir}.");
+    }
+
+    /// <summary>Sort key that moves the cublasLt family last (see <see cref="ProvisionCudaRuntimeCoreAsync"/>).</summary>
+    internal static int CudartMoveOrder(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name.StartsWith("cublasLt", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("libcublasLt", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
     }
 
     public void Dispose()

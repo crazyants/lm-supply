@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace LMSupply.Llama.Server;
@@ -16,6 +17,7 @@ public sealed class LlamaServerStateManager : IDisposable
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    private readonly string _cacheDirectory;
     private readonly string _stateFilePath;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private LlamaServerStateFile? _cachedState;
@@ -32,7 +34,94 @@ public sealed class LlamaServerStateManager : IDisposable
                 "LMSupply", "cache", "llama-server");
 
         Directory.CreateDirectory(dir);
+        _cacheDirectory = dir;
         _stateFilePath = Path.Combine(dir, StateFileName);
+    }
+
+    /// <summary>
+    /// Deletes versioned build directories (<c>b*</c>) under the cache root that no state entry
+    /// references via InstalledPath, PendingPath, or PreviousVersions. This is the single retention
+    /// mechanism: <see cref="ActivateUpdateAsync"/> trims state only, which makes superseded
+    /// versions unreferenced and therefore reclaimable here. Deletion is best-effort per directory
+    /// (a locked directory is retried on the next cleanup).
+    /// </summary>
+    /// <returns>The number of version directories deleted.</returns>
+    public async Task<int> CleanupUnreferencedVersionsAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            // Destructive decision: re-read from disk. The cache directory is shared across
+            // processes, so the process-local cache may miss references another process just
+            // persisted (e.g. a pending download).
+            _cachedState = null;
+            var stateFile = await LoadStateFileAsync(cancellationToken);
+
+            // Zero entries means "state unknown", not "everything is orphaned": pre-state caches
+            // are adopted through GetCachedVersions discovery and must never be swept here.
+            if (stateFile.Entries.Count == 0)
+                return 0;
+
+            var referencedPaths = stateFile.Entries.Values
+                .SelectMany(state => state.PreviousVersions.Select(previous => previous.Path)
+                    .Append(state.InstalledPath)
+                    .Append(state.PendingPath))
+                .Where(path => !string.IsNullOrEmpty(path))
+                .Select(path => Path.GetFullPath(path!).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                .ToList();
+
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+
+            var deleted = 0;
+            foreach (var candidate in Directory.GetDirectories(_cacheDirectory))
+            {
+                if (!IsVersionDirectoryName(Path.GetFileName(candidate)))
+                    continue;
+
+                var candidateFull = Path.GetFullPath(candidate)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var candidatePrefix = candidateFull + Path.DirectorySeparatorChar;
+
+                var isReferenced = referencedPaths.Any(path =>
+                    path.Equals(candidateFull, comparison) ||
+                    path.StartsWith(candidatePrefix, comparison));
+                if (isReferenced)
+                    continue;
+
+                try
+                {
+                    Directory.Delete(candidate, recursive: true);
+                    deleted++;
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceInformation(
+                        $"[LlamaServerStateManager] Cleanup of superseded version dir failed (will retry next cleanup): {candidate} — {ex.Message}");
+                }
+            }
+
+            return deleted;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private static bool IsVersionDirectoryName(string? name)
+    {
+        if (name is null || name.Length < 2 || name[0] != 'b')
+            return false;
+
+        for (var i = 1; i < name.Length; i++)
+        {
+            if (!char.IsAsciiDigit(name[i]))
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>

@@ -117,6 +117,7 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
 
                     if (activatedState != null)
                     {
+                        await CleanupSupersededBestEffortAsync(cancellationToken);
                         TriggerBackgroundCheck(backend);
                         return LlamaServerUpdateResult.WithUpdate(
                             serverExe, backend, state.InstalledVersion, activatedState.InstalledVersion);
@@ -241,6 +242,7 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
 
                 if (activatedState != null)
                 {
+                    await CleanupSupersededBestEffortAsync(cancellationToken);
                     return LlamaServerUpdateResult.WithUpdate(
                         newServerPath, backend, state.InstalledVersion, latestVersion);
                 }
@@ -332,6 +334,10 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
             // Small delay to avoid blocking the main path
             await Task.Delay(1000, cancellationToken);
 
+            // Off the critical path: reclaim superseded builds accumulated by earlier LMSupply
+            // versions (the retention gap left directories behind forever — 24 GB observed).
+            await CleanupSupersededBestEffortAsync(cancellationToken);
+
             var platform = GetCurrentPlatform();
             var backendStr = backend.ToString().ToLowerInvariant();
 
@@ -383,6 +389,22 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
         catch (Exception ex)
         {
             Trace.TraceInformation($"[LlamaServerUpdateService] Background update error: {ex.Message}");
+        }
+    }
+
+    private async Task CleanupSupersededBestEffortAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _stateManager.CleanupUnreferencedVersionsAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceInformation($"[LlamaServerUpdateService] Superseded-build cleanup failed: {ex.Message}");
         }
     }
 

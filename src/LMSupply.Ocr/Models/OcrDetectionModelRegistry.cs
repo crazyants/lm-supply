@@ -10,7 +10,14 @@ public sealed class OcrDetectionModelRegistry : ModelRegistryBase<DetectionModel
     /// <summary>
     /// Gets the default registry instance with built-in detection models.
     /// </summary>
-    public static OcrDetectionModelRegistry Default { get; } = new(DefaultDetectionModels.All);
+    public static OcrDetectionModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "ocr-detection" section (fail-soft).
+    /// </summary>
+    internal static OcrDetectionModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new OcrDetectionModelRegistry(DefaultDetectionModels.All), AliasConfiguration.Domains.OcrDetection);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

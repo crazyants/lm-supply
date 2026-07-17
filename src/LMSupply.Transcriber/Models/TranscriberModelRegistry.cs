@@ -22,7 +22,14 @@ public sealed class TranscriberModelRegistry : ModelRegistryBase<TranscriberMode
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static TranscriberModelRegistry Default { get; } = new(DefaultModels.All);
+    public static TranscriberModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "transcriber" section (fail-soft).
+    /// </summary>
+    internal static TranscriberModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new TranscriberModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Transcriber);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

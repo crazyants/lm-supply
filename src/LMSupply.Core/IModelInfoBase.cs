@@ -47,21 +47,12 @@ public enum AliasKind
 }
 
 /// <summary>
-/// Interface for model registries that manage model configurations and aliases.
+/// Non-generic alias surface of a model registry. Lets alias tooling
+/// (e.g. <see cref="AliasConfiguration"/>) operate on any registry regardless of
+/// its model-info type.
 /// </summary>
-/// <typeparam name="TModelInfo">The type of model information managed by this registry.</typeparam>
-public interface IModelRegistry<TModelInfo> where TModelInfo : IModelInfoBase
+public interface IAliasRegistry
 {
-    /// <summary>
-    /// Resolves a model identifier to its full information. Throws ModelNotFoundException if not found.
-    /// </summary>
-    TModelInfo Resolve(string modelIdOrAlias);
-
-    /// <summary>
-    /// Tries to resolve a model identifier to its full information.
-    /// </summary>
-    bool TryResolve(string modelIdOrAlias, out TModelInfo? modelInfo);
-
     /// <summary>
     /// Registers a user-defined alias. Throws AliasConflictException if the name
     /// conflicts with a system alias, or AliasChainException if the target is a user alias.
@@ -78,6 +69,23 @@ public interface IModelRegistry<TModelInfo> where TModelInfo : IModelInfoBase
     /// Gets all registered aliases (system + user).
     /// </summary>
     IReadOnlyList<AliasInfo> GetAliases();
+}
+
+/// <summary>
+/// Interface for model registries that manage model configurations and aliases.
+/// </summary>
+/// <typeparam name="TModelInfo">The type of model information managed by this registry.</typeparam>
+public interface IModelRegistry<TModelInfo> : IAliasRegistry where TModelInfo : IModelInfoBase
+{
+    /// <summary>
+    /// Resolves a model identifier to its full information. Throws ModelNotFoundException if not found.
+    /// </summary>
+    TModelInfo Resolve(string modelIdOrAlias);
+
+    /// <summary>
+    /// Tries to resolve a model identifier to its full information.
+    /// </summary>
+    bool TryResolve(string modelIdOrAlias, out TModelInfo? modelInfo);
 
     /// <summary>
     /// Gets all registered model information (deduplicated).

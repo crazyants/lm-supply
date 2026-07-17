@@ -10,7 +10,14 @@ public sealed class TranslatorModelRegistry : ModelRegistryBase<TranslatorModelI
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static TranslatorModelRegistry Default { get; } = new(DefaultModels.All);
+    public static TranslatorModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "translator" section (fail-soft).
+    /// </summary>
+    internal static TranslatorModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new TranslatorModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Translator);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

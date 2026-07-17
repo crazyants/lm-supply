@@ -23,7 +23,14 @@ public sealed class SynthesizerModelRegistry : ModelRegistryBase<SynthesizerMode
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static SynthesizerModelRegistry Default { get; } = new(DefaultModels.All);
+    public static SynthesizerModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "synthesizer" section (fail-soft).
+    /// </summary>
+    internal static SynthesizerModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new SynthesizerModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Synthesizer);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

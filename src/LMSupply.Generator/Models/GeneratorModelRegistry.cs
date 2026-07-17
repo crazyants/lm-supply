@@ -20,7 +20,14 @@ public sealed class GeneratorModelRegistry : ModelRegistryBase<ModelInfo>
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static GeneratorModelRegistry Default { get; } = new(DefaultGeneratorModels.All);
+    public static GeneratorModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "generator" section (fail-soft).
+    /// </summary>
+    internal static GeneratorModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new GeneratorModelRegistry(DefaultGeneratorModels.All), AliasConfiguration.Domains.Generator);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

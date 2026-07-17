@@ -3,6 +3,9 @@ using FluentAssertions;
 
 namespace LMSupply.Core.Tests.Registry;
 
+// Reads the env-sensitive DefaultFilePath — must serialize with every class that
+// mutates LMSUPPLY_* env vars (see the collection rule in LMSupplyCachePathsTests).
+[Collection("lmsupply-cache-env")]
 public class AliasConfigurationTests
 {
     [Fact]

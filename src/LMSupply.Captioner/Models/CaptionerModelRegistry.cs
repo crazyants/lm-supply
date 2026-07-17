@@ -12,7 +12,14 @@ public sealed class CaptionerModelRegistry : ModelRegistryBase<ModelInfo>
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static CaptionerModelRegistry Default { get; } = new(DefaultModels.All);
+    public static CaptionerModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "captioner" section (fail-soft).
+    /// </summary>
+    internal static CaptionerModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new CaptionerModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Captioner);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

@@ -618,6 +618,39 @@ For private HuggingFace repositories, set the `HF_TOKEN` environment variable.
 
 ---
 
+## Custom Model Aliases
+
+Every built-in alias table below can be extended with your own aliases — either from a
+config file (zero code) or programmatically.
+
+**Config file** — `~/.lmsupply/aliases.json` (relocate with the `LMSUPPLY_ALIASES_FILE`
+environment variable). Top-level keys are per-module domains; loading is fail-soft
+(a typo or a conflict with a system alias is skipped with a Trace warning, never a crash):
+
+```jsonc
+{
+  "generator": { "my-writer": "gguf:qwen3-quality" },
+  "embedder":  { "my-embed": "BAAI/bge-m3" }
+}
+```
+
+Domains: `generator`, `embedder`, `reranker`, `captioner`, `transcriber`, `translator`,
+`synthesizer`, `segmenter`, `detector`, `imagegenerator`, `ocr-detection`, `ocr-recognition`.
+
+```csharp
+// Zero consumer code needed after the file exists:
+await using var generator = await LocalGenerator.LoadAsync("my-writer");
+```
+
+**Programmatic** — each module exposes its registry; runtime registrations override
+file entries (last write wins). Alias names may not shadow system aliases
+(`default`, `auto`, ...) and may not contain `:` (reserved for variant qualifiers):
+
+```csharp
+LocalGenerator.Registry.RegisterAlias("my-writer", "gguf:qwen3-quality");
+LocalEmbedder.Registry.RegisterAlias("my-embed", "BAAI/bge-m3");
+```
+
 ## Model Caching
 
 Models are cached following HuggingFace Hub conventions:

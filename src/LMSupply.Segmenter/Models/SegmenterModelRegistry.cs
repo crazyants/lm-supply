@@ -21,7 +21,14 @@ public sealed class SegmenterModelRegistry : ModelRegistryBase<SegmenterModelInf
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static SegmenterModelRegistry Default { get; } = new(DefaultModels.All);
+    public static SegmenterModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "segmenter" section (fail-soft).
+    /// </summary>
+    internal static SegmenterModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new SegmenterModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Segmenter);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

@@ -22,7 +22,14 @@ public sealed class DetectorModelRegistry : ModelRegistryBase<DetectorModelInfo>
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static DetectorModelRegistry Default { get; } = new(DefaultModels.All);
+    public static DetectorModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "detector" section (fail-soft).
+    /// </summary>
+    internal static DetectorModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new DetectorModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Detector);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

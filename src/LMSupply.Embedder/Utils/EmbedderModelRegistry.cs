@@ -22,7 +22,14 @@ public sealed class EmbedderModelRegistry : ModelRegistryBase<ModelInfo>
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static EmbedderModelRegistry Default { get; } = new(DefaultModels.All);
+    public static EmbedderModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "embedder" section (fail-soft).
+    /// </summary>
+    internal static EmbedderModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new EmbedderModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Embedder);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

@@ -11,7 +11,14 @@ public sealed class RerankerModelRegistry : ModelRegistryBase<ModelInfo>
     /// <summary>
     /// Gets the default registry instance with built-in models.
     /// </summary>
-    public static RerankerModelRegistry Default { get; } = new(DefaultModels.All);
+    public static RerankerModelRegistry Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Builds the default registry: built-in models plus the user's
+    /// ~/.lmsupply/aliases.json "reranker" section (fail-soft).
+    /// </summary>
+    internal static RerankerModelRegistry CreateDefault()
+        => AliasConfiguration.ApplyDomain(new RerankerModelRegistry(DefaultModels.All), AliasConfiguration.Domains.Reranker);
 
     /// <summary>
     /// Initializes a new registry with the specified system models.

@@ -9,7 +9,12 @@ namespace LMSupply.Core.Tests.Runtime;
 /// must resolve its default directory through <see cref="LMSupplyCachePaths"/> —
 /// LMSUPPLY_CACHE_DIR env → %LOCALAPPDATA%/LMSupply/cache/runtimes — never through
 /// hardcoded copies, and never nested inside a HuggingFace hub directory.
+///
+/// Shares the "lmsupply-cache-env" collection with every other class mutating the
+/// process-global LMSUPPLY_CACHE_DIR env var (see LMSupplyCachePathsTests) — parallel
+/// classes would otherwise clobber each other's env state.
 /// </summary>
+[Collection("lmsupply-cache-env")]
 public sealed class RuntimeCachePathUnificationTests
 {
     [Fact]

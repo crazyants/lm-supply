@@ -11,7 +11,12 @@ namespace LMSupply.Core.Tests;
 ///
 /// HF model caching is deliberately separate (CacheManager, HF env chain) — models follow the
 /// HuggingFace hub standard, non-HF artifacts must live outside any hub.
+///
+/// Collection note: every test class that mutates the process-global LMSUPPLY_CACHE_DIR env var
+/// must share the "lmsupply-cache-env" collection — xUnit runs collections' classes sequentially,
+/// preventing parallel classes from clobbering each other's env state.
 /// </summary>
+[Collection("lmsupply-cache-env")]
 public sealed class LMSupplyCachePathsTests
 {
     [Fact]

@@ -519,11 +519,6 @@ public sealed class RuntimeManagerOptions
     public string? CacheDirectory { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum cache size in bytes. Default is 10 GB.
-    /// </summary>
-    public long MaxCacheSize { get; set; } = 10L * 1024 * 1024 * 1024;
-
-    /// <summary>
     /// Gets or sets the proxy URL.
     /// </summary>
     public string? ProxyUrl { get; set; }

@@ -1,3 +1,4 @@
+using LMSupply.Download;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.ChatFormatters;
 
@@ -298,7 +299,7 @@ public sealed class TextGeneratorBuilder
         if (!string.IsNullOrEmpty(_modelId))
         {
             // Use factory to resolve/download model
-            var cacheDir = _modelOptions.CacheDirectory ?? GetDefaultCacheDirectory();
+            var cacheDir = _modelOptions.CacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
             using var factory = new OnnxGeneratorModelFactory(cacheDir, _modelOptions.Provider);
 
             // Download if not available
@@ -312,13 +313,6 @@ public sealed class TextGeneratorBuilder
         }
 
         return string.Empty;
-    }
-
-    private static string GetDefaultCacheDirectory()
-    {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".cache", "huggingface", "hub");
     }
 
     private IChatFormatter ResolveChatFormatter(string modelId)

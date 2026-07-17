@@ -36,7 +36,7 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
     /// Creates a new factory with default settings.
     /// </summary>
     public OnnxGeneratorModelFactory()
-        : this(GetDefaultCacheDirectory(), ExecutionProvider.Auto)
+        : this(CacheManager.GetDefaultCacheDirectory(), ExecutionProvider.Auto)
     {
     }
 
@@ -359,13 +359,6 @@ public sealed class OnnxGeneratorModelFactory : IGeneratorModelFactory, IDisposa
 
         // Fall back to auto-detection from model name
         return ChatFormatterFactory.Create(modelId);
-    }
-
-    private static string GetDefaultCacheDirectory()
-    {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".cache", "huggingface", "hub");
     }
 
     /// <summary>

@@ -36,9 +36,7 @@ public sealed class LlamaServerDownloader : IDisposable
     /// <param name="httpClient">Optional HTTP client (creates new if null).</param>
     public LlamaServerDownloader(string? cacheDirectory = null, HttpClient? httpClient = null)
     {
-        _cacheDirectory = cacheDirectory
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LMSupply", "cache", "llama-server");
+        _cacheDirectory = cacheDirectory ?? LMSupplyCachePaths.GetLlamaServerDirectory();
 
         if (httpClient != null)
         {

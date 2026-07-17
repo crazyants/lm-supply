@@ -29,9 +29,7 @@ public sealed class LlamaServerStateManager : IDisposable
     /// <param name="cacheDirectory">Directory to store state file.</param>
     public LlamaServerStateManager(string? cacheDirectory = null)
     {
-        var dir = cacheDirectory
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LMSupply", "cache", "llama-server");
+        var dir = cacheDirectory ?? LMSupplyCachePaths.GetLlamaServerDirectory();
 
         Directory.CreateDirectory(dir);
         _cacheDirectory = dir;

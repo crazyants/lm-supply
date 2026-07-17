@@ -42,6 +42,13 @@ public sealed class LlamaServerUpdateOptions
     public int MaxVersionsToKeep { get; set; } = 2;
 
     /// <summary>
+    /// Directory for downloaded llama-server builds and their state file.
+    /// Default: null — resolves via <see cref="LMSupplyCachePaths.GetLlamaServerDirectory"/>
+    /// (LMSUPPLY_CACHE_DIR env override, then the LMSupply local cache root).
+    /// </summary>
+    public string? CacheDirectory { get; set; }
+
+    /// <summary>
     /// Timeout for GitHub API requests.
     /// Default: 10 seconds.
     /// </summary>

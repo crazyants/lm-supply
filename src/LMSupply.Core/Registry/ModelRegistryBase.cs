@@ -77,10 +77,17 @@ public abstract class ModelRegistryBase<TModelInfo> : IModelRegistry<TModelInfo>
             return true;
         }
 
-        // 2. User alias -> resolve target (no re-entry to user aliases)
+        // 2. User alias -> resolve target (no re-entry to user aliases).
+        // Invariant: a registered user alias ALWAYS resolves. If the target is not
+        // otherwise resolvable (e.g. a "gguf:*" domain identifier), trust the user's
+        // explicit mapping and fall back on the TARGET — never on the alias name.
         if (_userAliases.TryGetValue(baseId, out var targetId))
         {
-            return TryResolveInternal(targetId, out modelInfo);
+            if (TryResolveInternal(targetId, out modelInfo))
+                return true;
+
+            modelInfo = CreateFallbackModelInfo(targetId);
+            return true;
         }
 
         // 3-7. Standard resolution
@@ -138,6 +145,21 @@ public abstract class ModelRegistryBase<TModelInfo> : IModelRegistry<TModelInfo>
 
         _userAliases[aliasName] = targetModelId;
         Trace.TraceInformation($"[ModelRegistry] Registered user alias '{aliasName}' -> '{targetModelId}'");
+    }
+
+    /// <summary>
+    /// Gets the target of a user-defined alias, if one is registered under the name.
+    /// Local* entry points use this to translate a user alias BEFORE format detection
+    /// (gguf prefix, path checks), so detection runs against the target, not the alias.
+    /// System aliases are not user aliases and return false.
+    /// </summary>
+    public bool TryGetUserAliasTarget(string aliasName, out string? targetModelId)
+    {
+        targetModelId = null;
+        if (string.IsNullOrWhiteSpace(aliasName))
+            return false;
+
+        return _userAliases.TryGetValue(aliasName, out targetModelId);
     }
 
     /// <inheritdoc />

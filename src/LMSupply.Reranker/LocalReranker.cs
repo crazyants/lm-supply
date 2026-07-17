@@ -79,6 +79,14 @@ public static class LocalReranker
         options.ModelId = baseId;
         options.QuantizationHint ??= qualifier;
 
+        // User alias translation precedes format detection: the gguf check below
+        // must see the TARGET (e.g. "my-rerank" -> "gguf:..." must enter the GGUF path).
+        if (RerankerModelRegistry.Default.TryGetUserAliasTarget(baseId, out var userAliasTarget))
+        {
+            modelIdOrPath = userAliasTarget!;
+            options.ModelId = userAliasTarget!;
+        }
+
         // Check for GGUF format
         if (IsGgufModel(modelIdOrPath))
         {

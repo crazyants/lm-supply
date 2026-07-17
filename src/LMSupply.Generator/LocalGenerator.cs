@@ -54,6 +54,14 @@ public static class LocalGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         options ??= new GeneratorOptions();
 
+        // User alias translation precedes ALL format detection: an alias is a name
+        // substitution, so the gguf/default/path checks below must see the TARGET
+        // (e.g. "my-writer" -> "gguf:qwen3-quality" must enter the GGUF path).
+        if (GeneratorModelRegistry.Default.TryGetUserAliasTarget(modelId, out var userAliasTarget))
+        {
+            modelId = userAliasTarget!;
+        }
+
         // Any "gguf:"-prefixed string is a GGUF domain identifier — never split on ':'.
         // IsAlias only matches registered aliases, so unregistered "gguf:phi-4-mini" would
         // fall through to SplitQualifier, producing ("gguf", "phi-4-mini") and then calling

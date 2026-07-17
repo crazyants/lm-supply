@@ -72,6 +72,13 @@ public static class LocalEmbedder
         modelIdOrPath = baseId;
         options.QuantizationHint ??= qualifier;
 
+        // User alias translation precedes format detection: the gguf/path checks below
+        // must see the TARGET (e.g. "my-embed" -> "gguf:..." must enter the GGUF path).
+        if (EmbedderModelRegistry.Default.TryGetUserAliasTarget(modelIdOrPath, out var userAliasTarget))
+        {
+            modelIdOrPath = userAliasTarget!;
+        }
+
         // Check for GGUF format
         if (IsGgufModel(modelIdOrPath))
         {

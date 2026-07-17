@@ -453,11 +453,20 @@ public sealed class HuggingFaceDownloader : IDisposable
         }
     }
 
-    private static IEnumerable<string> GetDefaultModelFiles()
+    internal static IEnumerable<string> GetDefaultModelFiles()
     {
         return
         [
             "model.onnx",
+            // External-weight companions. Models whose ONNX graph stores weights in an
+            // external data file (e.g. BAAI/bge-m3 — the 'default'/'quality' embedder
+            // alias) ship model.onnx as a small graph shell; without the companion the
+            // session crashes at init ("file_size: ... model.onnx_data"). Both naming
+            // conventions exist on HF. Repos without one simply skip it (non-critical
+            // → Trace warning only). Chunked variants (model.onnx_data_0…) are not
+            // covered here — the discovery path (DownloadWithDiscoveryAsync) owns those.
+            "model.onnx_data",
+            "model.onnx.data",
             "config.json",
             "vocab.txt",
             "vocab.json",

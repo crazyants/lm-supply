@@ -21,6 +21,11 @@ This package is typically consumed as a dependency by other LMSupply packages:
 
 ## Cache Location
 
-Follows HuggingFace Hub standard:
+Models follow the HuggingFace Hub standard (`CacheManager`):
 - `~/.cache/huggingface/hub` (default)
 - `HF_HUB_CACHE` environment variable (override)
+
+Non-HF artifacts (ONNX runtime packages, llama-server builds) live outside any hub,
+under a single LMSupply root (`LMSupplyCachePaths`):
+- `%LOCALAPPDATA%/LMSupply/cache` (default)
+- `LMSUPPLY_CACHE_DIR` environment variable (override)

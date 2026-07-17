@@ -626,6 +626,22 @@ Models are cached following HuggingFace Hub conventions:
 - **Environment variables**: `HF_HUB_CACHE`, `HF_HOME`, or `XDG_CACHE_HOME`
 - **Manual override**: `new EmbedderOptions { CacheDirectory = "/path/to/cache" }`
 
+### Non-HF Artifacts (runtimes, llama-server builds)
+
+Non-model artifacts — ONNX runtime packages and llama-server builds — are deliberately kept
+*outside* the HuggingFace hub, under a single LMSupply root:
+
+- **Default**: `%LOCALAPPDATA%/LMSupply/cache` (platform equivalent elsewhere)
+- **Relocate everything**: set the `LMSUPPLY_CACHE_DIR` environment variable
+  (read at first use — set it before the first model load)
+- **Programmatic (llama-server)**: `new LlamaServerUpdateOptions { CacheDirectory = "..." }`
+  when constructing `LlamaServerUpdateService` directly
+
+Superseded llama-server builds are reclaimed automatically: after a successful update only the
+active build plus `MaxVersionsToKeep` rollback candidates are kept, and orphaned build
+directories from older LMSupply versions are swept by the background update check. If
+`AutoDownloadUpdates` is disabled, the sweep runs on update activation only.
+
 ---
 
 ## Requirements

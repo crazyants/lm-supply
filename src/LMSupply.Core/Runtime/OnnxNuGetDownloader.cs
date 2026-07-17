@@ -22,7 +22,7 @@ public sealed class OnnxNuGetDownloader : IDisposable
 
     public OnnxNuGetDownloader(string? cacheDirectory)
     {
-        _cacheDirectory = cacheDirectory ?? GetDefaultCacheDirectory();
+        _cacheDirectory = cacheDirectory ?? LMSupplyCachePaths.GetRuntimesDirectory();
 
         // Create HttpClient first, then wrap in try-catch to ensure cleanup on failure
         var httpClient = new HttpClient();
@@ -487,12 +487,6 @@ public sealed class OnnxNuGetDownloader : IDisposable
         {
             Trace.TraceInformation($"[OnnxNuGetDownloader] Temp directory cleanup failed: {ex.Message}");
         }
-    }
-
-    private static string GetDefaultCacheDirectory()
-    {
-        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(baseDir, "LMSupply", "cache", "runtimes");
     }
 
     public void Dispose()

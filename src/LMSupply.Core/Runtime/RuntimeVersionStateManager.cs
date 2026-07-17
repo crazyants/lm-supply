@@ -27,7 +27,7 @@ public sealed class RuntimeVersionStateManager : IDisposable
     /// <param name="cacheDirectory">The cache directory. If null, uses default LMSupply cache.</param>
     public RuntimeVersionStateManager(string? cacheDirectory = null)
     {
-        var dir = cacheDirectory ?? GetDefaultCacheDirectory();
+        var dir = cacheDirectory ?? LMSupplyCachePaths.GetRuntimesDirectory();
         _stateFilePath = Path.Combine(dir, "runtime-versions.json");
     }
 
@@ -339,12 +339,6 @@ public sealed class RuntimeVersionStateManager : IDisposable
 
         // Atomic rename (works on Windows and Unix)
         File.Move(tempPath, _stateFilePath, overwrite: true);
-    }
-
-    private static string GetDefaultCacheDirectory()
-    {
-        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(baseDir, "LMSupply", "cache", "runtimes");
     }
 
     public void Dispose()

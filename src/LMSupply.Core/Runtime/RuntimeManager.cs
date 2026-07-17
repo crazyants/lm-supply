@@ -397,7 +397,7 @@ public sealed class RuntimeManager : IAsyncDisposable
     /// <summary>
     /// Gets the cache directory path.
     /// </summary>
-    public string CacheDirectory => _options.CacheDirectory ?? GetDefaultCacheDirectory();
+    public string CacheDirectory => _options.CacheDirectory ?? LMSupplyCachePaths.GetRuntimesDirectory();
 
     /// <summary>
     /// Gets environment information summary.
@@ -489,12 +489,6 @@ public sealed class RuntimeManager : IAsyncDisposable
             _activeProvider,
             _platform,
             cancellationToken);
-    }
-
-    private static string GetDefaultCacheDirectory()
-    {
-        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(baseDir, "LMSupply", "cache", "runtimes");
     }
 
     public async ValueTask DisposeAsync()

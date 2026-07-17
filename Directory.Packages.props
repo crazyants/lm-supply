@@ -50,6 +50,12 @@
       (as of 10.0.8) still assigns to it, producing CS0200 at build time.
       Keep pinned to 2.7.x. See commit de95363 for the original fix.
     -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.6" />
+    <!--
+      Explicit lift: Microsoft.EntityFrameworkCore.Sqlite 10.0.8 pulls SQLitePCLRaw
+      2.1.11 (NU1903 high, GHSA-2m69-gcr7-jv3q). Same pattern as FluxIndex cycle-171.
+      Remove once EFCore.Sqlite's transitive floor reaches 2.1.12.
+    -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
   </ItemGroup>
 </Project>

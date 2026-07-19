@@ -236,6 +236,16 @@ var jsonOptions = new GenerationOptions
 };
 ```
 
+`JsonSchema` is a JSON **string**. It is parsed to an object and sent to llama-server via the
+OpenAI-compatible `response_format` (chat endpoint) or the native root `json_schema` field (raw
+completion) — never as a quoted string, which the server rejects with HTTP 400. Notes:
+
+- **`Grammar` and `JsonSchema` are mutually exclusive.** llama-server rejects a request that carries
+  both, so setting both throws `ArgumentException` at request time.
+- An unparseable `JsonSchema` string throws `ArgumentException` (with the JSON error) instead of
+  producing an opaque HTTP 400.
+- The ONNX backend does not constrain output to the schema.
+
 ### Hardware-Optimized Defaults
 
 `LlamaOptions.GetOptimalForHardware()` automatically configures based on your system:

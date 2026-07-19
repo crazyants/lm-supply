@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using LMSupply.Exceptions;
 
@@ -262,7 +263,7 @@ public sealed class LlamaServerClient : IDisposable
             Stream = true,
             Stop = options.StopSequences?.ToList(),
             Grammar = options.Grammar,
-            JsonSchema = options.JsonSchema
+            JsonSchema = ParseStructuredSchema(options.Grammar, options.JsonSchema)
         };
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
@@ -525,13 +526,61 @@ public sealed class LlamaServerClient : IDisposable
             Stream = stream,
             Stop = options.StopSequences?.ToList(),
             Grammar = options.Grammar,
-            JsonSchema = options.JsonSchema,
+            ResponseFormat = BuildChatResponseFormat(options.Grammar, options.JsonSchema),
             Tools = options.Tools?.ToList(),
             ChatTemplateKwargs = options.EnableThinking is { } enableThinking
                 ? new Dictionary<string, object> { ["enable_thinking"] = enableThinking }
                 : null
         };
     }
+
+    /// <summary>
+    /// Parses <paramref name="jsonSchema"/> (the JSON-schema string carried by
+    /// <c>GenerationOptions.JsonSchema</c>) into a node so it serializes as a JSON <b>object</b>, and
+    /// enforces llama-server's rule that a single request cannot carry both a grammar and a json_schema
+    /// constraint. Returns <c>null</c> when no schema is set. Throws <see cref="ArgumentException"/> on
+    /// invalid JSON or a grammar+schema conflict so the contract surfaces at call time instead of as an
+    /// opaque HTTP 400 from the server.
+    /// </summary>
+    /// <remarks>
+    /// The public option is a JSON <i>string</i>; serializing that string verbatim would emit a quoted
+    /// JSON string, which llama-server rejects (it expects an object). This is the single conversion
+    /// seam shared by the native <c>/completion</c> path and the chat <c>response_format</c> builder.
+    /// </remarks>
+    internal static JsonNode? ParseStructuredSchema(string? grammar, string? jsonSchema)
+    {
+        if (string.IsNullOrWhiteSpace(jsonSchema))
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(grammar))
+            throw new ArgumentException(
+                "Grammar and JsonSchema cannot both be set: llama-server rejects a request that " +
+                "specifies both a grammar and a json_schema constraint. Set only one.");
+
+        try
+        {
+            return JsonNode.Parse(jsonSchema)
+                ?? throw new ArgumentException("JsonSchema must be a JSON object or array, not null.", nameof(jsonSchema));
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException(
+                $"JsonSchema is not valid JSON and cannot be sent to llama-server: {ex.Message}",
+                nameof(jsonSchema), ex);
+        }
+    }
+
+    /// <summary>
+    /// Builds the OpenAI-compatible <c>response_format</c> for the chat endpoint from a JSON-schema
+    /// string, or <c>null</c> when no schema is set. llama-server's <c>/v1/chat/completions</c> reads
+    /// the schema from <c>response_format.json_schema.schema</c>; a root-level <c>json_schema</c> field
+    /// (which the native <c>/completion</c> endpoint uses) is not honored here.
+    /// See <see cref="ParseStructuredSchema"/> for validation.
+    /// </summary>
+    internal static ChatResponseFormat? BuildChatResponseFormat(string? grammar, string? jsonSchema)
+        => ParseStructuredSchema(grammar, jsonSchema) is { } schema
+            ? new ChatResponseFormat { JsonSchema = new ChatJsonSchema { Schema = schema } }
+            : null;
 }
 
 #region Request/Response Models
@@ -675,9 +724,13 @@ internal sealed class ChatCompletionRequest
     public string? Grammar { get; set; }
 
     /// <summary>
-    /// JSON schema for structured output (Phase 3).
+    /// Structured-output constraint for the OpenAI-compatible chat endpoint. llama-server's
+    /// <c>/v1/chat/completions</c> reads the schema from <c>response_format.json_schema.schema</c>
+    /// (OpenAI form), NOT a root-level <c>json_schema</c> field — sending the latter (as a string) is
+    /// rejected with HTTP 400. Built from <c>GenerationOptions.JsonSchema</c> in BuildChatRequest.
     /// </summary>
-    public string? JsonSchema { get; set; }
+    [JsonPropertyName("response_format")]
+    public ChatResponseFormat? ResponseFormat { get; set; }
 
     /// <summary>
     /// Tool definitions (OpenAI-compatible).
@@ -729,15 +782,44 @@ internal sealed class CompletionRequest
     public string? Grammar { get; set; }
 
     /// <summary>
-    /// JSON schema for structured output (Phase 3).
+    /// JSON schema (as a JSON <b>object</b>) for structured output on the native <c>/completion</c>
+    /// endpoint. Serialized to the root <c>json_schema</c> field, which llama-server expects to be an
+    /// object — so <c>GenerationOptions.JsonSchema</c> (a JSON string) is parsed to a node via
+    /// <see cref="LlamaServerClient.ParseStructuredSchema"/> before assignment.
     /// </summary>
-    public string? JsonSchema { get; set; }
+    public JsonNode? JsonSchema { get; set; }
 
     /// <summary>
     /// Re-use KV cache from previous request if possible.
     /// Reduces first token latency for prompts with common prefixes.
     /// </summary>
     public bool CachePrompt { get; set; } = true;
+}
+
+/// <summary>
+/// OpenAI-compatible <c>response_format</c> for structured chat output. llama-server's
+/// <c>/v1/chat/completions</c> reads the schema from <c>response_format.json_schema.schema</c>.
+/// </summary>
+internal sealed class ChatResponseFormat
+{
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "json_schema";
+
+    [JsonPropertyName("json_schema")]
+    public ChatJsonSchema? JsonSchema { get; set; }
+}
+
+/// <summary>
+/// The nested schema payload of <see cref="ChatResponseFormat"/> (OpenAI form:
+/// <c>{ "name": ..., "schema": {...} }</c>).
+/// </summary>
+internal sealed class ChatJsonSchema
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "response";
+
+    [JsonPropertyName("schema")]
+    public JsonNode? Schema { get; set; }
 }
 
 internal sealed class ChatCompletionChunk

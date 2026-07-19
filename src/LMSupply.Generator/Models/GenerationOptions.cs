@@ -220,21 +220,29 @@ public sealed class GenerationOptions
     /// Gets or sets a grammar constraint in GBNF (GGML BNF) format.
     /// Constrains generation to match the specified grammar rules.
     /// Use for enforcing specific output formats like JSON, markdown, etc.
+    /// Mutually exclusive with <see cref="JsonSchema"/>: llama-server rejects a request that sets both,
+    /// so setting both throws <see cref="System.ArgumentException"/> at request time.
     /// </summary>
     /// <example>
     /// // Simple grammar for yes/no answers:
     /// Grammar = "root ::= (\"yes\" | \"no\")"
     /// </example>
+    /// <remarks>Backend support: llama-server only (sent as the GBNF <c>grammar</c> field). Ignored by the ONNX backend.</remarks>
     public string? Grammar { get; set; }
 
     /// <summary>
-    /// Gets or sets a JSON schema to constrain generation.
+    /// Gets or sets a JSON schema (as a JSON string) to constrain generation.
     /// When set, output will be valid JSON matching this schema.
-    /// Supported by llama-server via json_schema parameter.
+    /// On the chat path the schema is sent via the OpenAI-compatible
+    /// <c>response_format: { type: "json_schema", json_schema: { schema } }</c>; on the raw completion
+    /// path it is sent as the native root <c>json_schema</c> object. The string is parsed to a JSON
+    /// object before sending — an unparseable value throws <see cref="System.ArgumentException"/> rather
+    /// than producing an opaque HTTP 400. Mutually exclusive with <see cref="Grammar"/>.
     /// </summary>
     /// <example>
     /// JsonSchema = "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}"
     /// </example>
+    /// <remarks>Backend support: llama-server only. The ONNX backend does not constrain output to the schema.</remarks>
     public string? JsonSchema { get; set; }
 
     #endregion

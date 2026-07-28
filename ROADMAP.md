@@ -58,7 +58,7 @@
 | **#4** | Split GGUF download support (`ShardCount`, `Q4_K_M/` subfolder) | ✅ |
 | **#5** | `ChatMessage.ContentParts` multimodal model | ✅ |
 
-Per-cycle logs: `claudedocs/cycle-logs/cycle-0{1..5}.md`
+Per-cycle logs: `ironhive-umbrella/claudedocs/lm-supply/cycle-logs/cycle-0{1..5}.md` (maintainer-local)
 
 ### Breaking changes (v0.28.0)
 

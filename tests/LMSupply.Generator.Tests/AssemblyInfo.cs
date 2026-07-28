@@ -10,5 +10,5 @@ using Xunit;
 //
 // The suite runs in ~1s, so serial execution is a negligible cost for full determinism.
 // This is a blunt CI-risk mitigation; a surgical correlation-token isolation + regression test
-// is tracked in claudedocs/issues (trace-listener-parallel-pollution-flake).
+// remains an open follow-up (trace-listener parallel pollution flake).
 [assembly: CollectionBehavior(DisableTestParallelization = true)]

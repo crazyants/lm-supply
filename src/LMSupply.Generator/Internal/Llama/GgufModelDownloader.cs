@@ -33,7 +33,23 @@ public sealed class GgufModelDownloader : IDisposable
     {
     }
 
-    public GgufModelDownloader(string? cacheDirectory)
+    /// <param name="cacheDirectory">Where downloaded GGUF files are kept. Null uses the default.</param>
+    /// <param name="hfToken">
+    /// HuggingFace access token. Null falls back to the <c>HF_TOKEN</c> environment variable, the
+    /// same source the ONNX download path reads.
+    /// </param>
+    /// <remarks>
+    /// Until 2026-08-06 this path sent no credentials at all, while the sibling ONNX path
+    /// (<c>ModelDiscoveryService</c>, <c>ModelMetadataService</c>) authenticated with the very same
+    /// <c>HF_TOKEN</c> — and the error text there tells the caller to set it. Following that advice
+    /// did nothing for GGUF downloads, which are the large ones: unauthenticated requests share a
+    /// per-IP rate limit, so a cold pull on a shared CI runner gets 429, and a failed download never
+    /// creates the cache directory, so nothing is cached and the next run starts in the same place.
+    ///
+    /// Deliberately NOT copied from the sibling: its 30-second timeout and automatic decompression.
+    /// Those are tuned for small JSON responses; this client streams multi-gigabyte files.
+    /// </remarks>
+    public GgufModelDownloader(string? cacheDirectory, string? hfToken = null)
     {
         _cacheDirectory = cacheDirectory ?? CacheManager.GetDefaultCacheDirectory();
         _httpClient = new HttpClient
@@ -41,8 +57,24 @@ public sealed class GgufModelDownloader : IDisposable
             Timeout = TimeSpan.FromMinutes(30)
         };
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "LMSupply/1.0");
-        _discoveryService = new ModelDiscoveryService(_cacheDirectory);
+
+        var token = hfToken ?? Environment.GetEnvironmentVariable("HF_TOKEN");
+        if (!string.IsNullOrEmpty(token))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        _discoveryService = new ModelDiscoveryService(_cacheDirectory, hfToken);
     }
+
+    /// <summary>
+    /// The Authorization scheme this downloader will send, or null when it sends none.
+    /// Exists so a test can observe that credentials are actually attached — the defect this
+    /// replaces was invisible from the outside: requests simply went out unauthenticated and
+    /// succeeded until a rate limit was reached.
+    /// </summary>
+    internal string? AuthorizationScheme => _httpClient.DefaultRequestHeaders.Authorization?.Scheme;
 
     /// <summary>
     /// Downloads a GGUF model file from HuggingFace.

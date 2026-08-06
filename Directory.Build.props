@@ -1,8 +1,8 @@
-﻿<Project>
+<Project>
 
   <!-- Centralized Version Management -->
   <PropertyGroup>
-<Version>0.37.1</Version>
+<Version>0.37.2</Version>
   </PropertyGroup>
 
   <PropertyGroup>

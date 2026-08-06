@@ -409,6 +409,21 @@ public sealed class LlamaServerProcess : IAsyncDisposable
 
         _process = _guardian.StartProcessWithStartInfo(startInfo);
 
+        // A launch that never happened still hands back a Process object, and the first call that
+        // touches it -- BeginErrorReadLine below -- throws "No process is associated with this
+        // object". That bare exception then REPLACES the diagnostic a few lines further down, which
+        // is the one written for exactly this situation. The caller is told the least when the
+        // failure is most opaque: no binary path, no backend, no exit code, nothing to act on.
+        // So the launch is confirmed before anything is attached to it.
+        if (!HasLaunched(_process))
+        {
+            throw new InvalidOperationException(
+                $"llama-server did not launch: '{_serverPath}' (backend {_backend}, " +
+                $"working directory '{workingDir}'). The process was never created, so there is no " +
+                "exit code or error output to report. Check that the binary exists at that path, is " +
+                "executable, and that its runtime dependencies are resolvable on this machine.");
+        }
+
         // Capture stderr output for diagnostics
         var stderrBuilder = new System.Text.StringBuilder();
         _process.ErrorDataReceived += (_, e) =>
@@ -765,6 +780,29 @@ public sealed class LlamaServerProcess : IAsyncDisposable
     /// </summary>
     internal static bool StartupLogShowsGpuDevice(string? startupLog)
         => !string.IsNullOrWhiteSpace(startupLog) && GpuDeviceLineRegex.IsMatch(startupLog);
+
+    /// <summary>
+    /// True when the object actually has an OS process behind it. A failed launch still yields a
+    /// <see cref="Process"/> instance, and every member that needs the underlying handle -- including
+    /// <c>Id</c> -- throws <see cref="InvalidOperationException"/> on it. Probing <c>Id</c> is the
+    /// discriminator: it succeeds for a process that has already exited, and fails only for one that
+    /// was never created.
+    /// </summary>
+    internal static bool HasLaunched(Process? process)
+    {
+        if (process is null)
+            return false;
+
+        try
+        {
+            _ = process.Id;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>True for llama-server backends that offload to a GPU (i.e. should engage a device).</summary>
     internal static bool IsGpuBackend(LlamaServerBackend backend) => backend switch

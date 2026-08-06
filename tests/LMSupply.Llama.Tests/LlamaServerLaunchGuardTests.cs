@@ -35,6 +35,21 @@ public class LlamaServerLaunchGuardTests
     }
 
     [Fact]
+    public void DidNotLaunchMessage_NamesWhatTheOperatorNeedsToCheck()
+    {
+        // The message is shared by both detection points -- the guardian throwing mid-start, and a
+        // returned object with no process behind it -- so that the same failure cannot be described
+        // two different ways depending on which one fired.
+        var message = LlamaServerProcess.DidNotLaunchMessage(
+            "/opt/llama/llama-server", LlamaServerBackend.Cpu, "/opt/llama");
+
+        message.Should().Contain("/opt/llama/llama-server", "the operator has to know WHICH binary failed");
+        message.Should().Contain("Cpu", "the backend decides which binary was even attempted");
+        message.Should().NotContain("No process is associated",
+            "that is the bare framework message this replaces");
+    }
+
+    [Fact]
     public void HasLaunched_IsFalse_ForNull()
     {
         LlamaServerProcess.HasLaunched(null).Should().BeFalse();

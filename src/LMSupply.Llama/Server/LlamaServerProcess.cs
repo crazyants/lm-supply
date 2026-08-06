@@ -407,21 +407,28 @@ public sealed class LlamaServerProcess : IAsyncDisposable
             startInfo.Environment["GGML_CUDA_GRAPH_OPT"] = "1";
         }
 
-        _process = _guardian.StartProcessWithStartInfo(startInfo);
+        // A launch that never happened yields "No process is associated with this object" -- a bare
+        // message with no binary path, no backend, nothing to act on. It replaces the diagnostic a
+        // few lines further down, which is the one written for exactly this situation, so the caller
+        // is told the LEAST precisely when the failure is most opaque.
+        //
+        // The throw comes from two places and both have to be covered. The guardian reads Id while
+        // starting, so the exception can surface before this method ever gets a Process back; and if
+        // a future guardian returns without touching it, the first member here that needs the
+        // handle throws instead. Guarding only the returned object -- as this did between 0.37.2 and
+        // 0.38.1 -- covers the second and misses the first, which is the one that actually occurs.
+        try
+        {
+            _process = _guardian.StartProcessWithStartInfo(startInfo);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException(DidNotLaunchMessage(_serverPath, _backend, workingDir), ex);
+        }
 
-        // A launch that never happened still hands back a Process object, and the first call that
-        // touches it -- BeginErrorReadLine below -- throws "No process is associated with this
-        // object". That bare exception then REPLACES the diagnostic a few lines further down, which
-        // is the one written for exactly this situation. The caller is told the least when the
-        // failure is most opaque: no binary path, no backend, no exit code, nothing to act on.
-        // So the launch is confirmed before anything is attached to it.
         if (!HasLaunched(_process))
         {
-            throw new InvalidOperationException(
-                $"llama-server did not launch: '{_serverPath}' (backend {_backend}, " +
-                $"working directory '{workingDir}'). The process was never created, so there is no " +
-                "exit code or error output to report. Check that the binary exists at that path, is " +
-                "executable, and that its runtime dependencies are resolvable on this machine.");
+            throw new InvalidOperationException(DidNotLaunchMessage(_serverPath, _backend, workingDir));
         }
 
         // Capture stderr output for diagnostics
@@ -780,6 +787,16 @@ public sealed class LlamaServerProcess : IAsyncDisposable
     /// </summary>
     internal static bool StartupLogShowsGpuDevice(string? startupLog)
         => !string.IsNullOrWhiteSpace(startupLog) && GpuDeviceLineRegex.IsMatch(startupLog);
+
+    /// <summary>
+    /// The message for a launch that produced no process. Shared by both detection points so they
+    /// cannot drift into saying different things about the same failure.
+    /// </summary>
+    internal static string DidNotLaunchMessage(string serverPath, LlamaServerBackend backend, string workingDir) =>
+        $"llama-server did not launch: '{serverPath}' (backend {backend}, working directory " +
+        $"'{workingDir}'). The process was never created, so there is no exit code or error output " +
+        "to report. Check that the binary exists at that path, is executable, and that its runtime " +
+        "dependencies are resolvable on this machine.";
 
     /// <summary>
     /// True when the object actually has an OS process behind it. A failed launch still yields a

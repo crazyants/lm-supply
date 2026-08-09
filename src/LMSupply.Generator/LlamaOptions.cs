@@ -185,6 +185,14 @@ public sealed class LlamaOptions
     #endregion
 
     /// <summary>
+    /// Gets or sets additional raw command-line arguments passed through to llama-server.
+    /// Escape hatch for flags not modeled by the properties above (e.g. "--verbose" for
+    /// per-request prompt/completion logging). Appended after the arguments this type
+    /// already derives from its other properties.
+    /// </summary>
+    public IReadOnlyList<string>? AdditionalArgs { get; set; }
+
+    /// <summary>
     /// Gets optimal LlamaOptions based on actual model size and available VRAM.
     /// Uses VramFitResult for precise GPU offload and batch settings.
     /// </summary>

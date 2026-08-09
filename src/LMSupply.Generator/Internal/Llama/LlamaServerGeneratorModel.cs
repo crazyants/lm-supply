@@ -215,6 +215,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     YarnAttentionFactor  = llamaOpts.YarnAttentionFactor,
                     YarnBetaFast         = llamaOpts.YarnBetaFast,
                     YarnBetaSlow         = llamaOpts.YarnBetaSlow,
+                    AdditionalArgs       = llamaOpts.AdditionalArgs,
                 };
                 // Severity-aware trace: TraceWarning for full CPU fallback (0 GPU layers),
                 // TraceInformation for partial offload. See LlamaOffloadTraceHelper.
@@ -296,12 +297,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         }
 
         // Build additional arguments
-        var additionalArgs = new List<string>();
-        if (llamaOpts.Threads.HasValue)
-        {
-            additionalArgs.Add("--threads");
-            additionalArgs.Add(llamaOpts.Threads.Value.ToString(CultureInfo.InvariantCulture));
-        }
+        var additionalArgs = BuildAdditionalArgs(llamaOpts);
 
         // Validate speculative decoding configuration
         if (llamaOpts.SpeculativeDecoding == SpeculativeDecodingMode.DraftModel
@@ -975,6 +971,27 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     /// Resolves KV cache type to llama-server CLI string.
     /// Auto selects based on backend and server version.
     /// </summary>
+    /// <summary>
+    /// Builds the raw llama-server CLI argument list derived from <see cref="LlamaOptions"/>
+    /// properties that don't map to a dedicated <see cref="LlamaServerConfig"/> field
+    /// (currently just Threads), plus any caller-supplied <see cref="LlamaOptions.AdditionalArgs"/>
+    /// passthrough appended after them.
+    /// </summary>
+    internal static List<string> BuildAdditionalArgs(LlamaOptions llamaOpts)
+    {
+        var args = new List<string>();
+        if (llamaOpts.Threads.HasValue)
+        {
+            args.Add("--threads");
+            args.Add(llamaOpts.Threads.Value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (llamaOpts.AdditionalArgs is { Count: > 0 })
+            args.AddRange(llamaOpts.AdditionalArgs);
+
+        return args;
+    }
+
     internal static string? ResolveKvCacheType(
         KvCacheQuantizationType type,
         LlamaServerBackend backend,
@@ -1179,6 +1196,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         MultimodalProjector = src.MultimodalProjector,
         LoraPath = src.LoraPath,
         LoraScale = src.LoraScale,
+        AdditionalArgs = src.AdditionalArgs,
     };
 
     /// <summary>

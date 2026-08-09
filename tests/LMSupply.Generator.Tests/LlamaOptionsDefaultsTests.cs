@@ -82,4 +82,43 @@ public class LlamaOptionsDefaultsTests
         var result = LlamaServerGeneratorModel.ResolveSpecType(mode, version);
         result.Should().Be(expected);
     }
+
+    // ─── BuildAdditionalArgs ──────────────────────────────────────────────
+    [Fact]
+    public void BuildAdditionalArgs_NoOptionsSet_ReturnsEmpty()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(new LlamaOptions());
+        args.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildAdditionalArgs_ThreadsSet_EmitsThreadsFlag()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(new LlamaOptions { Threads = 8 });
+        args.Should().Equal("--threads", "8");
+    }
+
+    [Fact]
+    public void BuildAdditionalArgs_AdditionalArgsSet_AppendsVerbatim()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(
+            new LlamaOptions { AdditionalArgs = ["--verbose", "--log-colors"] });
+        args.Should().Equal("--verbose", "--log-colors");
+    }
+
+    [Fact]
+    public void BuildAdditionalArgs_ThreadsAndAdditionalArgsSet_AppendsAdditionalArgsAfterThreads()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(
+            new LlamaOptions { Threads = 4, AdditionalArgs = ["--verbose"] });
+        args.Should().Equal("--threads", "4", "--verbose");
+    }
+
+    [Fact]
+    public void BuildAdditionalArgs_EmptyAdditionalArgsList_ReturnsEmpty()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(
+            new LlamaOptions { AdditionalArgs = [] });
+        args.Should().BeEmpty();
+    }
 }

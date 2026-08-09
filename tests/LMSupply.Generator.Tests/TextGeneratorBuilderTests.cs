@@ -141,6 +141,27 @@ public class TextGeneratorBuilderTests
         builder.WithChatFormat("phi3");
     }
 
+    [Fact]
+    public void WithLlamaOptions_SetsOptions()
+    {
+        // Arrange
+        var builder = TextGeneratorBuilder.Create();
+
+        // Act & Assert - should not throw
+        builder.WithLlamaOptions(new LlamaOptions { AdditionalArgs = ["--verbose"] });
+    }
+
+    [Fact]
+    public void WithLlamaOptions_NullOptions_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var builder = TextGeneratorBuilder.Create();
+
+        // Act & Assert
+        var action = () => builder.WithLlamaOptions(null!);
+        action.Should().Throw<ArgumentNullException>();
+    }
+
     // Note: Integration test for runtime loading is in the sample project
     // TextGeneratorBuilderSample validates that EnsureGenAiRuntimeAsync is called
     // before OnnxGeneratorModel creation, fixing the DllNotFoundException issue.

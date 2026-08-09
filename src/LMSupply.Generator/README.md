@@ -59,3 +59,19 @@ dotnet add package Microsoft.ML.OnnxRuntime.Gpu
 # Windows (AMD/Intel/NVIDIA)
 dotnet add package Microsoft.ML.OnnxRuntime.DirectML
 ```
+
+## Advanced GGUF Tuning
+
+Fine-grained llama-server control (GPU offload, batch size, RoPE/YaRN scaling, KV cache
+quantization, speculative decoding, LoRA, and more) is available via `LlamaOptions`:
+
+```csharp
+var generator = await TextGeneratorBuilder.Create()
+    .WithDefaultModel()
+    .WithLlamaOptions(new LlamaOptions
+    {
+        GpuLayerCount = -1,
+        AdditionalArgs = ["--verbose"], // raw llama-server CLI passthrough for flags not modeled above
+    })
+    .BuildAsync();
+```

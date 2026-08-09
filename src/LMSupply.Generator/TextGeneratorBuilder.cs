@@ -118,6 +118,18 @@ public sealed class TextGeneratorBuilder
     }
 
     /// <summary>
+    /// Sets fine-grained llama-server tuning options (GPU offload, batch size, RoPE/YaRN
+    /// scaling, KV cache quantization, speculative decoding, LoRA, raw CLI passthrough, etc.).
+    /// Only used by the GGUF/llama-server path; ignored for ONNX models.
+    /// </summary>
+    /// <param name="llamaOptions">Advanced llama-server options.</param>
+    public TextGeneratorBuilder WithLlamaOptions(LlamaOptions llamaOptions)
+    {
+        _modelOptions.LlamaOptions = llamaOptions ?? throw new ArgumentNullException(nameof(llamaOptions));
+        return this;
+    }
+
+    /// <summary>
     /// Enables verbose logging.
     /// </summary>
     public TextGeneratorBuilder WithVerboseLogging()

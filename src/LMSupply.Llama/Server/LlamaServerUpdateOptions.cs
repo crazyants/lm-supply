@@ -59,4 +59,23 @@ public sealed class LlamaServerUpdateOptions
     /// Default: false.
     /// </summary>
     public bool Verbose { get; set; }
+
+    /// <summary>
+    /// Pins an exact llama-server release tag (e.g. "b7898"). When set, version resolution never
+    /// calls the GitHub "latest release" API — a cache hit for this version makes zero network
+    /// calls, a cache miss downloads exactly this tagged asset.
+    /// <see cref="LlamaServerUpdateService.CheckAndApplyUpdateAsync"/> also short-circuits: a
+    /// pinned installation never re-checks for or auto-applies a newer version. Ignored if
+    /// <see cref="ServerBinaryPath"/> is also set.
+    /// Default: null (resolves "latest" as before).
+    /// </summary>
+    public string? PinnedVersion { get; set; }
+
+    /// <summary>
+    /// Points directly at an already-provisioned llama-server executable. When set, acquisition
+    /// (both the "latest version" network call and any download) is skipped entirely — the given
+    /// path is used as-is. Takes precedence over <see cref="PinnedVersion"/>.
+    /// Default: null (binary is acquired/cached as before).
+    /// </summary>
+    public string? ServerBinaryPath { get; set; }
 }

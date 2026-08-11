@@ -1,6 +1,7 @@
 using LMSupply.Download;
 using LMSupply.Generator.Abstractions;
 using LMSupply.Generator.ChatFormatters;
+using LMSupply.Llama.Server;
 
 namespace LMSupply.Generator;
 
@@ -126,6 +127,18 @@ public sealed class TextGeneratorBuilder
     public TextGeneratorBuilder WithLlamaOptions(LlamaOptions llamaOptions)
     {
         _modelOptions.LlamaOptions = llamaOptions ?? throw new ArgumentNullException(nameof(llamaOptions));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets llama-server acquisition policy (version pinning, a pre-provisioned binary path,
+    /// auto-update behavior) for GGUF model loading. Only used by the GGUF/llama-server path;
+    /// ignored for ONNX models.
+    /// </summary>
+    /// <param name="serverUpdateOptions">llama-server acquisition options.</param>
+    public TextGeneratorBuilder WithServerUpdateOptions(LlamaServerUpdateOptions serverUpdateOptions)
+    {
+        _modelOptions.ServerUpdateOptions = serverUpdateOptions ?? throw new ArgumentNullException(nameof(serverUpdateOptions));
         return this;
     }
 
@@ -289,6 +302,8 @@ public sealed class TextGeneratorBuilder
         MaxConcurrentRequests = _modelOptions.MaxConcurrentRequests,
         LlamaOptions = _modelOptions.LlamaOptions,
         QuantizationHint = _modelOptions.QuantizationHint,
+        ServerUpdateOptions = _modelOptions.ServerUpdateOptions,
+        PreferredAutoModelId = _modelOptions.PreferredAutoModelId,
     };
 
     /// <summary>

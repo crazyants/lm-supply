@@ -342,6 +342,8 @@ Delete the cached llama-server to trigger a fresh download of the latest version
 
 The error message above is only reached if the auto-upgrade path also fails. Validation degrades gracefully — if the version string can't be parsed (non-standard builds), model loading proceeds without error.
 
+**With a pinned version** (`GeneratorOptions.ServerUpdateOptions.PinnedVersion`, see [README](../src/LMSupply.Generator/README.md#pinning-or-pre-provisioning-the-llama-server-binary)), the auto-upgrade retry above is intentionally a no-op — a pin must never be silently exceeded. If the pinned build is too old for the model, load fails with the same error; the fix is to pin a newer build, not to delete the cache (deleting it just re-downloads the same pinned version).
+
 #### Public API
 
 `LlamaServerVersionRequirements` exposes three public members:

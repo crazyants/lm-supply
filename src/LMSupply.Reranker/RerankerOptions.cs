@@ -1,3 +1,5 @@
+using LMSupply.Llama.Server;
+
 namespace LMSupply.Reranker;
 
 /// <summary>
@@ -39,6 +41,14 @@ public sealed class RerankerOptions : LMSupplyOptionsBase
     public int BatchSize { get; set; } = 32;
 
     /// <summary>
+    /// Gets or sets llama-server acquisition policy (version pinning, a pre-provisioned binary
+    /// path, auto-update behavior) for GGUF model loading.
+    /// If null, the process-wide default (<see cref="LlamaServerUpdateService.Instance"/>,
+    /// unpinned "latest" resolution) is used. Only applies to GGUF models.
+    /// </summary>
+    public LlamaServerUpdateOptions? ServerUpdateOptions { get; set; }
+
+    /// <summary>
     /// Creates a copy of these options.
     /// </summary>
     public RerankerOptions Clone() => new()
@@ -50,6 +60,7 @@ public sealed class RerankerOptions : LMSupplyOptionsBase
         DisableAutoDownload = DisableAutoDownload,
         ThreadCount = ThreadCount,
         BatchSize = BatchSize,
-        QuantizationHint = QuantizationHint
+        QuantizationHint = QuantizationHint,
+        ServerUpdateOptions = ServerUpdateOptions
     };
 }

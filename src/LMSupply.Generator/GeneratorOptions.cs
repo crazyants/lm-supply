@@ -1,3 +1,5 @@
+using LMSupply.Llama.Server;
+
 namespace LMSupply.Generator;
 
 /// <summary>
@@ -50,4 +52,12 @@ public sealed class GeneratorOptions : LMSupplyOptionsBase
     /// <para>Default: null (standard hardware-aware selection).</para>
     /// </summary>
     public string? PreferredAutoModelId { get; set; }
+
+    /// <summary>
+    /// Gets or sets llama-server acquisition policy (version pinning, a pre-provisioned binary
+    /// path, auto-update behavior) for GGUF model loading.
+    /// If null, the process-wide default (<see cref="LlamaServerUpdateService.Instance"/>,
+    /// unpinned "latest" resolution) is used. Only applies to GGUF models.
+    /// </summary>
+    public LlamaServerUpdateOptions? ServerUpdateOptions { get; set; }
 }

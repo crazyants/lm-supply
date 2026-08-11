@@ -162,6 +162,52 @@ public class TextGeneratorBuilderTests
         action.Should().Throw<ArgumentNullException>();
     }
 
+    [Fact]
+    public void WithServerUpdateOptions_SetsOptions()
+    {
+        // Arrange
+        var builder = TextGeneratorBuilder.Create();
+
+        // Act & Assert - should not throw
+        builder.WithServerUpdateOptions(new LMSupply.Llama.Server.LlamaServerUpdateOptions { PinnedVersion = "b7898" });
+    }
+
+    [Fact]
+    public void WithServerUpdateOptions_NullOptions_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var builder = TextGeneratorBuilder.Create();
+
+        // Act & Assert
+        var action = () => builder.WithServerUpdateOptions(null!);
+        action.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void BuildLocalGeneratorOptions_MirrorsServerUpdateOptions()
+    {
+        // Regression guard for the completeness-gap class this field belongs to: a prior field
+        // (LlamaOptions.AdditionalArgs, 2026-08-09) was set via the builder but silently dropped by
+        // this exact private mirror, because BuildLocalGeneratorOptions() is a hand-maintained field
+        // list rather than a full copy. Reflection is used deliberately — the point is to catch a
+        // missing line in that private method, which a "should not throw" test on the public
+        // With*() method alone cannot see.
+        var pinned = new LMSupply.Llama.Server.LlamaServerUpdateOptions { PinnedVersion = "b7898" };
+        var builder = TextGeneratorBuilder.Create()
+            .WithDefaultModel()
+            .WithServerUpdateOptions(pinned);
+
+        var method = typeof(TextGeneratorBuilder).GetMethod(
+            "BuildLocalGeneratorOptions",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        method.Should().NotBeNull("BuildLocalGeneratorOptions must still exist under this name");
+
+        var mirrored = (GeneratorOptions)method!.Invoke(builder, null)!;
+
+        mirrored.ServerUpdateOptions.Should().BeSameAs(pinned,
+            "the GGUF/LocalGenerator routing path must receive the same ServerUpdateOptions set via the builder");
+    }
+
     // Note: Integration test for runtime loading is in the sample project
     // TextGeneratorBuilderSample validates that EnsureGenAiRuntimeAsync is called
     // before OnnxGeneratorModel creation, fixing the DllNotFoundException issue.

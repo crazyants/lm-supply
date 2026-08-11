@@ -1,4 +1,5 @@
 using FluentAssertions;
+using LMSupply.Llama.Server;
 
 namespace LMSupply.Embedder.Tests;
 
@@ -20,6 +21,7 @@ public class EmbedderOptionsTests
     [Fact]
     public void Properties_CanBeSet()
     {
+        var serverUpdateOptions = new LlamaServerUpdateOptions { PinnedVersion = "b7898" };
         var options = new EmbedderOptions
         {
             CacheDirectory = "/custom/path",
@@ -27,7 +29,8 @@ public class EmbedderOptionsTests
             NormalizeEmbeddings = false,
             Provider = ExecutionProvider.Cuda,
             PoolingMode = PoolingMode.Cls,
-            DoLowerCase = false
+            DoLowerCase = false,
+            ServerUpdateOptions = serverUpdateOptions
         };
 
         options.CacheDirectory.Should().Be("/custom/path");
@@ -36,6 +39,13 @@ public class EmbedderOptionsTests
         options.Provider.Should().Be(ExecutionProvider.Cuda);
         options.PoolingMode.Should().Be(PoolingMode.Cls);
         options.DoLowerCase.Should().BeFalse();
+        options.ServerUpdateOptions.Should().BeSameAs(serverUpdateOptions);
+    }
+
+    [Fact]
+    public void ServerUpdateOptions_DefaultsToNull()
+    {
+        new EmbedderOptions().ServerUpdateOptions.Should().BeNull();
     }
 
     [Fact]

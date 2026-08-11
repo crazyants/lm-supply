@@ -103,7 +103,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
 
         var preferredBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(
             options.Provider, Hardware.HardwareProfile.Current.GpuInfo);
-        var updateService = LlamaServerUpdateService.Instance;
+        var updateService = LlamaServerUpdateService.Resolve(options.ServerUpdateOptions);
         var updateResult = await updateService.GetServerPathAsync(
             preferredBackend,
             progress,
@@ -121,7 +121,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
 
         // 1b. Validate server version meets model requirements.
         // If the cached version is too old, trigger an immediate update and retry once
-        // before throwing — avoids requiring manual cache deletion.
+        // before throwing — avoids requiring manual cache deletion. When options.ServerUpdateOptions
+        // pins a version, CheckAndApplyUpdateAsync intentionally short-circuits to the same pinned
+        // binary (a pin must never be silently exceeded), so this retry is a no-op and Validate below
+        // still throws — correctly, since the pin genuinely doesn't meet the requirement.
         if (!LlamaServerVersionRequirements.MeetsMinimum(serverVersion, chatFormatter.FormatName))
         {
             var retryResult = await updateService.CheckAndApplyUpdateAsync(

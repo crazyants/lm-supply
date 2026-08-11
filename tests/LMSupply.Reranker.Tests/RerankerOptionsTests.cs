@@ -1,4 +1,5 @@
 using FluentAssertions;
+using LMSupply.Llama.Server;
 
 namespace LMSupply.Reranker.Tests;
 
@@ -21,6 +22,7 @@ public class RerankerOptionsTests
     [Fact]
     public void Clone_ShouldCreateIndependentCopy()
     {
+        var serverUpdateOptions = new LlamaServerUpdateOptions { PinnedVersion = "b7898" };
         var original = new RerankerOptions
         {
             ModelId = "quality",
@@ -29,7 +31,8 @@ public class RerankerOptionsTests
             Provider = ExecutionProvider.Cuda,
             DisableAutoDownload = true,
             ThreadCount = 4,
-            BatchSize = 64
+            BatchSize = 64,
+            ServerUpdateOptions = serverUpdateOptions
         };
 
         var clone = original.Clone();
@@ -46,6 +49,8 @@ public class RerankerOptionsTests
         clone.DisableAutoDownload.Should().BeTrue();
         clone.ThreadCount.Should().Be(4);
         clone.BatchSize.Should().Be(64);
+        clone.ServerUpdateOptions.Should().BeSameAs(serverUpdateOptions,
+            "Clone must not silently drop ServerUpdateOptions the way an earlier field was dropped (LlamaOptions.AdditionalArgs, 2026-08-09)");
     }
 
     [Fact]

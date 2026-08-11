@@ -50,7 +50,7 @@ internal sealed class LlamaServerEmbeddingModel : IEmbeddingModel
 
         var preferredBackend = global::LMSupply.Llama.LlamaBackendSelector.MapProvider(
             options.Provider, Hardware.HardwareProfile.Current.GpuInfo);
-        var updateService = LlamaServerUpdateService.Instance;
+        var updateService = LlamaServerUpdateService.Resolve(options.ServerUpdateOptions);
         var updateResult = await updateService.GetServerPathAsync(
             preferredBackend,
             progress,

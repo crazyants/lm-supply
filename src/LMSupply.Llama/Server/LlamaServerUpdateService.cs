@@ -19,6 +19,23 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
     /// </summary>
     public static LlamaServerUpdateService Instance => _instance.Value;
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<LlamaServerUpdateOptions, LlamaServerUpdateService> s_scopedInstances = new();
+
+    /// <summary>
+    /// Resolves the service instance to use for a load: the process-wide <see cref="Instance"/> when
+    /// <paramref name="options"/> is null, or a dedicated instance scoped to that options object
+    /// otherwise. A non-null options instance is memoized by reference identity, so a consumer that
+    /// holds one <see cref="LlamaServerUpdateOptions"/> and passes it on every
+    /// GeneratorOptions/EmbedderOptions/RerankerOptions load shares a single background-update timer
+    /// and state file across loads instead of spawning a duplicate per load. Constructing a fresh
+    /// options instance on every call still works correctly — each gets its own isolated service —
+    /// it just forgoes that sharing.
+    /// </summary>
+    public static LlamaServerUpdateService Resolve(LlamaServerUpdateOptions? options)
+        => options is null
+            ? Instance
+            : s_scopedInstances.GetValue(options, static o => new LlamaServerUpdateService(o));
+
     private readonly LlamaServerStateManager _stateManager;
     private readonly LlamaServerDownloader _downloader;
     private readonly LlamaServerUpdateOptions _options;
@@ -38,11 +55,17 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
     /// <summary>
     /// Creates a new update service with custom options.
     /// </summary>
-    public LlamaServerUpdateService(LlamaServerUpdateOptions options)
+    /// <param name="options">Update/acquisition policy.</param>
+    /// <param name="httpClient">
+    /// Optional HTTP client for GitHub Releases calls. Creates a new one if null. Exposed mainly
+    /// so tests can substitute a fake handler and assert on network call counts (e.g. that a
+    /// <see cref="LlamaServerUpdateOptions.PinnedVersion"/> cache hit makes zero calls).
+    /// </param>
+    public LlamaServerUpdateService(LlamaServerUpdateOptions options, HttpClient? httpClient = null)
     {
         _options = options;
         _stateManager = new LlamaServerStateManager(options.CacheDirectory);
-        _downloader = new LlamaServerDownloader(options.CacheDirectory);
+        _downloader = new LlamaServerDownloader(options.CacheDirectory, httpClient);
     }
 
     /// <summary>
@@ -72,6 +95,17 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (!string.IsNullOrEmpty(_options.ServerBinaryPath))
+        {
+            // Consumer supplied the binary directly. Acquisition — including the cudart companion
+            // fetch below — is entirely their responsibility: no network calls, no state tracking.
+            return File.Exists(_options.ServerBinaryPath)
+                ? LlamaServerUpdateResult.NoUpdate(_options.ServerBinaryPath, backend, _options.PinnedVersion ?? "external")
+                : LlamaServerUpdateResult.Failed(
+                    _options.ServerBinaryPath, backend,
+                    $"LlamaServerUpdateOptions.ServerBinaryPath '{_options.ServerBinaryPath}' does not exist.");
+        }
+
         var result = await GetServerPathCoreAsync(backend, progress, cancellationToken);
 
         // For a CUDA backend, ensure the cudart runtime is present next to the binary (it ships as a
@@ -97,6 +131,14 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (!string.IsNullOrEmpty(_options.PinnedVersion))
+        {
+            // A pinned version bypasses the state/rollback machinery entirely: it never
+            // participates in auto-update tracking, so there is nothing to reconcile against a
+            // previously-recorded "latest" installation.
+            return await GetPinnedVersionResultAsync(_options.PinnedVersion, backend, progress, cancellationToken);
+        }
+
         var platform = GetCurrentPlatform();
         var backendStr = backend.ToString().ToLowerInvariant();
 
@@ -175,6 +217,37 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
     }
 
     /// <summary>
+    /// Resolves a pinned version without ever calling <see cref="LlamaServerDownloader.GetLatestVersionAsync"/>.
+    /// A cache hit makes zero network calls; a cache miss downloads exactly the pinned asset. Does
+    /// not touch <see cref="_stateManager"/> or trigger a background check — a pinned installation
+    /// stays outside the auto-update/rollback machinery entirely.
+    /// </summary>
+    private async Task<LlamaServerUpdateResult> GetPinnedVersionResultAsync(
+        string pinnedVersion,
+        LlamaServerBackend backend,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var cachedPath = _downloader.GetCachedServerPath(pinnedVersion, backend);
+        if (cachedPath != null)
+            return LlamaServerUpdateResult.NoUpdate(cachedPath, backend, pinnedVersion);
+
+        progress?.Report(new DownloadProgress
+        {
+            FileName = "llama-server",
+            Phase = DownloadPhase.Downloading
+        });
+
+        var serverPath = await _downloader.EnsureServerAsync(
+            version: pinnedVersion,
+            preferredBackend: backend,
+            progress: progress,
+            cancellationToken: cancellationToken);
+
+        return LlamaServerUpdateResult.NoUpdate(serverPath, backend, pinnedVersion);
+    }
+
+    /// <summary>
     /// Checks for updates and applies them immediately if available.
     /// Used during WarmupAsync when UpdateOnWarmup is true.
     /// </summary>
@@ -183,6 +256,15 @@ public sealed class LlamaServerUpdateService : IAsyncDisposable
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // A pinned installation (exact version or an externally supplied binary) never re-checks
+        // for or auto-applies a newer version — that is the whole point of pinning for an
+        // offline/security-reviewed deployment (see LlamaServerUpdateOptions.PinnedVersion/
+        // ServerBinaryPath). Route straight to the pinned/external resolution instead.
+        if (!string.IsNullOrEmpty(_options.ServerBinaryPath) || !string.IsNullOrEmpty(_options.PinnedVersion))
+        {
+            return await GetServerPathAsync(backend, progress, cancellationToken);
+        }
+
         await _updateLock.WaitAsync(cancellationToken);
         try
         {

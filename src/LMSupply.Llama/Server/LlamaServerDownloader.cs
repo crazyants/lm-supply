@@ -197,8 +197,23 @@ public sealed class LlamaServerDownloader : IDisposable
 
         await ExtractArchiveAsync(archivePath, versionDir, asset.Platform, cancellationToken);
 
-        // Cleanup archive
-        File.Delete(archivePath);
+        // A download + extract that completed without throwing does NOT guarantee the expected
+        // executable is actually there -- an archive layout mismatch (see
+        // FlattenSingleTopLevelDirectory) or a silently incomplete extraction would otherwise return
+        // a path nothing launches, and the real cause would only surface later as an opaque
+        // process-start failure far from here (2026-08-17: exactly what happened on the Linux e2e
+        // runner before this check existed -- confirmed against the actual b10290 release asset).
+        if (!File.Exists(serverPath))
+        {
+            var extracted = Directory.Exists(versionDir)
+                ? string.Join(", ", Directory.EnumerateFileSystemEntries(versionDir).Select(Path.GetFileName))
+                : "(directory does not exist)";
+            throw new InvalidOperationException(
+                $"llama-server binary not found at '{serverPath}' after downloading and extracting " +
+                $"'{asset.Name}'. The archive was downloaded successfully but extraction did not " +
+                $"produce the expected executable -- the release's archive layout may have changed. " +
+                $"Extracted contents of '{versionDir}': {extracted}.");
+        }
 
         progress?.Report(new DownloadProgress
         {
@@ -278,6 +293,13 @@ public sealed class LlamaServerDownloader : IDisposable
             await ExtractTarGzAsync(archivePath, destinationDir, cancellationToken);
         }
 
+        // Must happen before FlattenSingleTopLevelDirectory: the archive was downloaded directly into
+        // destinationDir (see DownloadAsync), so until it is removed it sits alongside the extracted
+        // tree as a spurious second top-level entry and defeats the single-wrapper-directory check.
+        File.Delete(archivePath);
+
+        FlattenSingleTopLevelDirectory(destinationDir);
+
         // Set executable permission on Unix
         if (platform != LlamaServerPlatform.Windows)
         {
@@ -291,6 +313,37 @@ public sealed class LlamaServerDownloader : IDisposable
                     UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
             }
         }
+    }
+
+    /// <summary>
+    /// Flattens a single top-level wrapper directory left by extraction. llama.cpp's Linux/macOS
+    /// tar.gz releases unpack as "llama-b10290/llama-server" rather than "llama-server" at the
+    /// archive root (confirmed 2026-08-17 against the actual b10290 ubuntu-x64 asset); the Windows
+    /// zip for the same release is already flat, which is why the resulting missing-binary failure
+    /// only ever reproduced on Linux/macOS runners. Every other code path in this file
+    /// (<see cref="GetServerExecutablePath"/>, <see cref="GetCachedServerPath"/>,
+    /// <see cref="CudaRuntimePresent"/>) assumes a flat <paramref name="destinationDir"/>, so
+    /// normalizing once here keeps that assumption true everywhere instead of teaching every caller
+    /// about archive layout. No-op when the archive was already flat (zero or multiple top-level
+    /// entries, or a single top-level file rather than a directory).
+    /// </summary>
+    internal static void FlattenSingleTopLevelDirectory(string destinationDir)
+    {
+        var entries = Directory.GetFileSystemEntries(destinationDir);
+        if (entries.Length != 1 || !Directory.Exists(entries[0]))
+            return;
+
+        var wrapperDir = entries[0];
+        foreach (var entry in Directory.GetFileSystemEntries(wrapperDir))
+        {
+            var target = Path.Combine(destinationDir, Path.GetFileName(entry));
+            if (Directory.Exists(entry))
+                Directory.Move(entry, target);
+            else
+                File.Move(entry, target);
+        }
+
+        Directory.Delete(wrapperDir);
     }
 
     private static async Task ExtractTarGzAsync(string archivePath, string destinationDir, CancellationToken cancellationToken)

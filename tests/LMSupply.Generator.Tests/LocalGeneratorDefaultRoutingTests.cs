@@ -130,7 +130,7 @@ public class LocalGeneratorDefaultRoutingTests
     {
         var info = GgufModelRegistry.Resolve("gguf:phi-4-mini");
         info.Should().NotBeNull();
-        info!.RepoId.Should().Be("bartowski/Phi-4-mini-instruct-GGUF");
+        info!.RepoId.Should().Be("bartowski/microsoft_Phi-4-mini-instruct-GGUF");
         info.ChatFormat.Should().Be("phi3");
         info.NumLayers.Should().Be(32);
     }

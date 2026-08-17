@@ -2,7 +2,7 @@
 
   <!-- Centralized Version Management -->
   <PropertyGroup>
-<Version>0.40.2</Version>
+<Version>0.40.3</Version>
   </PropertyGroup>
 
   <PropertyGroup>

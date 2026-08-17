@@ -146,11 +146,17 @@ public static class GgufModelRegistry
         // ============================================================
 
         // Phi-4-mini Q4_K_M: 3.8B params, ~2.4GB VRAM, best Korean per-GB below 5GB
+        // NOTE (2026-08-17, one-time registry audit): RepoId/DefaultFile previously pointed at
+        // "bartowski/Phi-4-mini-instruct-GGUF", which does not exist — bartowski's repo (and every
+        // file inside it) carries the "microsoft_" prefix from the upstream model id
+        // (microsoft/Phi-4-mini-instruct). Any download attempt against the old id would fail
+        // outright (repo not found) rather than silently misselect, unlike the Gemma4 class of defect.
+        // Verified via huggingface.co/api/models/bartowski/microsoft_Phi-4-mini-instruct-GGUF.
         ["gguf:phi-4-mini"] = new GgufModelInfo
         {
-            RepoId = "bartowski/Phi-4-mini-instruct-GGUF",
+            RepoId = "bartowski/microsoft_Phi-4-mini-instruct-GGUF",
             DisplayName = "Phi-4 Mini Instruct",
-            DefaultFile = "Phi-4-mini-instruct-Q4_K_M.gguf",
+            DefaultFile = "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf",
             ChatFormat = "phi3",
             ContextLength = 16384,
             ParameterCount = 3_800_000_000,

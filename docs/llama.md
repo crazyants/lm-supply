@@ -288,6 +288,16 @@ The following packages use LMSupply.Llama for GGUF support:
 - Verify model file exists and is valid GGUF
 - Check system logs for GPU driver issues
 
+### `Gemma4Assistant requires ctx_other to be set` on load
+
+This means a speculative-decoding draft/assistant companion file (an `mtp-*`-prefixed GGUF) was
+loaded as the main model instead of a standalone chat model — those files are not usable on their
+own and this specific architecture crashes llama.cpp's automatic memory fitting on load (a
+confirmed, unresolved upstream bug: `ggml-org/llama.cpp#24343`). `GgufModelDownloader` excludes
+`mmproj-*`/`mtp-*`/`dflash-*` companion files from selection (`IsCompanionFile`) as of v0.40.2 —
+if you hit this on a registry alias, the registry's `DefaultFile` may not match what the backing
+HuggingFace repo actually publishes; verify against the repo's file listing before reporting.
+
 ### GPU not detected
 
 - Install appropriate GPU drivers

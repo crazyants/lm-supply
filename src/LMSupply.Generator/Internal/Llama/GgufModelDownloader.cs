@@ -319,7 +319,7 @@ public sealed class GgufModelDownloader : IDisposable
 
         var rawFiles = files
             .Where(f => f.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
-            .Where(f => !IsMmprojFile(Path.GetFileName(f.Path)))
+            .Where(f => !IsCompanionFile(Path.GetFileName(f.Path)))
             .Select(f => new GgufRawFile(Path.GetFileName(f.Path), f.Size))
             .ToList();
 
@@ -464,7 +464,7 @@ public sealed class GgufModelDownloader : IDisposable
 
         var rawFiles = Directory.EnumerateFiles(cacheDir, "*.gguf", SearchOption.TopDirectoryOnly)
             .Select(p => new GgufRawFile(Path.GetFileName(p), new FileInfo(p).Length))
-            .Where(f => !IsMmprojFile(f.FileName))
+            .Where(f => !IsCompanionFile(f.FileName))
             .ToList();
 
         return rawFiles.Count == 0 ? [] : GgufFileGroup.GroupFiles(rawFiles).ToList();
@@ -486,7 +486,7 @@ public sealed class GgufModelDownloader : IDisposable
                 .Select(Path.GetFileName)
                 .FirstOrDefault(f => f != null &&
                     f.Contains(quantization, StringComparison.OrdinalIgnoreCase) &&
-                    !IsMmprojFile(f));
+                    !IsCompanionFile(f));
             if (localMatch != null)
                 return localMatch;
         }
@@ -518,7 +518,7 @@ public sealed class GgufModelDownloader : IDisposable
 
         var ggufFiles = Directory.EnumerateFiles(cacheDir, "*.gguf", SearchOption.TopDirectoryOnly)
             .Select(Path.GetFileName)
-            .Where(f => f != null && !IsMmprojFile(f))
+            .Where(f => f != null && !IsCompanionFile(f))
             .ToList();
 
         if (ggufFiles.Count == 0)
@@ -713,6 +713,30 @@ public sealed class GgufModelDownloader : IDisposable
 
     internal static bool IsMmprojFile(string filename) =>
         filename.StartsWith("mmproj", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Multi-token-prediction (MTP) speculative-decoding draft/assistant companion file
+    /// (llama.cpp "gemma4_assistant" architecture and similar). Not a standalone chat model —
+    /// must never be selected as the main model (ggml-org/llama.cpp#24343: loading one directly
+    /// crashes with "requires ctx_other to be set" during llama.cpp's memory fitting).
+    /// </summary>
+    internal static bool IsMtpFile(string filename) =>
+        filename.StartsWith("mtp", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// DFlash block-diffusion speculative-decoding draft companion file (ggml-org/llama.cpp#22105).
+    /// Same class as <see cref="IsMtpFile"/> — a drafter for the target model, not usable standalone.
+    /// </summary>
+    internal static bool IsDflashFile(string filename) =>
+        filename.StartsWith("dflash", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True for any file that is a companion to a standalone model — a multimodal projector or a
+    /// speculative-decoding draft/assistant — and must therefore never be selected as the main
+    /// model in quantization/size-based auto-selection.
+    /// </summary>
+    internal static bool IsCompanionFile(string filename) =>
+        IsMmprojFile(filename) || IsMtpFile(filename) || IsDflashFile(filename);
 
     public void Dispose()
     {

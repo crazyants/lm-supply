@@ -300,10 +300,10 @@ Gemma 4와 Qwen3 시리즈 중심 레지스트리. `gguf:auto`는 **qwen3 auto-p
 | Alias | Model | Params | Quant | Size | VRAM Target |
 |-------|-------|--------|-------|------|-------------|
 | `gguf:gemma4-fast` | Gemma 4 E2B Instruct | 2.3B | Q4_K_M | ~3.1 GB | <4GB iGPU/mobile |
-| `gguf:gemma4-default` | Gemma 4 E4B Instruct | 4.5B | Q4_K_M | ~5.3 GB | 4-8GB |
+| `gguf:gemma4-default` | Gemma 4 E4B Instruct | 4.5B | Q4_0 | ~4.6 GB | 4-8GB |
 | `gguf:gemma4-balanced` | Gemma 4 E4B Instruct | 4.5B | Q8_0 | ~7.5 GB | 8-16GB (RTX 3060 12GB 등) |
-| `gguf:gemma4-quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_K_M | ~16.8 GB | 16-20GB |
-| `gguf:gemma4-large` | Gemma 4 31B Instruct | 31B | Q4_K_M | ~18.7 GB | 20-48GB |
+| `gguf:gemma4-quality` | Gemma 4 26B A4B (MoE) | 26B (4B active) | Q4_0 | ~13.6 GB | 16-20GB |
+| `gguf:gemma4-large` | Gemma 4 31B Instruct | 31B | Q4_0 | ~16.8 GB | 20-48GB |
 
 **Qwen3/3.5/3.6 aliases** (Apache 2.0, ChatML, thinking mode; `gguf:auto` pool):
 

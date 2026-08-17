@@ -157,4 +157,41 @@ public class GgufModelDownloaderTests
     {
         GgufModelDownloader.IsMmprojFile(filename).Should().Be(expected);
     }
+
+    // ggml-org/llama.cpp#24343 — an mtp-* file loaded as the main model crashes llama-server.
+    [Theory]
+    [InlineData("mtp-gemma-4-E4B-it-BF16.gguf", true)]
+    [InlineData("mtp-gemma-4-E4B-it-Q4_0.gguf", true)]
+    [InlineData("MTP-model.gguf", true)]
+    [InlineData("Mtp-mixed-case.gguf", true)]
+    [InlineData("gemma-4-E4B-it-Q4_0.gguf", false)]
+    [InlineData("gemma-4-E4B-it-Q8_0.gguf", false)]
+    [InlineData("model-mtp-suffix.gguf", false)]
+    public void IsMtpFile_DetectsMtpPrefix(string filename, bool expected)
+    {
+        GgufModelDownloader.IsMtpFile(filename).Should().Be(expected);
+    }
+
+    // ggml-org/llama.cpp#22105 — DFlash block-diffusion draft companion, same class as mtp-*.
+    [Theory]
+    [InlineData("dflash-gemma-4-26B-A4B-it-BF16.gguf", true)]
+    [InlineData("dflash-gemma-4-31B-it-Q8_0.gguf", true)]
+    [InlineData("DFLASH-model.gguf", true)]
+    [InlineData("Dflash-mixed-case.gguf", true)]
+    [InlineData("gemma-4-26B-A4B-it-Q4_0.gguf", false)]
+    [InlineData("model-dflash-suffix.gguf", false)]
+    public void IsDflashFile_DetectsDflashPrefix(string filename, bool expected)
+    {
+        GgufModelDownloader.IsDflashFile(filename).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("mmproj-model.gguf", true)]
+    [InlineData("mtp-model.gguf", true)]
+    [InlineData("dflash-model.gguf", true)]
+    [InlineData("gemma-4-E4B-it-Q4_0.gguf", false)]
+    public void IsCompanionFile_MatchesAnyKnownCompanionPrefix(string filename, bool expected)
+    {
+        GgufModelDownloader.IsCompanionFile(filename).Should().Be(expected);
+    }
 }

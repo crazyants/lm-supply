@@ -75,7 +75,7 @@ public class GgufModelRegistryTests
         model.Should().NotBeNull();
         model!.RepoId.Should().Contain("gemma-4");
         model.ChatFormat.Should().Be("gemma4");
-        model.DefaultFile.Should().Contain("Q4_K_M");
+        model.DefaultFile.Should().Contain("Q4_0"); // no K-quant is published for this repo
         model.ContextLength.Should().BeGreaterThanOrEqualTo(4096);
     }
 

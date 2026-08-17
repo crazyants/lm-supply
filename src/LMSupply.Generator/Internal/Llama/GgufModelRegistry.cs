@@ -38,16 +38,23 @@ public static class GgufModelRegistry
         },
 
         // Default: Gemma 4 E4B — best balance of size, speed, and quality
+        // NOTE (2026-08-17): this repo never published a K-quant variant — only BF16/Q4_0/Q8_0
+        // (plus mmproj-*/mtp-* companion files, both excluded from selection — see
+        // GgufModelDownloader.IsMmprojFile/IsMtpFile). The registry's DefaultFile previously named
+        // "gemma-4-E4B-it-Q4_K_M.gguf", which never existed upstream; on hosts where that mismatch
+        // caused a size/quant fallback, the (then-unfiltered) mtp-* companion could be selected
+        // instead of a real model and crash llama-server (ggml-org/llama.cpp#24343). Verified via
+        // huggingface.co/ggml-org/gemma-4-E4B-it-GGUF file listing before changing this.
         ["gguf:gemma4-default"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-E4B-it-GGUF",
             DisplayName = "Gemma 4 E4B Instruct",
-            DefaultFile = "gemma-4-E4B-it-Q4_K_M.gguf",
+            DefaultFile = "gemma-4-E4B-it-Q4_0.gguf",
             ChatFormat = "gemma4",
             ContextLength = 131072,
             ParameterCount = 4_500_000_000,
-            EstimatedSizeBytes = 5_335_285_440L,
-            QuantizationType = "Q4_K_M",
+            EstimatedSizeBytes = 4_590_807_392L,
+            QuantizationType = "Q4_0",
             NumLayers = 34,
             HiddenSize = 2560,
             License = LicenseTier.MIT,
@@ -75,16 +82,18 @@ public static class GgufModelRegistry
         },
 
         // Quality: Gemma 4 26B MoE — 31B-class performance with 4B active params
+        // NOTE (2026-08-17): this repo also never published a K-quant — see gemma4-default's note
+        // above for the shared root cause (ISSUE-lm-supply-20260817-gemma4-ctx-other-...).
         ["gguf:gemma4-quality"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-26B-A4B-it-GGUF",
             DisplayName = "Gemma 4 26B A4B Instruct (MoE)",
-            DefaultFile = "gemma-4-26B-A4B-it-Q4_K_M.gguf",
+            DefaultFile = "gemma-4-26B-A4B-it-Q4_0.gguf",
             ChatFormat = "gemma4",
             ContextLength = 262144,
             ParameterCount = 26_000_000_000,
-            EstimatedSizeBytes = 16_796_010_720L,
-            QuantizationType = "Q4_K_M",
+            EstimatedSizeBytes = 14_618_145_824L,
+            QuantizationType = "Q4_0",
             NumLayers = 46,
             HiddenSize = 4096,
             License = LicenseTier.MIT,
@@ -93,16 +102,18 @@ public static class GgufModelRegistry
         },
 
         // Large: Gemma 4 31B Dense — maximum quality single-GPU model
+        // NOTE (2026-08-17): this repo also never published a K-quant — see gemma4-default's note
+        // above for the shared root cause (ISSUE-lm-supply-20260817-gemma4-ctx-other-...).
         ["gguf:gemma4-large"] = new GgufModelInfo
         {
             RepoId = "ggml-org/gemma-4-31B-it-GGUF",
             DisplayName = "Gemma 4 31B Instruct",
-            DefaultFile = "gemma-4-31B-it-Q4_K_M.gguf",
+            DefaultFile = "gemma-4-31B-it-Q4_0.gguf",
             ChatFormat = "gemma4",
             ContextLength = 262144,
             ParameterCount = 31_000_000_000,
-            EstimatedSizeBytes = 18_687_057_376L,
-            QuantizationType = "Q4_K_M",
+            EstimatedSizeBytes = 17_992_313_088L,
+            QuantizationType = "Q4_0",
             NumLayers = 62,
             HiddenSize = 5376,
             License = LicenseTier.MIT,

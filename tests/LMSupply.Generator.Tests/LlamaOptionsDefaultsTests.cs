@@ -121,4 +121,43 @@ public class LlamaOptionsDefaultsTests
             new LlamaOptions { AdditionalArgs = [] });
         args.Should().BeEmpty();
     }
+
+    // ggml-org/llama.cpp#24343 — "Gemma4Assistant requires ctx_other to be set" during
+    // llama.cpp's automatic memory-fitting. Workaround: -fit off, gated to this architecture only.
+    [Fact]
+    public void BuildAdditionalArgs_Gemma4AssistantArchitecture_EmitsFitOff()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(
+            new LlamaOptions(), "gemma4_assistant");
+        args.Should().Equal("-fit", "off");
+    }
+
+    [Theory]
+    [InlineData("Gemma4_Assistant")]
+    [InlineData("GEMMA4_ASSISTANT")]
+    public void BuildAdditionalArgs_Gemma4AssistantArchitecture_IsCaseInsensitive(string architecture)
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(new LlamaOptions(), architecture);
+        args.Should().Equal("-fit", "off");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("llama")]
+    [InlineData("gemma3")]
+    [InlineData("gemma4")]
+    public void BuildAdditionalArgs_OtherArchitectures_DoesNotEmitFitOff(string? architecture)
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(new LlamaOptions(), architecture);
+        args.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildAdditionalArgs_Gemma4AssistantArchitecture_FitOffPrecedesUserAdditionalArgs()
+    {
+        var args = LlamaServerGeneratorModel.BuildAdditionalArgs(
+            new LlamaOptions { Threads = 4, AdditionalArgs = ["--verbose"] }, "gemma4_assistant");
+        args.Should().Equal("--threads", "4", "-fit", "off", "--verbose");
+    }
 }

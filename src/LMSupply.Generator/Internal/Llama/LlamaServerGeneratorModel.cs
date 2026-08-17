@@ -300,7 +300,7 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
         }
 
         // Build additional arguments
-        var additionalArgs = BuildAdditionalArgs(llamaOpts);
+        var additionalArgs = BuildAdditionalArgs(llamaOpts, ggufMetadata?.Architecture);
 
         // Validate speculative decoding configuration
         if (llamaOpts.SpeculativeDecoding == SpeculativeDecodingMode.DraftModel
@@ -977,16 +977,34 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
     /// <summary>
     /// Builds the raw llama-server CLI argument list derived from <see cref="LlamaOptions"/>
     /// properties that don't map to a dedicated <see cref="LlamaServerConfig"/> field
-    /// (currently just Threads), plus any caller-supplied <see cref="LlamaOptions.AdditionalArgs"/>
-    /// passthrough appended after them.
+    /// (currently just Threads), an architecture-gated workaround (see below), plus any
+    /// caller-supplied <see cref="LlamaOptions.AdditionalArgs"/> passthrough appended after them.
     /// </summary>
-    internal static List<string> BuildAdditionalArgs(LlamaOptions llamaOpts)
+    /// <param name="llamaOpts">The caller's llama.cpp options.</param>
+    /// <param name="ggufArchitecture">
+    /// The loaded model's <c>general.architecture</c> GGUF field, if read. Used only to gate the
+    /// <c>gemma4_assistant</c> workaround below.
+    /// </param>
+    internal static List<string> BuildAdditionalArgs(LlamaOptions llamaOpts, string? ggufArchitecture = null)
     {
         var args = new List<string>();
         if (llamaOpts.Threads.HasValue)
         {
             args.Add("--threads");
             args.Add(llamaOpts.Threads.Value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        // llama.cpp's automatic memory-fitting (-fit, on by default) throws "Gemma4Assistant
+        // requires ctx_other to be set" for this architecture — a confirmed upstream bug
+        // (ggml-org/llama.cpp#24343, fix pending as of PR #24590, unreleased as of this writing).
+        // Disabling fitting is safe here specifically: lm-supply already sets ctx-size/gpu-layers/
+        // batch-size explicitly (never relies on auto-fit to choose them) and has its own
+        // OOM-retry fallback (see LoadAsync's lease-retry loop), so this narrows to just the one
+        // architecture known to crash rather than disabling fitting universally.
+        if (string.Equals(ggufArchitecture, "gemma4_assistant", StringComparison.OrdinalIgnoreCase))
+        {
+            args.Add("-fit");
+            args.Add("off");
         }
 
         if (llamaOpts.AdditionalArgs is { Count: > 0 })

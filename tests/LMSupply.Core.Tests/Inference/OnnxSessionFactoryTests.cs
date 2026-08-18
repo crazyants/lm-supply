@@ -246,9 +246,20 @@ public class OnnxSessionFactoryTests
     [SkippableFact]
     public async Task CreateWithInfoAsync_ExplicitGpuProvider_WhenSessionCreateThrows_FallsBackToCpu()
     {
-        // Skip if ONNX Runtime native library is not available (CI without runtime installed).
-        var (available, _) = OnnxSessionFactory.CheckOnnxRuntimeAvailability();
-        Skip.IfNot(available, "ONNX Runtime not available in this environment");
+        // This test simulates a *session-construction*-time GPU failure (e.g. a DX12 device
+        // unavailable at runtime) on top of a GPU runtime that DOES provision successfully — it is
+        // not exercising (and cannot exercise, by construction) a *provisioning*-time failure, where
+        // the requested provider has no native binaries for this platform at all. DirectML only ever
+        // provisions on Windows, so gate on that specifically — not on
+        // CheckOnnxRuntimeAvailability(), which only reports whether *some* provider (e.g. CPU) is
+        // already loaded and says nothing about DirectML. On Linux/macOS CI, the generic check can be
+        // true (once anything has provisioned) while DirectML provisioning still always fails with
+        // "no native binaries for this platform" — a real, separate gap outside the fallback try/catch
+        // this test targets (see docket/issue tracking for that, filed separately).
+        await RuntimeManager.Instance.InitializeAsync();
+        var gpu = RuntimeManager.Instance.Gpu;
+        Skip.IfNot(OperatingSystem.IsWindows() && gpu?.DirectMLSupported == true,
+            "DirectML is only ever provisionable on Windows with DirectML support");
 
         // Simulate a session-creation failure on the first attempt (DML) by injecting a
         // configureOptions callback that throws. The factory should catch this and retry

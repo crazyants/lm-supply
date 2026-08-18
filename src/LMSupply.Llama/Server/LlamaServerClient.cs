@@ -29,9 +29,20 @@ public sealed class LlamaServerClient : IDisposable
     /// Creates a new client for the specified server URL.
     /// </summary>
     /// <param name="baseUrl">llama-server base URL.</param>
-    /// <param name="httpClient">Optional shared HttpClient. If null, a new one is created and owned.</param>
+    /// <param name="httpClient">Optional shared HttpClient. If null, a new one is created and owned.
+    /// <paramref name="requestTimeout"/> only applies to the client created in that case — a caller
+    /// supplying their own <paramref name="httpClient"/> owns its timeout too.</param>
     /// <param name="maxContextLength">Model context window size — carried in ContextLengthExceededException on overflow.</param>
-    public LlamaServerClient(string baseUrl, HttpClient? httpClient = null, int maxContextLength = 0)
+    /// <param name="requestTimeout">Timeout for the internally-created HttpClient. Defaults to 5
+    /// minutes, not .NET's 100-second default — local/CPU-bound inference, especially a multi-step
+    /// tool-calling loop where each round's prompt grows with prior tool results, routinely exceeds
+    /// 100 seconds per completion on hardware without a GPU. Ignored when <paramref name="httpClient"/>
+    /// is supplied.</param>
+    public LlamaServerClient(
+        string baseUrl,
+        HttpClient? httpClient = null,
+        int maxContextLength = 0,
+        TimeSpan? requestTimeout = null)
     {
         _baseUrl = baseUrl.TrimEnd('/');
         _maxContextLength = maxContextLength;
@@ -43,7 +54,7 @@ public sealed class LlamaServerClient : IDisposable
         }
         else
         {
-            _httpClient = new HttpClient();
+            _httpClient = new HttpClient { Timeout = requestTimeout ?? TimeSpan.FromMinutes(5) };
             _ownsHttpClient = true;
         }
     }

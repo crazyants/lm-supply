@@ -262,6 +262,14 @@ public sealed class LlamaServerConfig
     /// Timeout for graceful shutdown.
     /// </summary>
     public TimeSpan ShutdownTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Timeout for a single chat completion HTTP request to the running server.
+    /// Defaults to 5 minutes, not HttpClient's 100-second default — local/CPU-bound inference,
+    /// especially a multi-step tool-calling loop where each round's prompt grows with prior tool
+    /// results, routinely exceeds 100 seconds per completion on hardware without a GPU.
+    /// </summary>
+    public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromMinutes(5);
 }
 
 /// <summary>

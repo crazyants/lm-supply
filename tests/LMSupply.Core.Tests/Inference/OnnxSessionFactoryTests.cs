@@ -208,7 +208,14 @@ public class OnnxSessionFactoryTests
             skipProviders: skip);
 
         // Should fail at the precheck or session creation, not at signature resolution.
-        await action.Should().ThrowAsync<Exception>();
+        var ex = await action.Should().ThrowAsync<Exception>();
+
+        // Regression guard: the availability precheck must run AFTER RuntimeManager has had a
+        // chance to provision the runtime (see CreateWithFallbackChainAsync's <remarks>), not
+        // before. A "native library failed to load" message here would mean the precheck ran
+        // first-thing again and rejected before ever attempting provisioning.
+        ex.Which.Message.Should().NotContain("native library failed to load",
+            "the fallback chain must provision the runtime before checking availability, not the reverse");
     }
 
     [Fact]

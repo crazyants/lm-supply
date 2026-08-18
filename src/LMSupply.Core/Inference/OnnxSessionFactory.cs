@@ -197,6 +197,15 @@ public static class OnnxSessionFactory
     /// For CUDA, verifies runtime libraries are available before attempting.
     /// For DirectML, trusts the session creation result (Windows manages DirectML).
     /// </summary>
+    /// <remarks>
+    /// Does not call <see cref="EnsureOnnxRuntimeAvailable"/> itself — <see cref="Create(string,
+    /// ExecutionProvider,Action{SessionOptions}?,out bool)"/> already does, and it must run after
+    /// each provider's <c>EnsureRuntimeAsync</c> call below, not before this method's own fallback
+    /// loop starts. RuntimeManager/NativeLoader registration is in-memory and per-process, so on a
+    /// process that has never provisioned a runtime yet, checking availability before the first
+    /// <c>EnsureRuntimeAsync</c> call always reports unavailable — a false negative that used to
+    /// fail every first-time Auto-provider load outright, before it ever reached the download step.
+    /// </remarks>
     private static async Task<SessionCreationResult> CreateWithFallbackChainAsync(
         string modelPath,
         IReadOnlyCollection<ExecutionProvider>? skipProviders,
@@ -204,10 +213,6 @@ public static class OnnxSessionFactory
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken)
     {
-        // Pre-check: verify ONNX Runtime native library is loadable before entering fallback loop.
-        // Without this, missing VC++ Redistributable causes fatal 0xC0000005 in NativeMethods..cctor().
-        EnsureOnnxRuntimeAvailable(modelPath);
-
         var fallbackChain = RuntimeManager.Instance.Gpu?.GetFallbackProviders()
             ?? new[] { ExecutionProvider.Cpu };
 

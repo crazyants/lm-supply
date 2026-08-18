@@ -223,13 +223,15 @@ public class Gemma4ToolCallStreamParserTests
     [Theory]
     [InlineData(typeof(Phi3ChatFormatter))]
     [InlineData(typeof(Llama3ChatFormatter))]
-    [InlineData(typeof(ChatMLFormatter))]
     [InlineData(typeof(GemmaChatFormatter))]
     [InlineData(typeof(ExaoneChatFormatter))]
     [InlineData(typeof(DeepSeekChatFormatter))]
     [InlineData(typeof(MistralChatFormatter))]
     public void NonGemma4Formatters_CreateToolCallStreamParser_ReturnsNullByDefault(Type formatterType)
     {
+        // ChatMLFormatter is deliberately excluded here since ecosystem ISSUE Option D-8
+        // (2026-08-17): it opts in to its own ChatMLToolCallStreamParser (coexist mode) —
+        // see ChatMLToolCallStreamParserTests / ChatFormatterTests for its coverage.
         var formatter = (IChatFormatter)Activator.CreateInstance(formatterType)!;
 
         formatter.CreateToolCallStreamParser().Should().BeNull(

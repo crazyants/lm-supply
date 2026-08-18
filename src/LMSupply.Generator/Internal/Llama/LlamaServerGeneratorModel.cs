@@ -716,11 +716,16 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 ? new ReasoningTokenFilter(options.ExtractReasoningTokens)
                 : null;
 
-            // Initialize formatter-supplied tool-call wrapper parser if any.
-            // When present, the parser is the authoritative tool-call source for
-            // the turn and server-emitted tool-call deltas are suppressed
-            // (ecosystem ISSUE Option D-5, 2026-05-01 — Gemma 4 wrapper extraction).
+            // Initialize formatter-supplied tool-call wrapper parser if any. When present AND
+            // the formatter's grammar channel never produces a usable delta (the Gemma 4 case,
+            // SuppressServerToolCallsWhenParserActive == true), the parser is the sole tool-call
+            // source for the turn. When the formatter's grammar channel usually works (the
+            // ChatML/Qwen case, == false), server deltas win per-chunk and the parser only fills
+            // in the chunks where the server gave nothing — see ToolCallStreamCoexistence.
+            // (ecosystem ISSUE Option D-5, 2026-05-01 — Gemma 4 wrapper extraction;
+            // Option D-8, 2026-08-17 — ChatML coexist mode.)
             var toolStreamParser = _chatFormatter.CreateToolCallStreamParser();
+            var suppressServerCallsWhenParserActive = _chatFormatter.SuppressServerToolCallsWhenParserActive;
 
             await foreach (var data in _serverLease.Client.GenerateChatStreamAsync(
                 serverMessages, chatOptions, cancellationToken))
@@ -733,11 +738,10 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 }
 
                 // Convert tool call deltas from server types to Generator types.
-                // Suppressed when a formatter-supplied parser owns the channel.
-                IReadOnlyList<ChatToolCallDelta>? toolCallDeltas = null;
-                if (toolStreamParser is null && data.ToolCallDeltas is { Count: > 0 })
+                IReadOnlyList<ChatToolCallDelta>? serverToolCallDeltas = null;
+                if (data.ToolCallDeltas is { Count: > 0 })
                 {
-                    toolCallDeltas = data.ToolCallDeltas.Select(tc => new ChatToolCallDelta
+                    serverToolCallDeltas = data.ToolCallDeltas.Select(tc => new ChatToolCallDelta
                     {
                         Index = tc.Index,
                         Id = tc.Id,
@@ -745,6 +749,9 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                         Arguments = tc.Function?.Arguments
                     }).ToList();
                 }
+
+                IReadOnlyList<ChatToolCallDelta>? toolCallDeltas =
+                    toolStreamParser is null ? serverToolCallDeltas : null;
 
                 // b8994+: reasoning_content arrives as ReasoningDelta (separate from content).
                 // Route it to ChatStreamChunk.ReasoningDelta when extraction is requested;
@@ -763,13 +770,29 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                 }
 
                 // Route remaining text through the formatter-supplied wrapper parser.
-                if (text is not null && toolStreamParser is not null)
+                if (toolStreamParser is not null)
                 {
-                    var parsed = toolStreamParser.Feed(text);
-                    text = parsed.Text;
-                    if (parsed.ToolCalls is { Count: > 0 })
+                    if (suppressServerCallsWhenParserActive)
                     {
-                        toolCallDeltas = parsed.ToolCalls;
+                        // Gemma 4 class: the parser is the sole source whenever it is registered.
+                        if (text is not null)
+                        {
+                            var parsed = toolStreamParser.Feed(text);
+                            text = parsed.Text;
+                            if (parsed.ToolCalls is { Count: > 0 })
+                            {
+                                toolCallDeltas = parsed.ToolCalls;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // ChatML/Qwen class: server deltas win per chunk; the parser only fills
+                        // in chunks where the server gave nothing.
+                        var (resolvedText, resolvedCalls) =
+                            ToolCallStreamCoexistence.Resolve(text, serverToolCallDeltas, toolStreamParser);
+                        text = resolvedText;
+                        toolCallDeltas = resolvedCalls;
                     }
                 }
 

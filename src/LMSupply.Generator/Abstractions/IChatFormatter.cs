@@ -86,6 +86,26 @@ public interface IChatFormatter
     IToolCallStreamParser? CreateToolCallStreamParser() => null;
 
     /// <summary>
+    /// Whether the active GGUF generator should discard server-emitted
+    /// <c>ToolCallDeltas</c> unconditionally whenever <see cref="CreateToolCallStreamParser"/>
+    /// returns a non-null parser. Defaults to <c>true</c>, preserving the original Gemma 4
+    /// behavior where the server's grammar-constrained tool-call channel never produces a
+    /// usable delta and the parser is always the sole source for the turn.
+    /// </summary>
+    /// <remarks>
+    /// A formatter whose model's grammar-constrained channel DOES usually work (unlike Gemma 4)
+    /// should override this to <c>false</c>: unconditional suppression would silently discard a
+    /// working server-side tool call on every turn just because a parser is registered to catch
+    /// the model's rarer native-wrapper fallback. When <c>false</c>, the generator resolves each
+    /// chunk independently — server deltas win when present; the parser's output is used only on
+    /// chunks where the server gave nothing (see <c>ToolCallStreamCoexistence.Resolve</c>).
+    /// Reference: ecosystem ISSUE Option D-8 (2026-08-17) — Qwen/ChatML's grammar path succeeds on
+    /// the majority of turns (5/7 observed), so Gemma 4's unconditional-suppression policy would
+    /// regress a working majority path to fix a minority native-wrapper leak.
+    /// </remarks>
+    bool SuppressServerToolCallsWhenParserActive => true;
+
+    /// <summary>
     /// Returns the token string that activates the model's built-in thinking mode
     /// when prepended to the first system message, or <c>null</c> if the model does
     /// not support a thinking mode via prompt injection.

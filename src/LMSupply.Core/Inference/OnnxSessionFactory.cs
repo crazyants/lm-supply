@@ -121,12 +121,29 @@ public static class OnnxSessionFactory
         };
         var isGpuRequested = provider is ExecutionProvider.Cuda or ExecutionProvider.DirectML or ExecutionProvider.CoreML;
 
-        // Download runtime binaries if needed
-        await RuntimeManager.Instance.EnsureRuntimeAsync(
-            "onnxruntime",
-            provider: providerString,
-            progress: progress,
-            cancellationToken: cancellationToken);
+        // Download runtime binaries if needed. This is provisioning, not session construction --
+        // a platform that cannot provision the requested provider at all (e.g. DirectML has no
+        // native binaries for linux-x64/osx-*) fails loud here with an actionable message. The
+        // CPU-fallback catch below is reserved for a narrower failure class: the runtime WAS
+        // successfully provisioned but session construction itself failed transiently (a missing
+        // DX12 device, a CUDA driver mismatch). Conflating the two would let a caller silently run
+        // on CPU while believing an explicitly-requested GPU provider is active.
+        try
+        {
+            await RuntimeManager.Instance.EnsureRuntimeAsync(
+                "onnxruntime",
+                provider: providerString,
+                progress: progress,
+                cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (isGpuRequested)
+        {
+            throw WrapProvisioningFailure(provider, modelPath, ex);
+        }
 
         InferenceSession session;
         bool gpuEpAppended;
@@ -492,6 +509,19 @@ public static class OnnxSessionFactory
                 modelPath);
         }
     }
+
+    /// <summary>
+    /// Wraps a provisioning-stage failure (the requested provider has no native binaries for this
+    /// platform) into a clear, actionable exception, instead of letting the provisioning layer's
+    /// raw message (e.g. "No native binaries found for {rid} in {package}") leak to the caller.
+    /// </summary>
+    internal static ModelLoadException WrapProvisioningFailure(
+        ExecutionProvider provider, string modelPath, Exception inner) =>
+        new(
+            $"{provider} is not supported on this platform ({RuntimeInformation.RuntimeIdentifier}). " +
+            "Use ExecutionProvider.Auto or ExecutionProvider.Cpu instead.",
+            modelPath,
+            inner);
 
     /// <summary>
     /// Parses ONNX Runtime error messages to extract missing library names.

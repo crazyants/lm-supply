@@ -243,6 +243,31 @@ public class OnnxSessionFactoryTests
             .Should().BeFalse("CPU configuration appends no GPU execution provider");
     }
 
+    [Fact]
+    public void WrapProvisioningFailure_ProducesActionableMessage_NamingProviderAndPlatform()
+    {
+        // Regression test for the provisioning-vs-session-construction distinction (see
+        // ISSUE-lm-supply-20260818-explicit-gpu-provisioning-failure-bypasses-cpu-fallback.md).
+        // A real end-to-end repro requires a platform where the requested provider genuinely has
+        // no native binaries (e.g. DirectML on linux-x64) -- exercising that for real would mean
+        // downloading a multi-hundred-MB NuGet package on every CI run just to observe it lacks
+        // the current RID's entries. Testing the pure wrapping function directly (no I/O) is the
+        // "test double" alternative named in the issue's acceptance criteria.
+        var inner = new InvalidOperationException(
+            "No native binaries found for linux-x64 in Microsoft.ML.OnnxRuntime.DirectML");
+
+        var wrapped = OnnxSessionFactory.WrapProvisioningFailure(
+            ExecutionProvider.DirectML, "model.onnx", inner);
+
+        wrapped.Message.Should().Contain("DirectML",
+            "the message must name the provider the caller explicitly requested");
+        wrapped.Message.Should().NotContain("No native binaries found",
+            "the provisioning layer's raw message must not leak to the caller verbatim");
+        wrapped.InnerException.Should().BeSameAs(inner,
+            "the original provisioning exception must be preserved for diagnostics");
+        wrapped.ModelId.Should().Be("model.onnx");
+    }
+
     [SkippableFact]
     public async Task CreateWithInfoAsync_ExplicitGpuProvider_WhenSessionCreateThrows_FallsBackToCpu()
     {
@@ -254,8 +279,11 @@ public class OnnxSessionFactoryTests
         // CheckOnnxRuntimeAvailability(), which only reports whether *some* provider (e.g. CPU) is
         // already loaded and says nothing about DirectML. On Linux/macOS CI, the generic check can be
         // true (once anything has provisioned) while DirectML provisioning still always fails with
-        // "no native binaries for this platform" — a real, separate gap outside the fallback try/catch
-        // this test targets (see docket/issue tracking for that, filed separately).
+        // "no native binaries for this platform" — that case is now covered separately: it throws
+        // ModelLoadException via WrapProvisioningFailure (see
+        // WrapProvisioningFailure_ProducesActionableMessage_NamingProviderAndPlatform above) rather
+        // than falling back to CPU, since a caller who explicitly asked for DirectML should learn
+        // the platform can't provide it instead of silently running on CPU.
         await RuntimeManager.Instance.InitializeAsync();
         var gpu = RuntimeManager.Instance.Gpu;
         Skip.IfNot(OperatingSystem.IsWindows() && gpu?.DirectMLSupported == true,

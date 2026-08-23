@@ -51,7 +51,7 @@ public static class LocalEmbedder
     /// Loads an embedding model by name or path.
     /// </summary>
     /// <param name="modelIdOrPath">
-    /// Either a model ID (e.g., "all-MiniLM-L6-v2") for auto-download,
+    /// Either a catalog alias (e.g., "default", "fast", "large") or model ID for auto-download,
     /// or a local path to an ONNX/GGUF model file.
     /// GGUF models are auto-detected by "-GGUF"/"_gguf" in repo name or ".gguf" extension.
     /// </param>
@@ -185,7 +185,7 @@ public static class LocalEmbedder
         else
         {
             throw new ModelNotFoundException(
-                $"Unknown model '{modelIdOrPath}'. Use a known model ID (e.g., 'all-MiniLM-L6-v2'), " +
+                $"Unknown model '{modelIdOrPath}'. Use a known catalog alias (e.g., 'default', 'fast'), " +
                 "a HuggingFace repo ID (e.g., 'sentence-transformers/all-MiniLM-L6-v2'), " +
                 "or a local path to an ONNX model file.",
                 modelIdOrPath);

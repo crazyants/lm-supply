@@ -119,6 +119,7 @@ internal sealed class WhisperDecoder
         float[] encoderOutput,
         int encoderSequenceLength,
         int hiddenSize,
+        double chunkDurationSeconds,
         TranscribeOptions? options = null,
         CancellationToken cancellationToken = default)
     {
@@ -339,52 +340,16 @@ internal sealed class WhisperDecoder
                 tokens.Add(nextToken);
             }
 
-            // Handle remaining tokens as final segment
-            if (currentSegmentTokens.Count > 0)
-            {
-                var segmentText = _tokenizer.Decode(
-                    currentSegmentTokens.ToArray().AsSpan(),
-                    skipSpecialTokens: true);
-
-                if (!string.IsNullOrWhiteSpace(segmentText))
-                {
-                    var trimmedText = segmentText.Trim();
-                    segments.Add(new TranscriptionSegment
-                    {
-                        Id = segmentId,
-                        Start = currentSegmentStart,
-                        End = 30.0, // Default chunk length
-                        Text = trimmedText,
-                        AvgLogProb = currentSegmentLogProbs.Count > 0
-                            ? currentSegmentLogProbs.Average() : null,
-                        NoSpeechProb = chunkNoSpeechProb,
-                        CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
-                    });
-                }
-            }
-
-            // If no segments created (no timestamps mode), create single segment
-            if (segments.Count == 0)
-            {
-                var allTokens = tokens.Skip(initialTokens.Length).ToArray();
-                var fullText = _tokenizer.Decode(allTokens.AsSpan(), skipSpecialTokens: true);
-
-                if (!string.IsNullOrWhiteSpace(fullText))
-                {
-                    var trimmedText = fullText.Trim();
-                    segments.Add(new TranscriptionSegment
-                    {
-                        Id = 0,
-                        Start = 0,
-                        End = 30.0,
-                        Text = trimmedText,
-                        AvgLogProb = currentSegmentLogProbs.Count > 0
-                            ? currentSegmentLogProbs.Average() : null,
-                        NoSpeechProb = chunkNoSpeechProb,
-                        CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
-                    });
-                }
-            }
+            FinalizeSegments(
+                segments,
+                tokens,
+                initialTokens,
+                currentSegmentTokens,
+                currentSegmentLogProbs,
+                segmentId,
+                currentSegmentStart,
+                chunkNoSpeechProb,
+                chunkDurationSeconds);
 
             // Combine all segment texts for full transcription
             var fullTranscription = string.Join(" ", segments.Select(s => s.Text));
@@ -419,6 +384,76 @@ internal sealed class WhisperDecoder
         }
 
         return cache;
+    }
+
+    /// <summary>
+    /// Flushes any segment still open when the decode loop ended (no closing timestamp token was
+    /// generated), or — if no segment was ever opened at all (no-timestamps mode) — builds one
+    /// segment from the full decoded token stream. Pure token/text logic with no ONNX involved,
+    /// so it is independently unit-testable without a real decoder session.
+    /// </summary>
+    internal void FinalizeSegments(
+        List<TranscriptionSegment> segments,
+        List<int> tokens,
+        int[] initialTokens,
+        List<int> currentSegmentTokens,
+        List<float> currentSegmentLogProbs,
+        int segmentId,
+        double currentSegmentStart,
+        float? chunkNoSpeechProb,
+        double chunkDurationSeconds)
+    {
+        // Handle remaining tokens as final segment
+        if (currentSegmentTokens.Count > 0)
+        {
+            var segmentText = _tokenizer.Decode(
+                currentSegmentTokens.ToArray().AsSpan(),
+                skipSpecialTokens: true);
+
+            if (!string.IsNullOrWhiteSpace(segmentText))
+            {
+                var trimmedText = segmentText.Trim();
+                segments.Add(new TranscriptionSegment
+                {
+                    Id = segmentId,
+                    Start = currentSegmentStart,
+                    // No timestamp token was ever generated for this segment (decoder hit EOT
+                    // before emitting one) — fall back to the chunk's actual pre-padding
+                    // duration rather than the fixed 30s the encoder always pads/truncates to.
+                    End = chunkDurationSeconds,
+                    Text = trimmedText,
+                    AvgLogProb = currentSegmentLogProbs.Count > 0
+                        ? currentSegmentLogProbs.Average() : null,
+                    NoSpeechProb = chunkNoSpeechProb,
+                    CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
+                });
+            }
+        }
+
+        // If no segments created (no timestamps mode), create single segment
+        if (segments.Count == 0)
+        {
+            var allTokens = tokens.Skip(initialTokens.Length).ToArray();
+            var fullText = _tokenizer.Decode(allTokens.AsSpan(), skipSpecialTokens: true);
+
+            if (!string.IsNullOrWhiteSpace(fullText))
+            {
+                var trimmedText = fullText.Trim();
+                segments.Add(new TranscriptionSegment
+                {
+                    Id = 0,
+                    Start = 0,
+                    // No timestamp tokens at all (no-timestamps mode, or decoder hit EOT
+                    // immediately) — same fallback as above.
+                    End = chunkDurationSeconds,
+                    Text = trimmedText,
+                    AvgLogProb = currentSegmentLogProbs.Count > 0
+                        ? currentSegmentLogProbs.Average() : null,
+                    NoSpeechProb = chunkNoSpeechProb,
+                    CompressionRatio = SegmentPostProcessor.ComputeCompressionRatio(trimmedText)
+                });
+            }
+        }
     }
 
     /// <summary>

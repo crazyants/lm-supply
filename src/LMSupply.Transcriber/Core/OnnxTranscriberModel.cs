@@ -268,8 +268,15 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             // Run encoder
             var encoderOutput = await RunEncoderAsync(melSpec, numMelBins, cancellationToken);
 
+            // Audio is always padded/truncated to a fixed 30s window before mel extraction
+            // (AudioProcessor.PadOrTruncate), so the encoder's own sequence length can't tell us
+            // how long this chunk's real content was. Compute it from the pre-padding sample
+            // count instead, clamped to the padding window.
+            var sampleRate = _modelInfo?.SampleRate ?? 16000;
+            var chunkDurationSeconds = Math.Min(samples.Length / (double)sampleRate, 30.0);
+
             // Run decoder with greedy decoding (includes language detection)
-            var decoderResult = await RunDecoderAsync(encoderOutput, options, cancellationToken);
+            var decoderResult = await RunDecoderAsync(encoderOutput, chunkDurationSeconds, options, cancellationToken);
 
             Trace.TraceInformation($"[OnnxTranscriberModel] Transcription result - Language: {decoderResult.Language}, " +
                 $"Probability: {decoderResult.LanguageProbability?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "N/A"}, " +
@@ -311,6 +318,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
 
     private async Task<DecodingResult> RunDecoderAsync(
         float[] encoderOutput,
+        double chunkDurationSeconds,
         TranscribeOptions? options,
         CancellationToken cancellationToken)
     {
@@ -329,6 +337,7 @@ internal sealed class OnnxTranscriberModel : ITranscriberModel
             encoderOutput,
             sequenceLength,
             hiddenSize,
+            chunkDurationSeconds,
             options,
             cancellationToken);
     }

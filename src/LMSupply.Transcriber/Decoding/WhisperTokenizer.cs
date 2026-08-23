@@ -85,6 +85,18 @@ internal sealed class WhisperTokenizer : IDisposable
     }
 
     /// <summary>
+    /// Creates a tokenizer with default (v2) special token IDs and the given vocabulary. For
+    /// testing only — lets tests exercise <see cref="Decode"/>-dependent logic without loading a
+    /// real model's vocab.json.
+    /// </summary>
+    internal static WhisperTokenizer CreateForTesting(
+        Dictionary<int, string> idToToken,
+        Dictionary<string, int> tokenToId)
+    {
+        return new WhisperTokenizer(idToToken, tokenToId);
+    }
+
+    /// <summary>
     /// Creates a tokenizer from a model directory containing vocab.json.
     /// </summary>
     public static async Task<WhisperTokenizer> LoadAsync(string modelDir, CancellationToken cancellationToken = default)

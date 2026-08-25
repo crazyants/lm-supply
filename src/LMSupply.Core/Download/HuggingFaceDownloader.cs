@@ -351,7 +351,11 @@ public sealed class HuggingFaceDownloader : IDisposable
         {
             if (File.Exists(tempPath))
             {
-                File.Move(tempPath, destinationPath, overwrite: true);
+                // Retry: the destination may be transiently held open by another process/AV
+                // scanner right after a previous attempt renamed it into place.
+                await FileIoRetry.ExecuteAsync(
+                    () => File.Move(tempPath, destinationPath, overwrite: true),
+                    cancellationToken);
             }
             return;
         }
@@ -403,7 +407,12 @@ public sealed class HuggingFaceDownloader : IDisposable
         // Download with progress
         await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
         var fileMode = startPosition > 0 ? FileMode.Append : FileMode.Create;
-        await using var fileStream = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, BufferSize, true);
+
+        // Retry: two callers racing to acquire the same ".part" file (a caller bypassing the
+        // model pool's lock, or a genuinely concurrent second process) hit this as IOException.
+        await using var fileStream = await FileIoRetry.ExecuteAsync(
+            () => new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, BufferSize, true),
+            cancellationToken);
 
         var buffer = new byte[BufferSize];
         long bytesDownloaded = startPosition;
@@ -422,9 +431,12 @@ public sealed class HuggingFaceDownloader : IDisposable
             });
         }
 
-        // Move to final location atomically
+        // Move to final location atomically. Retry: the destination path may be transiently
+        // held open by another process/AV scanner immediately after this rename.
         fileStream.Close();
-        File.Move(tempPath, destinationPath, overwrite: true);
+        await FileIoRetry.ExecuteAsync(
+            () => File.Move(tempPath, destinationPath, overwrite: true),
+            cancellationToken);
     }
 
     /// <summary>

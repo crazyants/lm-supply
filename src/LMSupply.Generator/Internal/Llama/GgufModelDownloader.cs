@@ -599,7 +599,11 @@ public sealed class GgufModelDownloader : IDisposable
         {
             if (File.Exists(tempPath))
             {
-                File.Move(tempPath, destinationPath, overwrite: true);
+                // Retry: the destination may be transiently held open by another process/AV
+                // scanner right after a previous attempt renamed it into place.
+                await FileIoRetry.ExecuteAsync(
+                    () => File.Move(tempPath, destinationPath, overwrite: true),
+                    cancellationToken);
             }
             return;
         }
@@ -632,7 +636,13 @@ public sealed class GgufModelDownloader : IDisposable
 
             await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
             var fileMode = startPosition > 0 ? FileMode.Append : FileMode.Create;
-            await using var fileStream = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, 81920, true);
+
+            // Retry: two callers racing to acquire the same ".part" file (a caller bypassing
+            // the model pool's lock, or a genuinely concurrent second process) hit this as
+            // IOException.
+            await using var fileStream = await FileIoRetry.ExecuteAsync(
+                () => new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, 81920, true),
+                cancellationToken);
 
             var buffer = new byte[81920];
             long bytesDownloaded = startPosition;
@@ -667,8 +677,11 @@ public sealed class GgufModelDownloader : IDisposable
             await fileStream.FlushAsync(cancellationToken);
         }
 
-        // Move to final location (streams are now closed)
-        File.Move(tempPath, destinationPath, overwrite: true);
+        // Move to final location (streams are now closed). Retry: the destination path may be
+        // transiently held open by another process/AV scanner immediately after this rename.
+        await FileIoRetry.ExecuteAsync(
+            () => File.Move(tempPath, destinationPath, overwrite: true),
+            cancellationToken);
     }
 
     private string GetCachedPath(string repoId, string filename)

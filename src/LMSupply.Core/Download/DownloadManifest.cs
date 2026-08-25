@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LMSupply.Core.Download;
 
 namespace LMSupply.Download;
 
@@ -27,18 +28,7 @@ public sealed class DownloadManifest
         var json = JsonSerializer.Serialize(manifest, s_jsonOptions);
 
         // Retry on transient file lock (e.g., rapid host restart releasing handles).
-        for (var attempt = 0; attempt < 3; attempt++)
-        {
-            try
-            {
-                await File.WriteAllTextAsync(path, json);
-                return;
-            }
-            catch (IOException) when (attempt < 2)
-            {
-                await Task.Delay(100);
-            }
-        }
+        await FileIoRetry.ExecuteAsync(() => File.WriteAllTextAsync(path, json));
     }
 
     public static async Task<DownloadManifest?> ReadAsync(string directoryPath)

@@ -214,6 +214,13 @@ public sealed class GenerationOptions
     /// </summary>
     public IReadOnlyList<ChatToolDefinition>? Tools { get; set; }
 
+    /// <summary>
+    /// Controls whether, and which, tool the model must call. Null (default) leaves the model free
+    /// to decide, same as <see cref="Models.ToolChoice.Auto"/>. Only meaningful when <see cref="Tools"/>
+    /// is non-empty.
+    /// </summary>
+    public ToolChoice? ToolChoice { get; set; }
+
     #region Phase 3: Grammar Constraints
 
     /// <summary>

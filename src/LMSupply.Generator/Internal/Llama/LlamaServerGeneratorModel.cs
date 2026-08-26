@@ -953,11 +953,25 @@ internal sealed class LlamaServerGeneratorModel : IGeneratorModel, IDiagnosticsS
                     Parameters = t.Parameters
                 }
             }).ToList(),
+            ToolChoice = ToToolChoice(options.ToolChoice),
             // Forward thinking control to the chat template (enable_thinking). Auto -> null (omit ->
             // model default preserved); On/Off -> true/false. See ThinkingModeToEnableFlag.
             EnableThinking = ThinkingModeToEnableFlag(options.Thinking)
         };
     }
+
+    /// <summary>
+    /// Maps the public <see cref="GenerationOptions.ToolChoice"/> to the server-level
+    /// <see cref="LMSupply.Llama.Server.LlamaToolChoice"/>. Null (unset) -> null (server default "auto").
+    /// </summary>
+    internal static LMSupply.Llama.Server.LlamaToolChoice? ToToolChoice(ToolChoice? toolChoice) => toolChoice?.Mode switch
+    {
+        null or ToolChoiceMode.Auto => null,
+        ToolChoiceMode.None => LMSupply.Llama.Server.LlamaToolChoice.None,
+        ToolChoiceMode.Required => LMSupply.Llama.Server.LlamaToolChoice.Required,
+        ToolChoiceMode.Function => LMSupply.Llama.Server.LlamaToolChoice.Function(toolChoice.FunctionName!),
+        _ => null
+    };
 
     /// <summary>
     /// Maps the public <see cref="ThinkingMode"/> to the server-level <c>enable_thinking</c> flag:

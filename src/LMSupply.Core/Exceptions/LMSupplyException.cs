@@ -200,6 +200,42 @@ public class ContextLengthExceededException : InferenceException
 }
 
 /// <summary>
+/// Exception thrown when an inference backend (e.g. llama-server) returns a non-success HTTP
+/// response that no more specific exception type recognizes. Carries the raw status code and
+/// response body so callers can see what the backend itself reported instead of a generic
+/// HTTP status message.
+/// </summary>
+public class InferenceBackendException : InferenceException
+{
+    /// <summary>
+    /// Gets the HTTP status code returned by the backend.
+    /// </summary>
+    public System.Net.HttpStatusCode StatusCode { get; }
+
+    /// <summary>
+    /// Gets the raw response body returned by the backend, if any.
+    /// </summary>
+    public string ResponseBody { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InferenceBackendException"/> class.
+    /// </summary>
+    /// <param name="statusCode">The HTTP status code returned by the backend.</param>
+    /// <param name="responseBody">The raw response body returned by the backend, if any.</param>
+    public InferenceBackendException(System.Net.HttpStatusCode statusCode, string responseBody)
+        : base(FormatMessage(statusCode, responseBody))
+    {
+        StatusCode = statusCode;
+        ResponseBody = responseBody;
+    }
+
+    private static string FormatMessage(System.Net.HttpStatusCode statusCode, string responseBody) =>
+        string.IsNullOrEmpty(responseBody)
+            ? $"Inference backend returned {(int)statusCode} ({statusCode}) with an empty response body."
+            : $"Inference backend returned {(int)statusCode} ({statusCode}): {responseBody}";
+}
+
+/// <summary>
 /// Exception thrown when tokenization fails.
 /// </summary>
 public class TokenizationException : LMSupplyException

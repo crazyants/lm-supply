@@ -483,8 +483,9 @@ public sealed class LlamaServerClient : IDisposable
             throw new ContextLengthExceededException(null, maxContextLength);
         }
 
-        // Fallback to default behavior for non-context errors
-        response.EnsureSuccessStatusCode();
+        // Not a recognized context-overflow shape — surface the body we already read instead
+        // of discarding it and falling through to EnsureSuccessStatusCode()'s generic message.
+        throw new InferenceBackendException(response.StatusCode, errorBody);
     }
 
     private static bool IsContextOverflowError(string errorBody)
@@ -539,11 +540,31 @@ public sealed class LlamaServerClient : IDisposable
             Grammar = options.Grammar,
             ResponseFormat = BuildChatResponseFormat(options.Grammar, options.JsonSchema),
             Tools = options.Tools?.ToList(),
+            ToolChoice = BuildToolChoiceNode(options.ToolChoice),
             ChatTemplateKwargs = options.EnableThinking is { } enableThinking
                 ? new Dictionary<string, object> { ["enable_thinking"] = enableThinking }
                 : null
         };
     }
+
+    /// <summary>
+    /// Builds the OpenAI-compatible <c>tool_choice</c> wire value: omitted (null, server default
+    /// "auto") for <see cref="LlamaToolChoiceMode.Auto"/> or an unset choice, a bare string for
+    /// <c>none</c>/<c>required</c>, or <c>{"type":"function","function":{"name":...}}</c> to force
+    /// one named function.
+    /// </summary>
+    internal static JsonNode? BuildToolChoiceNode(LlamaToolChoice? toolChoice) => toolChoice?.Mode switch
+    {
+        null or LlamaToolChoiceMode.Auto => null,
+        LlamaToolChoiceMode.None => JsonValue.Create("none"),
+        LlamaToolChoiceMode.Required => JsonValue.Create("required"),
+        LlamaToolChoiceMode.Function => new JsonObject
+        {
+            ["type"] = "function",
+            ["function"] = new JsonObject { ["name"] = toolChoice.FunctionName }
+        },
+        _ => null
+    };
 
     /// <summary>
     /// Parses <paramref name="jsonSchema"/> (the JSON-schema string carried by
@@ -661,6 +682,12 @@ public sealed class ChatCompletionOptions
     public IReadOnlyList<ToolDefinition>? Tools { get; init; }
 
     /// <summary>
+    /// Controls whether/which tool the model must call. Null = auto (model decides). Only
+    /// meaningful when <see cref="Tools"/> is set.
+    /// </summary>
+    public LlamaToolChoice? ToolChoice { get; init; }
+
+    /// <summary>
     /// Thinking control forwarded to the GGUF chat template via <c>chat_template_kwargs.enable_thinking</c>.
     /// Null = omit (model template default: Qwen3 thinks, Gemma does not). False = suppress reasoning
     /// (direct answer); True = force reasoning on. Only applies to the chat path (/v1/chat/completions),
@@ -747,6 +774,14 @@ internal sealed class ChatCompletionRequest
     /// Tool definitions (OpenAI-compatible).
     /// </summary>
     public List<ToolDefinition>? Tools { get; set; }
+
+    /// <summary>
+    /// OpenAI-compatible <c>tool_choice</c> — a bare string (<c>"none"</c>/<c>"required"</c>) or
+    /// <c>{"type":"function","function":{"name":...}}</c>, or omitted entirely for the server's
+    /// "auto" default. Built from <see cref="ChatCompletionOptions.ToolChoice"/> in BuildChatRequest
+    /// via <see cref="LlamaServerClient.BuildToolChoiceNode"/>.
+    /// </summary>
+    public JsonNode? ToolChoice { get; set; }
 
     /// <summary>
     /// Re-use KV cache from previous request if possible.
@@ -943,6 +978,57 @@ public sealed class FunctionDefinition
 
     [JsonPropertyName("parameters")]
     public JsonElement? Parameters { get; set; }
+}
+
+/// <summary>
+/// Which <see cref="LlamaToolChoice"/> mode a value represents, mirroring the OpenAI-compatible
+/// <c>tool_choice</c> wire values llama-server accepts.
+/// </summary>
+public enum LlamaToolChoiceMode
+{
+    /// <summary>Model decides freely whether to call a tool.</summary>
+    Auto = 0,
+
+    /// <summary>Suppress tool calls even though <see cref="ChatCompletionOptions.Tools"/> is set.</summary>
+    None = 1,
+
+    /// <summary>Force the model to call at least one tool.</summary>
+    Required = 2,
+
+    /// <summary>Force the model to call one specific, named function.</summary>
+    Function = 3
+}
+
+/// <summary>
+/// Controls whether/which tool the model must call. Only meaningful when
+/// <see cref="ChatCompletionOptions.Tools"/> is set.
+/// </summary>
+public sealed class LlamaToolChoice
+{
+    /// <summary>Model decides freely whether to call a tool. Equivalent to leaving <see cref="ChatCompletionOptions.ToolChoice"/> unset.</summary>
+    public static readonly LlamaToolChoice Auto = new(LlamaToolChoiceMode.Auto, null);
+
+    /// <summary>Suppress tool calls even though <see cref="ChatCompletionOptions.Tools"/> is set.</summary>
+    public static readonly LlamaToolChoice None = new(LlamaToolChoiceMode.None, null);
+
+    /// <summary>Force the model to call at least one tool.</summary>
+    public static readonly LlamaToolChoice Required = new(LlamaToolChoiceMode.Required, null);
+
+    /// <summary>Force the model to call the named function.</summary>
+    public static LlamaToolChoice Function(string name) =>
+        new(LlamaToolChoiceMode.Function, name ?? throw new ArgumentNullException(nameof(name)));
+
+    /// <summary>Which mode this instance represents.</summary>
+    public LlamaToolChoiceMode Mode { get; }
+
+    /// <summary>The forced function name when <see cref="Mode"/> is <see cref="LlamaToolChoiceMode.Function"/>; null otherwise.</summary>
+    public string? FunctionName { get; }
+
+    private LlamaToolChoice(LlamaToolChoiceMode mode, string? functionName)
+    {
+        Mode = mode;
+        FunctionName = functionName;
+    }
 }
 
 /// <summary>
